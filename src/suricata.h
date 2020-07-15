@@ -91,11 +91,11 @@ const char *GetDocURL(void);
                                      outstanding packets first */
 #define SURICATA_DONE    (1 << 2)   /**< packets capture ended */
 
-/* Engine stage/status*/
+/* 引擎的阶段/状态 */
 enum {
-    SURICATA_INIT = 0,
-    SURICATA_RUNTIME,
-    SURICATA_DEINIT
+    SURICATA_INIT = 0,  /* 初始化阶段 */
+    SURICATA_RUNTIME,   /* 运行态 */
+    SURICATA_DEINIT     /* 退出释放阶段 */
 };
 
 /* Engine is acting as */
@@ -111,8 +111,8 @@ int EngineModeIsIDS(void);
 
 /* Box is acting as router */
 enum {
-    SURI_HOST_IS_SNIFFER_ONLY,
-    SURI_HOST_IS_ROUTER,
+    SURI_HOST_IS_SNIFFER_ONLY,   /* for IDS */
+    SURI_HOST_IS_ROUTER,         /* for IPS */
 };
 
 #define IS_SURI_HOST_MODE_SNIFFER_ONLY(host_mode)  ((host_mode) == SURI_HOST_IS_SNIFFER_ONLY)
@@ -121,10 +121,10 @@ enum {
 #include "runmodes.h"
 
 typedef struct SCInstance_ {
-    enum RunModes run_mode;
+    enum RunModes run_mode;     /* 运行模式，默认 RUNMODE_PCAP_DEV */
     enum RunModes aux_run_mode;
 
-    char pcap_dev[128];
+    char pcap_dev[128];         /* 监听接口名，通过-i指定 */
     char *sig_file;
     int sig_file_exclusive;
     char *pid_filename;
@@ -141,22 +141,22 @@ typedef struct SCInstance_ {
     uint32_t groupid;
 #endif /* OS_WIN32 */
 
-    bool system;
+    bool system;               /* true/false为SYSTEM/USER，USER将使用当前工作目录，如PCAP FILE为USER */
     bool set_logdir;
     bool set_datadir;
 
-    int delayed_detect;
-    int disabled_detect;
-    int daemon;
-    int offline;
-    int verbose;
+    int delayed_detect;        /* 在规则载入前就开始处理数据包，以减少IPS模式下down time */
+    int disabled_detect;       /* 是否禁止检测引擎，0/1 */
+    int daemon;                /* 是否作为精灵进程运行，由配置参数-D决定 */
+    int offline;               /* 是否为离线模式，如PCAP FILE模式 */
+    int verbose;               /* 日志详细程度，[0, 4]，对应参数-v/-v -v等（越多次对应INFO级别向更详细方向的次数） */
     int checksum_validation;
 
     struct timeval start_time;
 
     const char *log_dir;
-    const char *progname; /**< pointer to argv[0] */
-    const char *conf_filename;
+    const char *progname;      /**进程名，指向argv[0] */
+    const char *conf_filename; /* 配置文件名，'-c'传入 */
     char *strict_rule_parsing_string;
 } SCInstance;
 

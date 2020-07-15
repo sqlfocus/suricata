@@ -92,7 +92,7 @@ typedef struct StatsGlobalContext_ {
 } StatsGlobalContext;
 
 static void *stats_thread_data = NULL;
-static StatsGlobalContext *stats_ctx = NULL;
+static StatsGlobalContext *stats_ctx = NULL;    /* 统计相关环境 */
 static time_t stats_start_time;
 /** refresh interval in seconds */
 static uint32_t stats_tts = STATS_MGMTT_TTS;

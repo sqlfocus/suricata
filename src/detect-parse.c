@@ -2338,7 +2338,7 @@ end:
 Signature *DetectEngineAppendSig(DetectEngineCtx *de_ctx, const char *sigstr)
 {
     Signature *sig = SigInit(de_ctx, sigstr);
-    if (sig == NULL) {
+    if (sig == NULL) {   /* 解析字符串为规则结构体 */
         return NULL;
     }
 
@@ -2366,7 +2366,7 @@ Signature *DetectEngineAppendSig(DetectEngineCtx *de_ctx, const char *sigstr)
         sig->next = de_ctx->sig_list;
     }
 
-    de_ctx->sig_list = sig;
+    de_ctx->sig_list = sig;     /* 插入到引擎结构的规则列表 */
 
     /**
      * In DetectEngineAppendSig(), the signatures are prepended and we always return the first one

@@ -82,9 +82,9 @@
 
 
 #include "util-spm.h"
-
+/* 基于内容的匹配规则结构 */
 typedef struct DetectContentData_ {
-    uint8_t *content;
+    uint8_t *content;      /* 内容对应的字节数组 */
     uint16_t content_len;
     uint16_t replace_len;
     /* for chopped fast pattern, the length */
@@ -94,14 +94,14 @@ typedef struct DetectContentData_ {
     /* would want to move PatIntId here and flags down to remove the padding
      * gap, but I think the first four members was used as a template for
      * casting.  \todo check this and fix it if posssible */
-    uint32_t flags;
+    uint32_t flags;        /* DETECT_CONTENT_NOCASE */
     PatIntId id;
     uint16_t depth;
     uint16_t offset;
     int32_t distance;
     int32_t within;
     /* SPM search context. */
-    SpmCtx *spm_ctx;
+    SpmCtx *spm_ctx;       /* 单模匹配引擎上下文 */
     /* pointer to replacement data */
     uint8_t *replace;
 } DetectContentData;

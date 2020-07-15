@@ -55,7 +55,7 @@ typedef struct PcapThreadVars_
     /* thread specific handle */
     pcap_t *pcap_handle;
     /* handle state */
-    unsigned char pcap_state;
+    unsigned char pcap_state;   /* PCAP_STATE_UP */
     /* thread specific bpf */
     struct bpf_program filter;
     /* ptr to string from config */
@@ -88,7 +88,7 @@ typedef struct PcapThreadVars_
     ChecksumValidationMode checksum_mode;
 
     LiveDevice *livedev;
-} PcapThreadVars;
+} PcapThreadVars;  /* pcap抓包线程环境 */
 
 static TmEcode ReceivePcapThreadInit(ThreadVars *, const void *, void **);
 static void ReceivePcapThreadExitStats(ThreadVars *, void *);
@@ -170,7 +170,7 @@ static int PcapTryReopen(PcapThreadVars *ptv)
     ptv->pcap_state = PCAP_STATE_UP;
     return 0;
 }
-
+/* 从pcap抓取报文后，入口函数 */
 static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
 {
     SCEnter();
@@ -184,7 +184,7 @@ static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
     }
 
     PKT_SET_SRC(p, PKT_SRC_WIRE);
-    p->ts.tv_sec = h->ts.tv_sec;
+    p->ts.tv_sec = h->ts.tv_sec;         /* 初始化报文头 */
     p->ts.tv_usec = h->ts.tv_usec;
     SCLogDebug("p->ts.tv_sec %"PRIuMAX"", (uintmax_t)p->ts.tv_sec);
     p->datalink = ptv->datalink;
@@ -196,7 +196,7 @@ static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
 
     if (unlikely(PacketCopyData(p, pkt, h->caplen))) {
         TmqhOutputPacketpool(ptv->tv, p);
-        SCReturn;
+        SCReturn;                        /* 拷贝报文内容 */
     }
 
     switch (ptv->checksum_mode) {
@@ -216,7 +216,7 @@ static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
     }
 
     if (TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK) {
-        pcap_breakloop(ptv->pcap_handle);
+        pcap_breakloop(ptv->pcap_handle);/* 运行注册报文处理链 */
         ptv->cb_result = TM_ECODE_FAILED;
     }
 
@@ -236,7 +236,7 @@ static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
 
 /**
  *  \brief Main PCAP reading Loop function
- */
+ *//* pcap抓包主循环 */
 static TmEcode ReceivePcapLoop(ThreadVars *tv, void *data, void *slot)
 {
     SCEnter();
@@ -245,7 +245,7 @@ static TmEcode ReceivePcapLoop(ThreadVars *tv, void *data, void *slot)
     PcapThreadVars *ptv = (PcapThreadVars *)data;
     TmSlot *s = (TmSlot *)slot;
 
-    ptv->slot = s->slot_next;
+    ptv->slot = s->slot_next;/* 指向后续报文处理链, TMM_DECODEPCAP -> DecodePcap() */
     ptv->cb_result = TM_ECODE_OK;
 
     while (1) {
@@ -255,8 +255,8 @@ static TmEcode ReceivePcapLoop(ThreadVars *tv, void *data, void *slot)
 
         /* make sure we have at least one packet in the packet pool, to prevent
          * us from alloc'ing packets at line rate */
-        PacketPoolWait();
-
+        PacketPoolWait();    /* 等待报文缓存池不为空，有可用 Packet 结构 */
+        /* 获取报文，并处理；一次性64个 */
         int r = pcap_dispatch(ptv->pcap_handle, packet_q_len,
                           (pcap_handler)PcapCallbackLoop, (u_char *)ptv);
         if (unlikely(r == 0 || r == PCAP_ERROR_BREAK)) {
@@ -332,7 +332,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
     }
 
     PcapThreadVars *ptv = SCCalloc(1, sizeof(PcapThreadVars));
-    if (unlikely(ptv == NULL)) {
+    if (unlikely(ptv == NULL)) {   /* 分配抓包线程信息结构 */
         pcapconfig->DerefFunc(pcapconfig);
         SCReturnInt(TM_ECODE_FAILED);
     }
@@ -349,7 +349,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
 
     if (LiveGetOffload() == 0) {
         (void)GetIfaceOffloading((char *)pcapconfig->iface, 1, 1);
-    } else {
+    } else {                       /* 配置网卡offloading */
         DisableIfaceOffloading(ptv->livedev, 1, 1);
     }
 
@@ -359,7 +359,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
                 "state will require " xstr(CHECKSUM_SAMPLE_COUNT) " packets");
     }
 
-    char errbuf[PCAP_ERRBUF_SIZE];
+    char errbuf[PCAP_ERRBUF_SIZE];/* 创建pcap抓包实例句柄 */
     ptv->pcap_handle = pcap_create((char *)pcapconfig->iface, errbuf);
     if (ptv->pcap_handle == NULL) {
         if (strlen(errbuf)) {
@@ -398,7 +398,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
 
     /* set Promisc, and Timeout. Must be called before pcap_activate */
     int pcap_set_promisc_r = pcap_set_promisc(ptv->pcap_handle, pcapconfig->promisc);
-    if (pcap_set_promisc_r != 0) {
+    if (pcap_set_promisc_r != 0) {/* 设置混杂模式 */
         SCLogError(SC_ERR_PCAP_SET_PROMISC, "could not set promisc mode, "
                 "error %s", pcap_geterr(ptv->pcap_handle));
         SCFree(ptv);
@@ -407,7 +407,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
     }
 
     int pcap_set_timeout_r = pcap_set_timeout(ptv->pcap_handle, LIBPCAP_COPYWAIT);
-    if (pcap_set_timeout_r != 0) {
+    if (pcap_set_timeout_r != 0) {/* 设置超时 */
         SCLogError(SC_ERR_PCAP_SET_TIMEOUT, "could not set timeout, "
                 "error %s", pcap_geterr(ptv->pcap_handle));
         SCFree(ptv);
@@ -434,7 +434,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
 
     /* activate the handle */
     int pcap_activate_r = pcap_activate(ptv->pcap_handle);
-    if (pcap_activate_r != 0) {
+    if (pcap_activate_r != 0) {   /* 激活抓包句柄 */
         SCLogError(SC_ERR_PCAP_ACTIVATE_HANDLE, "could not activate the "
                 "pcap handler, error %s", pcap_geterr(ptv->pcap_handle));
         SCFree(ptv);
@@ -444,7 +444,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
     ptv->pcap_state = PCAP_STATE_UP;
 
     /* set bpf filter if we have one */
-    if (pcapconfig->bpf_filter) {
+    if (pcapconfig->bpf_filter) { /* 设置bpf filter */
         SCMutexLock(&pcap_bpf_compile_lock);
 
         ptv->bpf_filter = pcapconfig->bpf_filter;
@@ -479,7 +479,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
 
     ptv->datalink = pcap_datalink(ptv->pcap_handle);
 
-    pcapconfig->DerefFunc(pcapconfig);
+    pcapconfig->DerefFunc(pcapconfig); /* 释放配置信息, PcapDerefConfig() */
 
     ptv->capture_kernel_packets = StatsRegisterCounter("capture.kernel_packets",
             ptv->tv);
@@ -547,7 +547,7 @@ static TmEcode DecodePcap(ThreadVars *tv, Packet *p, void *data)
 
     /* update counters */
     DecodeUpdatePacketCounters(tv, dtv, p);
-
+    /* L1-L4解码，并计算hash值 */
     DecodeLinkLayer(tv, dtv, p->datalink, p, GET_PKT_DATA(p), GET_PKT_LEN(p));
 
     PacketDecodeFinalize(tv, dtv, p);

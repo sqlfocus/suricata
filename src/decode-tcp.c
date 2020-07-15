@@ -250,7 +250,7 @@ int DecodeTCP(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
         TCP_HAS_MSS(p) ? "MSS " : "", TCP_HAS_TFO(p) ? "TFO " : "");
 #endif
 
-    FlowSetupPacket(p);
+    FlowSetupPacket(p);       /* 流处理 */
 
     return TM_ECODE_OK;
 }

@@ -168,8 +168,8 @@ uint16_t UtilCpuGetNumProcessorsMax(void)
  */
 void UtilCpuPrintSummary(void)
 {
-    uint16_t cpus_conf = UtilCpuGetNumProcessorsConfigured();
-    uint16_t cpus_online = UtilCpuGetNumProcessorsOnline();
+    uint16_t cpus_conf = UtilCpuGetNumProcessorsConfigured();  /* 获取CPU数 */
+    uint16_t cpus_online = UtilCpuGetNumProcessorsOnline();    /* 获取在线CPU数 */
 
     SCLogDebug("CPUs Summary: ");
     if (cpus_conf > 0)

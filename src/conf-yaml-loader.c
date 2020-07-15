@@ -413,7 +413,7 @@ ConfYamlParse(yaml_parser_t *parser, ConfNode *parent, int inseq, int rlevel)
  * \param filename Filename of configuration file to load.
  *
  * \retval 0 on success, -1 on failure.
- */
+ *//* 加载、解析yaml文件 */
 int
 ConfYamlLoadFile(const char *filename)
 {
@@ -451,7 +451,7 @@ ConfYamlLoadFile(const char *filename)
     }
 
     yaml_parser_set_input_file(&parser, infile);
-    ret = ConfYamlParse(&parser, root, 0, 0);
+    ret = ConfYamlParse(&parser, root, 0, 0);     /* 解析主程序 */
     yaml_parser_delete(&parser);
     fclose(infile);
 
@@ -491,7 +491,7 @@ ConfYamlLoadString(const char *string, size_t len)
  * \param prefix Name prefix to use.
  *
  * \retval 0 on success, -1 on failure.
- */
+ *//* 将新加载的文件挂在到原文件的'prefix'节点下 */
 int
 ConfYamlLoadFileWithPrefix(const char *filename, const char *prefix)
 {
@@ -528,7 +528,7 @@ ConfYamlLoadFileWithPrefix(const char *filename, const char *prefix)
         ConfYamlSetConfDirname(filename);
     }
 
-    if (root == NULL) {
+    if (root == NULL) {   /* prefix节点不存在，在原yaml文件解析结果上创建 */
         /* if node at 'prefix' doesn't yet exist, add a place holder */
         ConfSet(prefix, "<prefix root node>");
         root = ConfGetNode(prefix);
@@ -537,7 +537,7 @@ ConfYamlLoadFileWithPrefix(const char *filename, const char *prefix)
             yaml_parser_delete(&parser);
             return -1;
         }
-    }
+    }                     /* 将新配置文件加载至prefix节点(以此为root节点) */
     yaml_parser_set_input_file(&parser, infile);
     ret = ConfYamlParse(&parser, root, 0, 0);
     yaml_parser_delete(&parser);

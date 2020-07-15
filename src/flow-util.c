@@ -200,7 +200,7 @@ void FlowInit(Flow *f, const Packet *p)
     SCReturn;
 }
 
-int g_bypass_info_id = -1;
+int g_bypass_info_id = -1;    /* flow bypass计数器内存索引 */
 
 int GetFlowBypassInfoID(void)
 {
@@ -221,7 +221,7 @@ static void FlowBypassFree(void *x)
 }
 
 void RegisterFlowBypassInfo(void)
-{
+{   /* STORAGE_FLOW 类型的存储，bypass计数器 */
     g_bypass_info_id = FlowStorageRegister("bypass_counters", sizeof(void *),
                                               NULL, FlowBypassFree);
 }

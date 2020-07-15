@@ -166,7 +166,7 @@ void ConfNodeFree(ConfNode *node)
 }
 
 /**
- * \brief Get a ConfNode by name.
+ * \brief Get a ConfNode by name. 在树结构中查找指定节点
  *
  * \param name The full name of the configuration node to lookup.
  *

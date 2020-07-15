@@ -72,8 +72,8 @@ struct AppLayerThreadCtx_ {
 
 #define MAX_COUNTER_SIZE 64
 typedef struct AppLayerCounterNames_ {
-    char name[MAX_COUNTER_SIZE];
-    char tx_name[MAX_COUNTER_SIZE];
+    char name[MAX_COUNTER_SIZE];     /* app_layer.flow.http_tcp */
+    char tx_name[MAX_COUNTER_SIZE];  /* app_layer.tx.http_tcp */
 } AppLayerCounterNames;
 
 typedef struct AppLayerCounters_ {
@@ -804,13 +804,13 @@ int AppLayerSetup(void)
 {
     SCEnter();
 
-    AppLayerProtoDetectSetup();
-    AppLayerParserSetup();
+    AppLayerProtoDetectSetup();  /* 初始化用到的模式匹配器环境 */
+    AppLayerParserSetup();       /* 传输层+应用层协议号的列表, alp_ctx */
 
     AppLayerParserRegisterProtocolParsers();
     AppLayerProtoDetectPrepareState();
-
-    AppLayerSetupCounters();
+                                 /* 注册协议解析函数、添加协议识别单模引擎规则 */
+    AppLayerSetupCounters();     /* */
 
     SCReturnInt(0);
 }

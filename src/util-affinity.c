@@ -32,7 +32,7 @@
 #include "queue.h"
 #include "runmodes.h"
 
-ThreadsAffinityType thread_affinity[MAX_CPU_SET] = {
+ThreadsAffinityType thread_affinity[MAX_CPU_SET] = {  /* cpu亲昵性配置 */
     {
         .name = "receive-cpu-set",
         .mode_flag = EXCLUSIVE_AFFINITY,
@@ -88,7 +88,7 @@ static void AffinitySetupInit(void)
     for (i = 0; i < MAX_CPU_SET; i++) {
         cpu_set_t *cs = &thread_affinity[i].cpu_set;
         CPU_ZERO(cs);
-        for (j = 0; j < ncpu; j++) {
+        for (j = 0; j < ncpu; j++) {  /* 初始化包含的CPU核心为全部核心 */
             CPU_SET(j, cs);
         }
         SCMutexInit(&thread_affinity[i].taf_mutex, NULL);
@@ -193,7 +193,7 @@ void AffinitySetupLoadFromConfig()
         SCLogInfo("can't get cpu-affinity node");
         return;
     }
-
+    /* 根据配置文件，初始化 thread_affinity[] */
     TAILQ_FOREACH(affinity, &root->head, next) {
         if (strcmp(affinity->val, "decode-cpu-set") == 0 ||
             strcmp(affinity->val, "stream-cpu-set") == 0 ||

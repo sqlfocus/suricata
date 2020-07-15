@@ -113,7 +113,7 @@ char *DetectLoadCompleteSigPath(const DetectEngineCtx *de_ctx, const char *sig_f
  *  \param goodsigs_tot Will store number of valid signatures in the file
  *  \param badsigs_tot Will store number of invalid signatures in the file
  *  \retval 0 on success, -1 on error
- */
+ *//* 加载规则文件 */
 static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
         int *goodsigs, int *badsigs)
 {
@@ -132,16 +132,16 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
                    " %s.", sig_file, strerror(errno));
         return -1;
     }
-
+    /* 以行为单位处理 */
     while(fgets(line + offset, (int)sizeof(line) - offset, fp) != NULL) {
         lineno++;
         size_t len = strlen(line);
 
-        /* ignore comments and empty lines */
+        /* 忽略空白行、注释行，ignore comments and empty lines */
         if (line[0] == '\n' || line [0] == '\r' || line[0] == ' ' || line[0] == '#' || line[0] == '\t')
             continue;
 
-        /* Check for multiline rules. */
+        /* 处理换行，Check for multiline rules. */
         while (len > 0 && isspace((unsigned char)line[--len]));
         if (line[len] == '\\') {
             multiline++;
@@ -154,7 +154,7 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
              * to parse. */
         }
 
-        /* Check if we have a trailing newline, and remove it */
+        /* 忽略行末尾换行符号，Check if we have a trailing newline, and remove it */
         len = strlen(line);
         if (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
             line[len - 1] = '\0';
@@ -166,7 +166,7 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
         de_ctx->rule_file = sig_file;
         de_ctx->rule_line = lineno - multiline;
 
-        sig = DetectEngineAppendSig(de_ctx, line);
+        sig = DetectEngineAppendSig(de_ctx, line);  /* 解析为规则结构 */
         if (sig != NULL) {
             if (rule_engine_analysis_set || fp_engine_analysis_set) {
                 RetrieveFPForSig(de_ctx, sig);
@@ -213,7 +213,7 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
  *  \param de_ctx Pointer to the detection engine context
  *  \param sig_file Filename (or pattern) holding signatures
  *  \retval -1 on error
- */
+ *//* 从规则文件读取配置规则 */
 static int ProcessSigFiles(DetectEngineCtx *de_ctx, char *pattern,
         SigFileLoaderStat *st, int *good_sigs, int *bad_sigs)
 {
@@ -250,7 +250,7 @@ static int ProcessSigFiles(DetectEngineCtx *de_ctx, char *pattern,
 #endif
         SCLogConfig("Loading rule file: %s", fname);
         r = DetectLoadSigFile(de_ctx, fname, good_sigs, bad_sigs);
-        if (r < 0) {
+        if (r < 0) {            /* 解析加载规则文件 */
             ++(st->bad_files);
         }
 
@@ -272,7 +272,7 @@ static int ProcessSigFiles(DetectEngineCtx *de_ctx, char *pattern,
  *  \param sig_file Filename (or pattern) holding signatures
  *  \param sig_file_exclusive File passed in 'sig_file' should be loaded exclusively.
  *  \retval -1 on error
- */
+ *//* 加载规则 */
 int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_exclusive)
 {
     SCEnter();
@@ -286,7 +286,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     int good_sigs = 0;
     int bad_sigs = 0;
 
-    if (strlen(de_ctx->config_prefix) > 0) {
+    if (strlen(de_ctx->config_prefix) > 0) {  /* 提取规则文件名 */
         snprintf(varname, sizeof(varname), "%s.rule-files",
                 de_ctx->config_prefix);
     }
@@ -305,7 +305,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
                     "Invalid rule-files configuration section: "
                     "expected a list of filenames.");
             }
-            else {
+            else {                            /* 加载规则文件 */
                 TAILQ_FOREACH(file, &rule_files->head, next) {
                     sfile = DetectLoadCompleteSigPath(de_ctx, file->val);
                     good_sigs = bad_sigs = 0;
@@ -327,7 +327,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     }
 
     /* If a Signature file is specified from commandline, parse it too */
-    if (sig_file != NULL) {
+    if (sig_file != NULL) {                   /* 加载命令行指定的规则文件 */
         ret = ProcessSigFiles(de_ctx, sig_file, sig_stat, &good_sigs, &bad_sigs);
 
         if (ret != 0) {
@@ -360,20 +360,20 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
         goto end;
     }
 
-    SCSigRegisterSignatureOrderingFuncs(de_ctx);
-    SCSigOrderSignatures(de_ctx);
+    SCSigRegisterSignatureOrderingFuncs(de_ctx);  /* 注册规则优先级函数 */
+    SCSigOrderSignatures(de_ctx);                 /* 按优先级排序规则列表 */
     SCSigSignatureOrderingModuleCleanup(de_ctx);
 
-    SCThresholdConfInitContext(de_ctx);
+    SCThresholdConfInitContext(de_ctx);           /* */
 
     /* Setup the signature group lookup structure and pattern matchers */
-    if (SigGroupBuild(de_ctx) < 0)
+    if (SigGroupBuild(de_ctx) < 0)      /* 构建匹配正则引擎 */
         goto end;
 
     ret = 0;
 
  end:
-    gettimeofday(&de_ctx->last_reload, NULL);
+    gettimeofday(&de_ctx->last_reload, NULL);     /* 更新加载时间 */
     if (RunmodeGetCurrent() == RUNMODE_ENGINE_ANALYSIS) {
         if (rule_engine_analysis_set) {
             CleanupRuleAnalyzer();

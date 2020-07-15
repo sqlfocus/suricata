@@ -131,12 +131,12 @@ void TmModuleRunInit(void)
     uint16_t i;
 
     for (i = 0; i < TMM_SIZE; i++) {
-        t = &tmm_modules[i];
+        t = &tmm_modules[i];    /* 所有线程模块参考 RegisterAllModules() */
 
         if (t->name == NULL)
             continue;
 
-        if (t->Init == NULL)
+        if (t->Init == NULL)    /* */
             continue;
 
         t->Init();

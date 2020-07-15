@@ -195,7 +195,7 @@ error:
 /**
  * \brief DetectContentParse
  * \initonly
- */
+ *//* 基于内容的匹配规则初始化 */
 DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
                                       const char *contentstr)
 {
@@ -205,7 +205,7 @@ DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
     int ret;
 
     ret = DetectContentDataParse("content", contentstr, &content, &len);
-    if (ret == -1) {
+    if (ret == -1) {   /* 解析传入字符串为uint8_t字节数组，去除转义等 */
         return NULL;
     }
 
@@ -219,12 +219,12 @@ DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
 
     cd->content = (uint8_t *)cd + sizeof(DetectContentData);
     memcpy(cd->content, content, len);
-    cd->content_len = len;
+    cd->content_len = len;      /* 赋值内容字节数组 */
 
     /* Prepare SPM search context. */
     cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 0,
                              spm_global_thread_ctx);
-    if (cd->spm_ctx == NULL) {
+    if (cd->spm_ctx == NULL) {  /* 初始化其单模引擎 */
         SCFree(content);
         SCFree(cd);
         return NULL;

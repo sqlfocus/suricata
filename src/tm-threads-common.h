@@ -82,9 +82,9 @@ typedef enum {
 
 /* ThreadVars type */
 enum {
-    TVT_PPT,
-    TVT_MGMT,
-    TVT_CMD,
+    TVT_PPT,     /* 报文处理 */
+    TVT_MGMT,    /* 管理线程 */
+    TVT_CMD,     /* 命令行 */
     TVT_MAX,
 };
 

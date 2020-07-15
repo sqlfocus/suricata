@@ -84,7 +84,7 @@ char *RunmodeAutoFpCreatePickupQueuesString(int n)
     return queues;
 }
 
-/**
+/**pcap autofp的初始化入口函数
  */
 int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
                               ConfigIfaceThreadsCountFunc ModThreadsCount,
@@ -101,7 +101,7 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     int nlive = LiveGetDeviceCount();
     int thread_max = TmThreadGetNbThreads(WORKER_CPU_SET);
     /* always create at least one thread */
-    if (thread_max == 0)
+    if (thread_max == 0)        /* 根据比例获取检测线程数, [1, 1024] */
         thread_max = ncpus * threading_detect_ratio;
     if (thread_max < 1)
         thread_max = 1;
@@ -111,15 +111,15 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     }
 
     char *queues = RunmodeAutoFpCreatePickupQueuesString(thread_max);
-    if (queues == NULL) {
+    if (queues == NULL) {       /* 构造队列名，“pickup1,...pickupn” */
         FatalError(SC_ERR_RUNMODE, "RunmodeAutoFpCreatePickupQueuesString failed");
     }
-
+    /* 创建接口对应的接收线程  */
     if ((nlive <= 1) && (live_dev != NULL)) {
         SCLogDebug("live_dev %s", live_dev);
 
         void *aconf = ConfigParser(live_dev);
-        if (aconf == NULL) {
+        if (aconf == NULL) {    /* 获取接口配置 */
             FatalError(SC_ERR_RUNMODE, "Failed to allocate config for %s",
                    live_dev);
         }
@@ -128,10 +128,10 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
         SCLogInfo("Going to use %" PRId32 " %s receive thread(s)",
                   threads_count, recv_mod_name);
 
-        /* create the threads */
+        /* create the threads *//* 创建线程，线程名参考 thread_name_autofp = "RX" */
         for (int thread = 0; thread < MIN(thread_max, threads_count); thread++) {
-            snprintf(tname, sizeof(tname), "%s#%02d", thread_name, thread+1);
-            ThreadVars *tv_receive =
+            snprintf(tname, sizeof(tname), "%s#%02d", thread_name, thread+1);  /* 线程名: RX#01 */
+            ThreadVars *tv_receive =     /* 主处理函数, TmThreadsSlotPktAcqLoop() */
                 TmThreadCreatePacketHandler(tname,
                         "packetpool", "packetpool",
                         queues, "flow", "pktacqloop");
@@ -139,22 +139,22 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
                 FatalError(SC_ERR_RUNMODE, "TmThreadsCreate failed");
             }
             TmModule *tm_module = TmModuleGetByName(recv_mod_name);
-            if (tm_module == NULL) {
+            if (tm_module == NULL) {     /* ReceivePcap -> TmModuleReceivePcapRegister() */
                 FatalError(SC_ERR_RUNMODE,
                     "TmModuleGetByName failed for %s",
-                    recv_mod_name);
-            }
+                    recv_mod_name);      
+            }                            /* 将 ReceivePcap 处理函数加入报文处理链 */
             TmSlotSetFuncAppend(tv_receive, tm_module, aconf);
 
             tm_module = TmModuleGetByName(decode_mod_name);
-            if (tm_module == NULL) {
+            if (tm_module == NULL) {     /* 将 DecodePcap 处理函数加入报文处理链 */
                 FatalError(SC_ERR_RUNMODE,
                         "TmModuleGetByName %s failed", decode_mod_name);
             }
             TmSlotSetFuncAppend(tv_receive, tm_module, NULL);
 
             TmThreadSetCPU(tv_receive, RECEIVE_CPU_SET);
-
+                                         /* 实质性创建线程 */
             if (TmThreadSpawn(tv_receive) != TM_ECODE_OK) {
                 FatalError(SC_ERR_RUNMODE, "TmThreadSpawn failed");
             }
@@ -217,15 +217,15 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
             }
         }
     }
-
+    /* 创建检测线程 */
     for (int thread = 0; thread < thread_max; thread++) {
         snprintf(tname, sizeof(tname), "%s#%02u", thread_name_workers, thread+1);
         snprintf(qname, sizeof(qname), "pickup%u", thread+1);
 
         SCLogDebug("tname %s, qname %s", tname, qname);
 
-        ThreadVars *tv_detect_ncpu =
-            TmThreadCreatePacketHandler(tname,
+        ThreadVars *tv_detect_ncpu =  /* 输入处理为flow，输出处理为packetpool，slot为varslot */
+            TmThreadCreatePacketHandler(tname,           /* 线程名: W#01 */
                                         qname, "flow",
                                         "packetpool", "packetpool",
                                         "varslot");
@@ -233,7 +233,7 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
             FatalError(SC_ERR_RUNMODE, "TmThreadsCreate failed");
         }
         TmModule *tm_module = TmModuleGetByName("FlowWorker");
-        if (tm_module == NULL) {
+        if (tm_module == NULL) {      /* TMM_FLOWWORKER */
             FatalError(SC_ERR_RUNMODE, "TmModuleGetByName for FlowWorker failed");
         }
         TmSlotSetFuncAppend(tv_detect_ncpu, tm_module, NULL);
@@ -243,7 +243,7 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
         TmThreadSetGroupName(tv_detect_ncpu, "Detect");
 
         tm_module = TmModuleGetByName("RespondReject");
-        if (tm_module == NULL) {
+        if (tm_module == NULL) {      /* TMM_RESPONDREJECT */
             FatalError(SC_ERR_RUNMODE, "TmModuleGetByName RespondReject failed");
         }
         TmSlotSetFuncAppend(tv_detect_ncpu, tm_module, NULL);

@@ -48,12 +48,12 @@ static SCMutex sc_log_fg_filters_m[SC_LOG_FILTER_MAX] = { SCMUTEX_INITIALIZER,
 
 /**
  * \brief Holds the function-dependent filters
- */
+ *//* 日志过滤函数列表 */
 static SCLogFDFilter *sc_log_fd_filters = NULL;
 
 /**
  * \brief Mutex for accessing the function-dependent filters sc_log_fd_filters
- */
+ *//* sc_log_fd_filters 列表的锁 */
 static SCMutex sc_log_fd_filters_m = SCMUTEX_INITIALIZER;
 
 /**
@@ -730,7 +730,7 @@ void SCLogReleaseFDFilters(void)
     while (fdf != NULL) {
         temp = fdf;
         fdf = fdf->next;
-        SCLogReleaseFDFilter(temp);
+        SCLogReleaseFDFilter(temp);  /* 清理过滤函数列表 */
     }
 
     sc_log_fd_filters = NULL;

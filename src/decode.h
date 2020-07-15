@@ -433,7 +433,7 @@ typedef struct Packet_
     uint8_t proto;
     /* make sure we can't be attacked on when the tunneled packet
      * has the exact same tuple as the lower levels */
-    uint8_t recursion_level;
+    uint8_t recursion_level;    /* L4解码层数，防止嵌套攻击 */
 
     uint16_t vlan_id[2];
     uint8_t vlan_idx;
@@ -443,13 +443,13 @@ typedef struct Packet_
     /* coccinelle: Packet:flowflags:FLOW_PKT_ */
 
     /* Pkt Flags */
-    uint32_t flags;
+    uint32_t flags;       /* PKT_WANTS_FLOW - 需要建流表 */
 
-    struct Flow_ *flow;
+    struct Flow_ *flow;   /* 流指针 */
 
     /* raw hash value for looking up the flow, will need to modulated to the
      * hash size still */
-    uint32_t flow_hash;
+    uint32_t flow_hash;   /* 根据五元组计算的流哈希值 */
 
     struct timeval ts;
 
@@ -550,7 +550,7 @@ typedef struct Packet_
 
     /* storage: set to pointer to heap and extended via allocation if necessary */
     uint32_t pktlen;
-    uint8_t *ext_pkt;
+    uint8_t *ext_pkt;      /*  */
 
     /* Incoming interface */
     struct LiveDevice_ *livedev;
@@ -599,7 +599,7 @@ typedef struct Packet_
     /* The Packet pool from which this packet was allocated. Used when returning
      * the packet to its owner's stack. If NULL, then allocated with malloc.
      */
-    struct PktPool_ *pool;
+    struct PktPool_ *pool;       /* 申请报文时的缓存池 */
 
 #ifdef PROFILING
     PktProfiling *profile;
@@ -1105,7 +1105,7 @@ void DecodeUnregisterCounters(void);
 
 /** indication by decoder that it feels the packet should be handled by
  *  flow engine: Packet::flow_hash will be set */
-#define PKT_WANTS_FLOW                  (1<<22)
+#define PKT_WANTS_FLOW                  (1<<22)     /* 应该建流表 */
 
 /** protocol detection done */
 #define PKT_PROTO_DETECT_TS_DONE        (1<<23)
@@ -1158,7 +1158,7 @@ static inline bool VerdictTunnelPacket(Packet *p)
     SCMutexUnlock(m);
     return verdict;
 }
-
+/* 二层解码处理入口 */
 static inline void DecodeLinkLayer(ThreadVars *tv, DecodeThreadVars *dtv,
         const int datalink, Packet *p, const uint8_t *data, const uint32_t len)
 {

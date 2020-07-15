@@ -61,7 +61,7 @@ typedef struct ThreadVars_ {
     /** function pointer to the function that runs the packet pipeline for
      *  this thread. It is passed directly to pthread_create(), hence the
      *  void pointers in and out. */
-    void *(*tm_func)(void *);
+    void *(*tm_func)(void *);   /* 线程主函数, pktacqloop -> TmThreadsSlotPktAcqLoop() */
 
     char name[16];
     char *printable_name;
@@ -77,24 +77,24 @@ typedef struct ThreadVars_ {
 
 
     /** TmModule::flags for each module part of this thread */
-    uint8_t tmm_flags;
+    uint8_t tmm_flags;     
 
     uint8_t cap_flags; /**< Flags to indicate the capabilities of all the
                             TmModules resgitered under this thread */
-    uint8_t inq_id;
+    uint8_t inq_id;    /* 如 TMQH_PACKETPOOL */
     uint8_t outq_id;
 
     /** local id */
     int id;
 
     /** incoming queue and handler */
-    Tmq *inq;
+    Tmq *inq;          /* 输入队列，及处理函数，如 TmqhInputPacketpool() */
     struct Packet_ * (*tmqh_in)(struct ThreadVars_ *);
 
-    SC_ATOMIC_DECLARE(uint32_t, flags);
+    SC_ATOMIC_DECLARE(uint32_t, flags);    /* THV_PAUSE */
 
     /** list of of TmSlot objects together forming the packet pipeline. */
-    struct TmSlot_ *tm_slots;
+    struct TmSlot_ *tm_slots;     /* 报文处理函数链, 使用 tmm_modules[] 对象初始化 */
 
     /** pointer to the flowworker in the pipeline. Used as starting point
      *  for injected packets. Can be NULL if the flowworker is not part
@@ -103,7 +103,7 @@ typedef struct ThreadVars_ {
 
     /** outgoing queue and handler */
     Tmq *outq;
-    void *outctx;
+    void *outctx;      /* 输出队列及处理函数, TmqhOutputPacketpool() */
     void (*tmqh_out)(struct ThreadVars_ *, struct Packet_ *);
 
     /** queue for decoders to temporarily store extra packets they

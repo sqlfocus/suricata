@@ -529,7 +529,7 @@ int DecodeIPV4(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
     }
     p->proto = IPV4_GET_IPPROTO(p);
 
-    /* If a fragment, pass off for re-assembly. */
+    /* IP碎片重组；If a fragment, pass off for re-assembly. */
     if (unlikely(IPV4_GET_IPOFFSET(p) > 0 || IPV4_GET_MF(p) == 1)) {
         Packet *rp = Defrag(tv, dtv, p);
         if (rp != NULL) {

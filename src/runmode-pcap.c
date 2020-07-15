@@ -39,23 +39,23 @@ const char *RunModeIdsGetDefaultMode(void)
 }
 
 int RunModeIdsPcapWorkers(void);
-
+/* 针对不同的方式single/autofp/workers，注册不同的运行函数 */
 void RunModeIdsPcapRegister(void)
 {
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "single",
                               "Single threaded pcap live mode",
-                              RunModeIdsPcapSingle);
+                              RunModeIdsPcapSingle);  /* */
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "autofp",
                               "Multi threaded pcap live mode.  Packets from "
                               "each flow are assigned to a single detect thread, "
                               "unlike \"pcap_live_auto\" where packets from "
                               "the same flow can be processed by any detect "
                               "thread",
-                              RunModeIdsPcapAutoFp);
+                              RunModeIdsPcapAutoFp);  /* 自动流负载均衡 */
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "workers",
                               "Workers pcap live mode, each thread does all"
                               " tasks from acquisition to logging",
-                              RunModeIdsPcapWorkers);
+                              RunModeIdsPcapWorkers); /* run-to-death */
 
     return;
 }
@@ -110,7 +110,7 @@ static void *ParsePcapConfig(const char *iface)
     aconf->checksum_mode = CHECKSUM_VALIDATION_AUTO;
     aconf->bpf_filter = NULL;
     if ((ConfGet("bpf-filter", &tmpbpf)) == 1) {
-        aconf->bpf_filter = tmpbpf;
+        aconf->bpf_filter = tmpbpf;      /* 获取bpf规则 */
     }
 
     SC_ATOMIC_INIT(aconf->ref);
@@ -123,9 +123,9 @@ static void *ParsePcapConfig(const char *iface)
         SCLogInfo("Unable to find pcap config using default value");
         return aconf;
     }
-
+                                         /* 获取“pcap:eth0”配置 */
     if_root = ConfFindDeviceConfig(pcap_node, iface);
-
+                                         /* 获取“pcap:default”配置 */
     if_default = ConfFindDeviceConfig(pcap_node, "default");
 
     if (if_root == NULL && if_default == NULL) {
@@ -137,12 +137,12 @@ static void *ParsePcapConfig(const char *iface)
 
     /* If there is no setting for current interface use default one as main iface */
     if (if_root == NULL) {
-        if_root = if_default;
+        if_root = if_default;            /* 无明确配置，则使用pcap:default */
         if_default = NULL;
     }
 
     if (ConfGetChildValueWithDefault(if_root, if_default, "threads", &threadsstr) != 1) {
-        aconf->threads = 1;
+        aconf->threads = 1;              /* 获取线程数，无则=1 */
     } else {
         if (threadsstr != NULL) {
             if (StringParseInt32(&aconf->threads, 10, 0, (const char *)threadsstr) < 0) {
@@ -281,11 +281,11 @@ int RunModeIdsPcapAutoFp(void)
     const char *live_dev = NULL;
 
     SCEnter();
-    RunModeInitialize();
+    RunModeInitialize();       /* 获取cpu亲昵性、检测线程比例等 */
     TimeModeSetLive();
 
     (void) ConfGet("pcap.single-pcap-dev", &live_dev);
-
+                               /* 建立运行所需要的线程，接口接收报文、解析线程，检测线程 */
     ret = RunModeSetLiveCaptureAutoFp(ParsePcapConfig,
                               PcapConfigGeThreadsCount,
                               "ReceivePcap",

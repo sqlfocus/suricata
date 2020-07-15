@@ -818,7 +818,7 @@ int RunModeIdsAFPAutoFp(void)
         SCLogError(SC_ERR_RUNMODE, "Unable to init peers list.");
         exit(EXIT_FAILURE);
     }
-
+    /* 构建对应的线程 */
     ret = RunModeSetLiveCaptureAutoFp(ParseAFPConfig,
                               AFPConfigGeThreadsCount,
                               "ReceiveAFP",

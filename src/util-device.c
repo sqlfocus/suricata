@@ -35,7 +35,7 @@ static int g_bypass_storage_id = -1;
  *  \brief Utility functions to handle device list
  */
 
-/** private device list */
+/** 初始化完成后，对应的网卡列表，private device list */
 static TAILQ_HEAD(, LiveDevice_) live_devices =
     TAILQ_HEAD_INITIALIZER(live_devices);
 
@@ -44,7 +44,7 @@ static TAILQ_HEAD(, LiveDevice_) live_devices =
  * As we don't know the size of the Storage on devices
  * before the parsing we need to wait and use this list
  * to create later the LiveDevice via LiveDeviceFinalize()
- */
+ *//* 解析命令行参数、配置文件时，获取的网卡列表 */
 static TAILQ_HEAD(, LiveDeviceName_) pre_live_devices =
     TAILQ_HEAD_INITIALIZER(pre_live_devices);
 
@@ -308,7 +308,7 @@ int LiveBuildDeviceList(const char *runmode)
 {
     return LiveBuildDeviceListCustom(runmode, "interface");
 }
-
+/* 从配置文件读取指定模式下的接口，如"pcap.interface" */
 int LiveBuildDeviceListCustom(const char *runmode, const char *itemname)
 {
     ConfNode *base = ConfGetNode(runmode);
@@ -323,11 +323,11 @@ int LiveBuildDeviceListCustom(const char *runmode, const char *itemname)
         TAILQ_FOREACH(subchild, &child->head, next) {
             if ((!strcmp(subchild->name, itemname))) {
                 if (!strcmp(subchild->val, "default"))
-                    break;
+                    break;     /* 遇到default直接退出 */
                 SCLogConfig("Adding %s %s from config file",
                           itemname, subchild->val);
                 LiveRegisterDeviceName(subchild->val);
-                i++;
+                i++;           /* 仅保存非default接口名 */
             }
         }
     }
@@ -473,7 +473,7 @@ void LiveDeviceFinalize(void)
     /* Iter on devices and register them */
     TAILQ_FOREACH_SAFE(ld, &pre_live_devices, next, pld) {
         if (ld->dev) {
-            LiveRegisterDevice(ld->dev);
+            LiveRegisterDevice(ld->dev);  /* 存储到 live_devices */
             SCFree(ld->dev);
         }
         SCFree(ld);

@@ -63,7 +63,7 @@
 #include "util-print.h"
 #include "queue.h"
 
-static int g_expectation_id = -1;
+static int g_expectation_id = -1;        /* "expectation"存储索引, storage_list */
 static int g_expectation_data_id = -1;
 
 SC_ATOMIC_DECLARE(uint32_t, expectation_count);

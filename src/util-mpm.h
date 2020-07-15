@@ -28,7 +28,7 @@
 
 #define MPM_INIT_HASH_SIZE 65536
 
-enum {
+enum {  /* 多模式匹配表 mpm_table[] 索引，对应算法种类 */
     MPM_NOTSET = 0,
 
     /* aho-corasick */
@@ -87,7 +87,7 @@ typedef struct MpmPattern_ {
 
 typedef struct MpmCtx_ {
     void *ctx;
-    uint8_t mpm_type;
+    uint8_t mpm_type;       /* MPM_AC */
 
     uint8_t flags;
 
@@ -99,13 +99,13 @@ typedef struct MpmCtx_ {
     uint16_t minlen;
     uint16_t maxlen;
 
-    uint32_t memory_cnt;
+    uint32_t memory_cnt;    /* 已使用的内存 */
     uint32_t memory_size;
 
     uint32_t max_pat_id;
 
     /* hash used during ctx initialization */
-    MpmPattern **init_hash;
+    MpmPattern **init_hash; /* */
 } MpmCtx;
 
 /* if we want to retrieve an unique mpm context from the mpm context factory

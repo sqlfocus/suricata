@@ -75,7 +75,7 @@ typedef struct FlowWorkerThreadData_ {
  */
 static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packet *p)
 {
-    FlowHandlePacketUpdate(p->flow, p);
+    FlowHandlePacketUpdate(p->flow, p);   /* 更新流表项 */
 
     int state = SC_ATOMIC_GET(p->flow->flow_state);
     switch (state) {
@@ -185,7 +185,7 @@ static void FlowPruneFiles(Packet *p)
         }
     }
 }
-
+/* 流处理函数入口 */
 static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 {
     FlowWorkerThreadData *fw = data;
@@ -202,11 +202,11 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     if (p->flags & PKT_WANTS_FLOW) {
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_FLOW);
 
-        FlowHandlePacket(tv, fw->dtv, p);
+        FlowHandlePacket(tv, fw->dtv, p);    /* 查找或建流 */
         if (likely(p->flow != NULL)) {
             DEBUG_ASSERT_FLOW_LOCKED(p->flow);
             if (FlowUpdate(tv, fw, p) == TM_ECODE_DONE) {
-                FLOWLOCK_UNLOCK(p->flow);
+                FLOWLOCK_UNLOCK(p->flow);    /* 更新流 */
                 return TM_ECODE_OK;
             }
         }
@@ -279,7 +279,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     DEBUG_ASSERT_FLOW_LOCKED(p->flow);
     SCLogDebug("packet %"PRIu64" calling Detect", p->pcap_cnt);
 
-    if (detect_thread != NULL) {
+    if (detect_thread != NULL) {         /* 流检测 */
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_DETECT);
         Detect(tv, p, detect_thread);
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_DETECT);

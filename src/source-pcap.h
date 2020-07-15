@@ -45,18 +45,18 @@ typedef struct PcapIfaceConfig_
 {
     char iface[PCAP_IFACE_NAME_LENGTH];
     /* number of threads */
-    int threads;
+    int threads;                /* 线程数 */
     /* socket buffer size */
     int buffer_size;
     /* snapshot length */
     int snaplen;
     /* promiscuous value */
-    int promisc;
+    int promisc;                /* LIBPCAP_PROMISC */
     /* BPF filter */
-    const char *bpf_filter;
+    const char *bpf_filter;     /* 配置的bpf规则 */
     ChecksumValidationMode checksum_mode;
     SC_ATOMIC_DECLARE(unsigned int, ref);
-    void (*DerefFunc)(void *);
+    void (*DerefFunc)(void *);  /* PcapDerefConfig() */
 } PcapIfaceConfig;
 
 #endif /* __SOURCE_PCAP_H__ */

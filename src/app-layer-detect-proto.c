@@ -110,10 +110,10 @@ typedef struct AppLayerProtoDetectProbingParser_ {
 
 typedef struct AppLayerProtoDetectPMSignature_ {
     AppProto alproto;
-    uint8_t direction;  /**< direction for midstream */
+    uint8_t direction;      /* STREAM_TOSERVER */
     SigIntId id;
     /* \todo Change this into a non-pointer */
-    DetectContentData *cd;
+    DetectContentData *cd;  /* 规则引擎环境 */
     uint16_t pp_min_depth;
     uint16_t pp_max_depth;
     ProbingParserFPtr PPFunc;
@@ -129,7 +129,7 @@ typedef struct AppLayerProtoDetectPMCtx_ {
      *  unique pattern with a unique id, we can lookup the signature by
      *  the pattern id. */
     AppLayerProtoDetectPMSignature **map;
-    AppLayerProtoDetectPMSignature *head;
+    AppLayerProtoDetectPMSignature *head;   /* 链表 */
 
     /* \todo we don't need this except at setup time.  Get rid of it. */
     PatIntId max_pat_id;
@@ -147,18 +147,18 @@ typedef struct AppLayerProtoDetectCtxIpproto_ {
 typedef struct AppLayerProtoDetectCtx_ {
     /* Context per ip_proto.
      * \todo Modify ctx_ipp to hold for only tcp and udp. The rest can be
-     *       implemented if needed.  Waste of space otherwise. */
-    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];
+     *       implemented if needed.  Waste of space otherwise. */ /* 传输层协议->流方向->L7识别规则表 */
+    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];    /* L7协议识别环境，内含多模式匹配的上下文 */
 
     /* Global SPM thread context prototype. */
-    SpmGlobalThreadCtx *spm_global_thread_ctx;
+    SpmGlobalThreadCtx *spm_global_thread_ctx;   /* 单模式匹配的上下文 */
 
-    AppLayerProtoDetectProbingParser *ctx_pp;
+    AppLayerProtoDetectProbingParser *ctx_pp;    /* */
 
     /* Indicates the protocols that have registered themselves
      * for protocol detection.  This table is independent of the
      * ipproto. */
-    const char *alproto_names[ALPROTO_MAX];
+    const char *alproto_names[ALPROTO_MAX];      /* 注册的检测协议名，如"http" */
 } AppLayerProtoDetectCtx;
 
 /**
@@ -171,7 +171,7 @@ struct AppLayerProtoDetectThreadCtx_ {
     SpmThreadCtx *spm_thread_ctx;
 };
 
-/* The global app layer proto detection context. */
+/* 应用层协议发现相关的环境，The global app layer proto detection context. */
 static AppLayerProtoDetectCtx alpd_ctx;
 
 static void AppLayerProtoDetectPEGetIpprotos(AppProto alproto,
@@ -1447,11 +1447,11 @@ static int AppLayerProtoDetectPMRegisterPattern(uint8_t ipproto, AppProto alprot
 
     DetectContentData *cd = DetectContentParseEncloseQuotes(
             alpd_ctx.spm_global_thread_ctx, pattern);
-    if (cd == NULL)
+    if (cd == NULL)            /* 初始化单模匹配引擎 */
         goto error;
     cd->depth = depth;
     cd->offset = offset;
-    if (!is_cs) {
+    if (!is_cs) {              /* 不关注大小写，则重新构建引擎 */
         /* Rebuild as nocase */
         SpmDestroyCtx(cd->spm_ctx);
         cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1,
@@ -1471,10 +1471,10 @@ static int AppLayerProtoDetectPMRegisterPattern(uint8_t ipproto, AppProto alprot
 
     if (pp_max_depth > ctx_pm->pp_max_len)
         ctx_pm->pp_max_len = pp_max_depth;
-    if (depth < ctx_pm->min_len)
+    if (depth < ctx_pm->min_len) /* 重新初始化全局信息 */
         ctx_pm->min_len = depth;
 
-    /* Finally turn it into a signature and add to the ctx. */
+    /* 加入链表 alpd_ctx.ctx_ipp.ctx_pm.head, Finally turn it into a signature and add to the ctx. */
     AppLayerProtoDetectPMAddSignature(ctx_pm, cd, alproto, direction,
             PPFunc, pp_min_depth, pp_max_depth);
 
@@ -1776,16 +1776,16 @@ int AppLayerProtoDetectSetup(void)
     alpd_ctx.spm_global_thread_ctx = SpmInitGlobalThreadCtx(spm_matcher);
     if (alpd_ctx.spm_global_thread_ctx == NULL) {
         SCLogError(SC_ERR_FATAL, "Unable to alloc SpmGlobalThreadCtx.");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);         /* 初始化App单模匹配环境 */
     }
 
     for (i = 0; i < FLOW_PROTO_DEFAULT; i++) {
         for (j = 0; j < 2; j++) {
             MpmInitCtx(&alpd_ctx.ctx_ipp[i].ctx_pm[j].mpm_ctx, mpm_matcher);
-        }
+        }                           /* 初始化传输层多摸匹配环境 */
     }
 
-    AppLayerExpectationSetup();
+    AppLayerExpectationSetup();     /* 申请"expectation"（ippair、flow）存储内存 */
 
     SCReturnInt(0);
 }
@@ -1889,7 +1889,7 @@ void AppLayerProtoDetectReset(Flow *f)
 
 int AppLayerProtoDetectConfProtoDetectionEnabled(const char *ipproto,
                                                  const char *alproto)
-{
+{/* 检测配置文件是否使能对应的协议检测 */
     SCEnter();
 
     BUG_ON(ipproto == NULL || alproto == NULL);

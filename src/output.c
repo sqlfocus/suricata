@@ -113,7 +113,7 @@ typedef TAILQ_HEAD(LoggerThreadStore_, LoggerThreadStoreNode_) LoggerThreadStore
 
 /**
  * The list of all registered (known) output modules.
- */
+ *//* 输出模块列表 */
 OutputModuleList output_modules = TAILQ_HEAD_INITIALIZER(output_modules);
 
 /**

@@ -188,7 +188,7 @@ volatile sig_atomic_t sigusr2_count = 0;
  * Flag to indicate if the engine is at the initialization
  * or already processing packets. 3 stages: SURICATA_INIT,
  * SURICATA_RUNTIME and SURICATA_FINALIZE
- */
+ *//* 引擎状态标识 */
 SC_ATOMIC_DECLARE(unsigned int, engine_stage);
 
 /* Max packets processed simultaniously per thread. */
@@ -205,17 +205,17 @@ int run_mode = RUNMODE_UNKNOWN;
 static enum EngineMode g_engine_mode = ENGINE_MODE_IDS;
 
 /** Host mode: set if box is sniffing only
- * or is a router */
+ * or is a router *//* 设备运行模式，默认仅监听 */
 uint8_t host_mode = SURI_HOST_IS_SNIFFER_ONLY;
 
 /** Maximum packets to simultaneously process. */
 intmax_t max_pending_packets;
 
 /** global indicating if detection is enabled */
-int g_detect_disabled = 0;
+int g_detect_disabled = 0;    /* 是否关闭检测引擎，默认关闭 */
 
 /** set caps or not */
-int sc_set_caps = FALSE;
+int sc_set_caps = FALSE;      /* 处于安全考虑，是否去除主线程特权 */
 
 /** highest mtu of the interfaces we monitor */
 int g_default_mtu = 0;
@@ -231,10 +231,10 @@ int g_disable_randomness = 1;
 
 /** determine (without branching) if we include the vlan_ids when hashing or
   * comparing flows */
-uint16_t g_vlan_mask = 0xffff;
+uint16_t g_vlan_mask = 0xffff;   /* 流是否考虑将vlan id作为元组之一 */
 
-/** Suricata instance */
-SCInstance suricata;
+/** Suricata实例数据结构，保存程序当前的一些状态、标志等上下文环境 */
+SCInstance suricata;  /* 通常作为参数传递给各个模块的子函数 */
 
 int SuriHasSigFile(void)
 {
@@ -315,9 +315,9 @@ static void SignalHandlerSigHup(/*@unused@*/ int sig)
 
 void GlobalsInitPreConfig(void)
 {
-    TimeInit();
-    SupportFastPatternForSigMatchTypes();
-    SCThresholdConfGlobalInit();
+    TimeInit();      /* 设置时区 */
+    SupportFastPatternForSigMatchTypes(); /* 快速模式匹配，注册关键字 */
+    SCThresholdConfGlobalInit();          /* threshold配置匹配规则 */
 }
 
 static void GlobalsDestroy(SCInstance *suri)
@@ -833,7 +833,7 @@ static void PrintBuildInfo(void)
 int coverage_unittests;
 int g_ut_modules;
 int g_ut_covered;
-
+/* 注册线程级别功能模块，如PCAP收发报文等 */
 void RegisterAllModules(void)
 {
     // zero all module storage
@@ -854,8 +854,8 @@ void RegisterAllModules(void)
     TmModuleVerdictIPFWRegister();
     TmModuleDecodeIPFWRegister();
     /* pcap live */
-    TmModuleReceivePcapRegister();
-    TmModuleDecodePcapRegister();
+    TmModuleReceivePcapRegister();    /* pcap收发报文 */
+    TmModuleDecodePcapRegister();     /* pcap解析报文 */
     /* pcap file */
     TmModuleReceivePcapFileRegister();
     TmModuleDecodePcapFileRegister();
@@ -919,7 +919,7 @@ static TmEcode ParseInterfacesList(const int runmode, char *pcap_dev)
 
     /* run the selected runmode */
     if (runmode == RUNMODE_PCAP_DEV) {
-        if (strlen(pcap_dev) == 0) {
+        if (strlen(pcap_dev) == 0) {   /* 如果命令行未指定监听网卡，则从配置文件获取 */
             int ret = LiveBuildDeviceList("pcap");
             if (ret == 0) {
                 SCLogError(SC_ERR_INITIALIZATION, "No interface found in config for pcap");
@@ -929,7 +929,7 @@ static TmEcode ParseInterfacesList(const int runmode, char *pcap_dev)
     } else if (runmode == RUNMODE_PFRING) {
         /* FIXME add backward compat support */
         /* iface has been set on command line */
-        if (strlen(pcap_dev)) {
+        if (strlen(pcap_dev)) {        /* 对于pfring模式，将命令行指定的接口名设置为pfring.live-interface字段的值 */
             if (ConfSetFinal("pfring.live-interface", pcap_dev) != 1) {
                 SCLogError(SC_ERR_INITIALIZATION, "Failed to set pfring.live-interface");
                 SCReturnInt(TM_ECODE_FAILED);
@@ -1120,7 +1120,7 @@ static int ParseCommandLinePcapLive(SCInstance *suri, const char *in_arg)
 {
     memset(suri->pcap_dev, 0, sizeof(suri->pcap_dev));
 
-    if (in_arg != NULL) {
+    if (in_arg != NULL) {  /* 存储网卡名到 SCInstance->pcap_dev */
         /* some windows shells require escaping of the \ in \Device. Otherwise
          * the backslashes are stripped. We put them back here. */
         if (strlen(in_arg) > 9 && strncmp(in_arg, "DeviceNPF", 9) == 0) {
@@ -1139,9 +1139,9 @@ static int ParseCommandLinePcapLive(SCInstance *suri, const char *in_arg)
     }
 
     if (suri->run_mode == RUNMODE_UNKNOWN) {
-        suri->run_mode = RUNMODE_PCAP_DEV;
+        suri->run_mode = RUNMODE_PCAP_DEV;    /* 指定引擎默认运行模式 */
         if (in_arg) {
-            LiveRegisterDeviceName(suri->pcap_dev);
+            LiveRegisterDeviceName(suri->pcap_dev); /* 将网卡加入 pre_live_devices, 待最终初始化 */
         }
     } else if (suri->run_mode == RUNMODE_PCAP_DEV) {
         LiveRegisterDeviceName(suri->pcap_dev);
@@ -1337,7 +1337,7 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
 #endif /* HAVE_NFLOG */
             } else if (strcmp((long_opts[option_index]).name , "pcap") == 0) {
                 if (ParseCommandLinePcapLive(suri, optarg) != TM_ECODE_OK) {
-                    return TM_ECODE_FAILED;
+                    return TM_ECODE_FAILED;     /* pcap模式时，指定待监听的网卡 */
                 }
             } else if(strcmp((long_opts[option_index]).name, "simulate-ips") == 0) {
                 SCLogInfo("Setting IPS mode");
@@ -1620,8 +1620,8 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
         case 'h':
             suri->run_mode = RUNMODE_PRINT_USAGE;
             return TM_ECODE_OK;
-        case 'i':
-            if (optarg == NULL) {
+        case 'i':       /* 注册待处理的网卡，如果参数中未指定运行模式 */
+            if (optarg == NULL) { /* 则优先afpacket，其次pcaplive */
                 SCLogError(SC_ERR_INITIALIZATION, "no option argument (optarg) for -i");
                 return TM_ECODE_FAILED;
             }
@@ -1856,8 +1856,8 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
     if (engine_analysis)
         suri->run_mode = RUNMODE_ENGINE_ANALYSIS;
 
-    suri->offline = IsRunModeOffline(suri->run_mode);
-    g_system = suri->system = IsRunModeSystem(suri->run_mode);
+    suri->offline = IsRunModeOffline(suri->run_mode);  /* 判断是否为离线模式 */
+    g_system = suri->system = IsRunModeSystem(suri->run_mode); /* 判断是否为系统模式 */
 
     ret = SetBpfString(optind, argv);
     if (ret != TM_ECODE_OK)
@@ -1920,10 +1920,10 @@ static int MayDaemonize(SCInstance *suri)
     }
 
     if (suri->daemon == 1) {
-        Daemonize();
+        Daemonize();                  /* 精灵化 */
     }
 
-    if (suri->pid_filename != NULL) {
+    if (suri->pid_filename != NULL) { /* 创建PID文件 */
         if (SCPidfileCreate(suri->pid_filename) != 0) {
             SCFree(suri->pid_filename);
             suri->pid_filename = NULL;
@@ -1943,8 +1943,8 @@ static int InitSignalHandler(SCInstance *suri)
 {
     /* registering signals we use */
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-    UtilSignalHandlerSetup(SIGINT, SignalHandlerSigint);
-    UtilSignalHandlerSetup(SIGTERM, SignalHandlerSigterm);
+    UtilSignalHandlerSetup(SIGINT, SignalHandlerSigint);    /* ctrl-c信号处理 */
+    UtilSignalHandlerSetup(SIGTERM, SignalHandlerSigterm);  /* kill信号处理 */
 #endif
 #ifndef OS_WIN32
     UtilSignalHandlerSetup(SIGHUP, SignalHandlerSigHup);
@@ -1997,7 +1997,7 @@ void PreRunInit(const int runmode)
         return;
 
     StatsInit();
-#ifdef PROFILING
+#ifdef PROFILING                      /* 初始化内建性能分析模块 */
     SCProfilingRulesGlobalInit();
     SCProfilingKeywordsGlobalInit();
     SCProfilingPrefilterGlobalInit();
@@ -2005,12 +2005,12 @@ void PreRunInit(const int runmode)
     SCProfilingInit();
 #endif /* PROFILING */
     DatasetsInit();
-    DefragInit();
-    FlowInitConfig(FLOW_QUIET);
-    IPPairInitConfig(FLOW_QUIET);
-    StreamTcpInitConfig(STREAM_VERBOSE);
+    DefragInit();                     /* 初始化IP分片重组模块 */
+    FlowInitConfig(FLOW_QUIET);       /* 初始化FLOW引擎 */
+    IPPairInitConfig(FLOW_QUIET);     /* */
+    StreamTcpInitConfig(STREAM_VERBOSE);  /* 初始化tcp流重组模块 */
     AppLayerParserPostStreamSetup();
-    AppLayerRegisterGlobalCounters();
+    AppLayerRegisterGlobalCounters(); /* 注册引用层全局计数器 */
 }
 
 /* tasks we need to run before packets start flowing,
@@ -2021,7 +2021,7 @@ void PreRunPostPrivsDropInit(const int runmode)
         return;
 
     StatsSetupPostConfigPreOutput();
-    RunModeInitializeOutputs();
+    RunModeInitializeOutputs();       /* 初始化输出模块 */
     StatsSetupPostConfigPostOutput();
 }
 
@@ -2143,10 +2143,10 @@ static int FinalizeRunMode(SCInstance *suri, char **argv)
             break;
     }
     /* Set the global run mode and offline flag. */
-    run_mode = suri->run_mode;
+    run_mode = suri->run_mode;       /* 初始化运行模式 */
 
     if (!CheckValidDaemonModes(suri->daemon, suri->run_mode)) {
-        return TM_ECODE_FAILED;
+        return TM_ECODE_FAILED;      /* pcap模式不允许daemon化 */
     }
 
     return TM_ECODE_OK;
@@ -2177,7 +2177,7 @@ static void SetupDelayedDetect(SCInstance *suri)
     }
 
 }
-
+/* 加载规则文件 */
 static int LoadSignatures(DetectEngineCtx *de_ctx, SCInstance *suri)
 {
     if (SigLoadSignatures(de_ctx, suri->sig_file, suri->sig_file_exclusive) < 0) {
@@ -2195,7 +2195,7 @@ static int ConfigGetCaptureValue(SCInstance *suri)
      * back on a sane default. */
     if (ConfGetInt("max-pending-packets", &max_pending_packets) != 1)
         max_pending_packets = DEFAULT_MAX_PENDING_PACKETS;
-    if (max_pending_packets >= 65535) {
+    if (max_pending_packets >= 65535) {  /* 每接收线程最大pending报文数 */
         SCLogError(SC_ERR_INVALID_YAML_CONF_ENTRY,
                 "Maximum max-pending-packets setting is 65534. "
                 "Please check %s for errors", suri->conf_filename);
@@ -2206,7 +2206,7 @@ static int ConfigGetCaptureValue(SCInstance *suri)
 
     /* Pull the default packet size from the config, if not found fall
      * back on a sane default. */
-    const char *temp_default_packet_size;
+    const char *temp_default_packet_size;/* 默认报文大小 */
     if ((ConfGet("default-packet-size", &temp_default_packet_size)) != 1) {
         int mtu = 0;
         int lthread;
@@ -2253,7 +2253,7 @@ static int ConfigGetCaptureValue(SCInstance *suri)
                             dev[len-1] = '\0';
                         }
                     }
-                    mtu = GetIfaceMTU(dev);
+                    mtu = GetIfaceMTU(dev);  /* 通过接口MTU更新默认报文大小 */
                     g_default_mtu = MAX(mtu, g_default_mtu);
 
                     unsigned int iface_max_packet_size = GetIfaceMaxPacketSize(dev);
@@ -2292,7 +2292,7 @@ static void PostRunStartedDetectSetup(const SCInstance *suri)
         UtilSignalUnblock(SIGUSR2);
     }
 #endif
-    if (suri->delayed_detect) {
+    if (suri->delayed_detect) {   /* 设置了延迟检测，需重新加载规则 */
         /* force 'reload', this will load the rules and swap engines */
         DetectEngineReload(suri);
         SCLogNotice("Signature(s) loaded, Detect thread(s) activated.");
@@ -2302,14 +2302,14 @@ static void PostRunStartedDetectSetup(const SCInstance *suri)
 #endif
     }
 }
-
+/* 加载配置文件后，构建引擎，如加载规则等 */
 void PostConfLoadedDetectSetup(SCInstance *suri)
 {
     DetectEngineCtx *de_ctx = NULL;
     if (!suri->disabled_detect) {
-        SCClassConfInit();
-        SCReferenceConfInit();
-        SetupDelayedDetect(suri);
+        SCClassConfInit();         /* 分类class正则初始化 */
+        SCReferenceConfInit();     /* reference正则初始化 */
+        SetupDelayedDetect(suri);  /* 确认是否设置延迟检测，以减少IPS模式下机器down time时长 */
         int mt_enabled = 0;
         (void)ConfGetBool("multi-detect.enabled", &mt_enabled);
         int default_tenant = 0;
@@ -2325,7 +2325,7 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
         } else if (mt_enabled && !default_tenant && suri->run_mode != RUNMODE_CONF_TEST) {
             de_ctx = DetectEngineCtxInitStubForMT();
         } else {
-            de_ctx = DetectEngineCtxInit();
+            de_ctx = DetectEngineCtxInit();   /* 初始化检测引擎 */
         }
         if (de_ctx == NULL) {
             SCLogError(SC_ERR_INITIALIZATION, "initializing detection engine "
@@ -2335,12 +2335,12 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
 
         if (de_ctx->type == DETECT_ENGINE_TYPE_NORMAL) {
             if (LoadSignatures(de_ctx, suri) != TM_ECODE_OK)
-                exit(EXIT_FAILURE);
+                exit(EXIT_FAILURE);           /* 加载规则文件 */
         }
 
         gettimeofday(&de_ctx->last_reload, NULL);
-        DetectEngineAddToMaster(de_ctx);
-        DetectEngineBumpVersion();
+        DetectEngineAddToMaster(de_ctx);      /* 规则引擎加入master链表 */
+        DetectEngineBumpVersion();            /* 更新bump版本号 */
     }
 }
 
@@ -2381,10 +2381,10 @@ static void PostConfLoadedSetupHostMode(void)
             if (strcmp(hostmode, "auto") != 0) {
                 WarnInvalidConfEntry("host-mode", "%s", "auto");
             }
-            if (EngineModeIsIPS()) {
-                host_mode = SURI_HOST_IS_ROUTER;
+            if (EngineModeIsIPS()) {    /* 如果设置为auto，则根据IDS/IPS角色选择主机模式 */
+                host_mode = SURI_HOST_IS_ROUTER;         /* IPS为串联路由 */
             } else {
-                host_mode = SURI_HOST_IS_SNIFFER_ONLY;
+                host_mode = SURI_HOST_IS_SNIFFER_ONLY;   /* IDS为旁路监听 */
             }
         }
     } else {
@@ -2404,7 +2404,7 @@ static void PostConfLoadedSetupHostMode(void)
 static void SetupUserMode(SCInstance *suri)
 {
     /* apply 'user mode' config updates here */
-    if (suri->system == false) {
+    if (suri->system == false) {   /* 用户模式下，修正日志、数据目录为当前路径 */
         if (suri->set_logdir == false) {
             /* override log dir to current work dir" */
             if (ConfigSetLogDirectory((char *)".") != TM_ECODE_OK) {
@@ -2434,20 +2434,20 @@ int PostConfLoadedSetup(SCInstance *suri)
 #endif
 
     /* load the pattern matchers */
-    MpmTableSetup();
-    SpmTableSetup();
+    MpmTableSetup();        /* 注册多模式匹配算法，如AC等 */
+    SpmTableSetup();        /* 注册单模式匹配算法，如Boyer-Moore/Hyper-scan等 */
 
     int disable_offloading;
     if (ConfGetBool("capture.disable-offloading", &disable_offloading) == 0)
         disable_offloading = 1;
-    if (disable_offloading) {
+    if (disable_offloading) {       /* 是否支持网卡offloading */
         LiveSetOffloadDisable();
     } else {
         LiveSetOffloadWarn();
     }
 
     if (suri->checksum_validation == -1) {
-        const char *cv = NULL;
+        const char *cv = NULL;      /* 是否验证校验和 */
         if (ConfGetValue("capture.checksum-validation", &cv) == 1) {
             if (strcmp(cv, "none") == 0) {
                 suri->checksum_validation = 0;
@@ -2465,23 +2465,23 @@ int PostConfLoadedSetup(SCInstance *suri)
             break;
     }
 
-    if (suri->runmode_custom_mode) {
+    if (suri->runmode_custom_mode) {/* 更新运行模式，为命令行--runmode指定的模式 */
         ConfSet("runmode", suri->runmode_custom_mode);
     }
 
-    StorageInit();
+    StorageInit();                  /* 初始化存储模块, storage_list */
 #ifdef HAVE_PACKET_EBPF
     EBPFRegisterExtension();
     LiveDevRegisterExtension();
 #endif
-    RegisterFlowBypassInfo();
-    AppLayerSetup();
+    RegisterFlowBypassInfo();       /* 注册流bypass计数器存储内存 */
+    AppLayerSetup();                /* 应用协议识别相关设置 */
 
     /* Suricata will use this umask if provided. By default it will use the
        umask passed on from the shell. */
     const char *custom_umask;
     if (ConfGet("umask", &custom_umask) == 1) {
-        uint16_t mask;
+        uint16_t mask;              /* 设置此进程文件权限 */
         if (StringParseUint16(&mask, 8, strlen(custom_umask),
                                     custom_umask) > 0) {
             umask((mode_t)mask);
@@ -2491,15 +2491,15 @@ int PostConfLoadedSetup(SCInstance *suri)
 
     if (ConfigGetCaptureValue(suri) != TM_ECODE_OK) {
         SCReturnInt(TM_ECODE_FAILED);
-    }
+    }                               /* 设置抓包数上限、默认报文大小等 */
 
 #ifdef NFQ
     if (suri->run_mode == RUNMODE_NFQ)
         NFQInitConfig(FALSE);
 #endif
 
-    /* Load the Host-OS lookup. */
-    SCHInfoLoadFromConfig();
+    /* Load the Host-OS lookup. */  /* IDS检测根据特定OS漏洞规则，因此知道OS类型很有帮助 */
+    SCHInfoLoadFromConfig();        /* 加载 IP<-->HOST OS 之间的对应关系 */
 
     if (suri->run_mode == RUNMODE_ENGINE_ANALYSIS) {
         SCLogInfo("== Carrying out Engine Analysis ==");
@@ -2513,14 +2513,14 @@ int PostConfLoadedSetup(SCInstance *suri)
     }
 
     /* hardcoded initialization code */
-    SigTableSetup(); /* load the rule keywords */
+    SigTableSetup();                /* 初始化检测引擎，注册支持的规则关键字到 sigmatch_table[] */
     SigTableApplyStrictCommandlineOption(suri->strict_rule_parsing_string);
-    TmqhSetup();
+    TmqhSetup();                    /* 注册队列处理函数，用于衔接线程模块、数据包队列 */
 
-    CIDRInit();
-    SCProtoNameInit();
+    CIDRInit();                     /* 初始化掩码数组，以加速获取对应bit位数的掩码 */
+    SCProtoNameInit();              /* 传输层协议映射表，来自/etc/protocols */
 
-    TagInitCtx();
+    TagInitCtx();                   /* tag/bit等关键字注册到storage模块 */
     PacketAlertTagInit();
     ThresholdInit();
     HostBitInitCtx();
@@ -2531,7 +2531,7 @@ int PostConfLoadedSetup(SCInstance *suri)
                 "basic address vars test failed. Please check %s for errors",
                 suri->conf_filename);
         SCReturnInt(TM_ECODE_FAILED);
-    }
+    }                               /* 检测IP/Port配置项格式是否正确 */
     if (DetectPortTestConfVars() < 0) {
         SCLogError(SC_ERR_INVALID_YAML_CONF_ENTRY,
                 "basic port vars test failed. Please check %s for errors",
@@ -2540,23 +2540,23 @@ int PostConfLoadedSetup(SCInstance *suri)
     }
 
     FeatureTrackingRegister(); /* must occur prior to output mod registration */
-    RegisterAllModules();
+    RegisterAllModules();           /* 注册支持的线程模块，如pcap报文捕获、解码等, tmm_modules[] */
 
-    AppLayerHtpNeedFileInspection();
+    AppLayerHtpNeedFileInspection();/* 设置libhtp库的一些标志位 */
 
-    StorageFinalize();
+    StorageFinalize();              /* 分配存储类型信息表 storage_map, 完成storage模块初始化 */
 
-    TmModuleRunInit();
+    TmModuleRunInit();              /* 初始化各线程模块, call ->Init() */
 
     if (MayDaemonize(suri) != TM_ECODE_OK)
-        SCReturnInt(TM_ECODE_FAILED);
+        SCReturnInt(TM_ECODE_FAILED);         /* 进程精灵化 */
 
     if (InitSignalHandler(suri) != TM_ECODE_OK)
-        SCReturnInt(TM_ECODE_FAILED);
+        SCReturnInt(TM_ECODE_FAILED);         /* 注册信号处理函数 */
 
     /* Check for the existance of the default logging directory which we pick
      * from suricata.yaml.  If not found, shut the engine down */
-    suri->log_dir = ConfigGetLogDirectory();
+    suri->log_dir = ConfigGetLogDirectory();  /* 检测日志目录是否存在 */
 
     if (ConfigCheckLogDirectoryExists(suri->log_dir) != TM_ECODE_OK) {
         SCLogError(SC_ERR_LOGDIR_CONFIG, "The logging directory \"%s\" "
@@ -2580,20 +2580,20 @@ int PostConfLoadedSetup(SCInstance *suri)
     }
 #endif
 
-    if (suri->disabled_detect) {
+    if (suri->disabled_detect) {     /* 如果检测引擎未是能，则关闭流重组 */
         SCLogConfig("detection engine disabled");
         /* disable raw reassembly */
         (void)ConfSetFinal("stream.reassembly.raw", "false");
     }
 
-    HostInitConfig(HOST_VERBOSE);
+    HostInitConfig(HOST_VERBOSE);    /* 初始化 host_config */
     SCAsn1LoadConfig();
 
-    CoredumpLoadConfig();
+    CoredumpLoadConfig();            /* 使能coredump，并初始化相关配置 */
 
-    DecodeGlobalConfig();
+    DecodeGlobalConfig();            /* */
 
-    LiveDeviceFinalize();
+    LiveDeviceFinalize();            /* 存储到 live_devices, 以维护网卡基本信息，如收、丢包等 */
 
     /* set engine mode if L2 IPS */
     if (PostDeviceFinalizedSetup(suri) != TM_ECODE_OK) {
@@ -2601,9 +2601,9 @@ int PostConfLoadedSetup(SCInstance *suri)
     }
 
     /* hostmode depends on engine mode being set */
-    PostConfLoadedSetupHostMode();
+    PostConfLoadedSetupHostMode();   /* 设置设备工作模式 host_mode, 旁路监听还是串联动作/SURI_HOST_IS_ROUTER */
 
-    PreRunInit(suri->run_mode);
+    PreRunInit(suri->run_mode);      /* 功能模块初始化，如IP碎片重组等 */
 
     SCReturnInt(TM_ECODE_OK);
 }
@@ -2615,19 +2615,19 @@ static void SuricataMainLoop(SCInstance *suri)
             suricata_ctl_flags |= SURICATA_STOP;
         }
 
-        if (suricata_ctl_flags & SURICATA_STOP) {
+        if (suricata_ctl_flags & SURICATA_STOP) { /* 收到ctrl-c信号/kill命令，进程退出 */
             SCLogNotice("Signal Received.  Stopping engine.");
             break;
         }
 
-        TmThreadCheckThreadState();
+        TmThreadCheckThreadState();        /* 检测线程是否正常；异常会导致进程退出 */
 
-        if (sighup_count > 0) {
+        if (sighup_count > 0) {            /* SIGHUP信号（终端连接结束）处理，文件交替轮换 */
             OutputNotifyFileRotation();
             sighup_count--;
         }
 
-        if (sigusr2_count > 0) {
+        if (sigusr2_count > 0) {           /* SIGUSR2信号处理，重新加载引擎规则 */
             if (!(DetectEngineReloadIsStart())) {
                 DetectEngineReloadStart();
                 DetectEngineReload(suri);
@@ -2644,7 +2644,7 @@ static void SuricataMainLoop(SCInstance *suri)
     }
 }
 
-SuricataContext context;
+SuricataContext context;    /* 全局函数指针表 */
 
 /**
  * \brief Global initialization common to all runmodes.
@@ -2669,12 +2669,12 @@ int InitGlobal(void) {
 
     rs_init(&context);
 
-    SC_ATOMIC_INIT(engine_stage);
+    SC_ATOMIC_INIT(engine_stage);              /* 设置引擎状态为启动 */
 
     /* initialize the logging subsys */
-    SCLogInitLogModule(NULL);
+    SCLogInitLogModule(NULL);                  /* <第一次>初始化日志模块，全部利用默认值 */
 
-    (void)SCSetThreadName("Suricata-Main");
+    (void)SCSetThreadName("Suricata-Main");    /* 设置主线程名 */
 
     /* Ignore SIGUSR2 as early as possble. We redeclare interest
      * once we're done launching threads. The goal is to either die
@@ -2682,26 +2682,26 @@ int InitGlobal(void) {
      */
 #ifndef OS_WIN32
     UtilSignalHandlerSetup(SIGUSR2, SIG_IGN);
-    if (UtilSignalBlock(SIGUSR2)) {
+    if (UtilSignalBlock(SIGUSR2)) {            /* 暂时忽略信号 SIGUSR2（用于规则引擎重载） */
         SCLogError(SC_ERR_INITIALIZATION, "SIGUSR2 initialization error");
         return EXIT_FAILURE;
     }
 #endif
 
-    ParseSizeInit();
-    RunModeRegisterRunModes();
+    ParseSizeInit();                     /* 初始化大小参数正则式，如10Mb */
+    RunModeRegisterRunModes();           /* 注册模式运行函数 */
 
     /* Initialize the configuration module. */
-    ConfInit();
+    ConfInit();                          /* 初始化配置文件解析结构root节点 */
 
     return 0;
 }
 
 int SuricataMain(int argc, char **argv)
 {
-    SCInstanceInit(&suricata, argv[0]);
+    SCInstanceInit(&suricata, argv[0]);  /* 初始化suricata全局实例 */
 
-    if (InitGlobal() != 0) {
+    if (InitGlobal() != 0) {             /* 全局初始化：第一次初始化日志模块，注册模式运行函数 */
         exit(EXIT_FAILURE);
     }
 
@@ -2713,65 +2713,65 @@ int SuricataMain(int argc, char **argv)
 #endif /* OS_WIN32 */
 
     if (ParseCommandLine(argc, argv, &suricata) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);              /* 命令行解析，确定 SCInstance->run_mode */
     }
 
     if (FinalizeRunMode(&suricata, argv) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);              /* 检测运行模式是否可以daemon化 */
     }
 
     switch (StartInternalRunMode(&suricata, argc, argv)) {
         case TM_ECODE_DONE:
-            exit(EXIT_SUCCESS);
+            exit(EXIT_SUCCESS);          /* 检查是否为内部模式(打印使用说明等)，如果是运行后结束 */
         case TM_ECODE_FAILED:
             exit(EXIT_FAILURE);
     }
 
     /* Initializations for global vars, queues, etc (memsets, mutex init..) */
-    GlobalsInitPreConfig();
+    GlobalsInitPreConfig();              /* 解析配置文件前，初始化全局变量 */
 
     /* Load yaml configuration file if provided. */
     if (LoadYamlConfig(&suricata) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);              /* 加载-c指定的yaml配置文件，由libyaml库解析 */
     }
 
     if (suricata.run_mode == RUNMODE_DUMP_CONFIG) {
-        ConfDump();
+        ConfDump();                      /* 打印配置文件 */
         exit(EXIT_SUCCESS);
     }
 
-    int vlan_tracking = 1;
+    int vlan_tracking = 1;               /* 跟踪流时，是否考虑vlan id */
     if (ConfGetBool("vlan.use-for-tracking", &vlan_tracking) == 1 && !vlan_tracking) {
         /* Ignore vlan_ids when comparing flows. */
         g_vlan_mask = 0x0000;
     }
     SCLogDebug("vlan tracking is %s", vlan_tracking == 1 ? "enabled" : "disabled");
 
-    SetupUserMode(&suricata);
+    SetupUserMode(&suricata);            /* 用户模式修改日志、数据默认目录为当前路径 */
 
     /* Since our config is now loaded we can finish configurating the
-     * logging module. */
+     * logging module. */                /* 再次初始化日志模块 */
     SCLogLoadConfig(suricata.daemon, suricata.verbose);
 
     LogVersion(&suricata);
-    UtilCpuPrintSummary();
+    UtilCpuPrintSummary();               /* 打印CPU数信息 */
 
     if (ParseInterfacesList(suricata.aux_run_mode, suricata.pcap_dev) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
-    }
+        exit(EXIT_FAILURE);              /* 如果命令行-i未指定接口，则从配置文件读取并加入 pre_live_devices */
+    }                                    /*             指定接口，则设置配置文件解析结果，如 pfring..live-interface */
 
     if (PostConfLoadedSetup(&suricata) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);              /* 读取配置文件后，程序运行前必要的初始化流程，如注册模式匹配器、识别模块等 */
     }
 
     SCDropMainThreadCaps(suricata.userid, suricata.groupid);
-
+                                         /* 为安全，去除主线程权限 */
     /* Re-enable coredumps after privileges are dropped. */
-    CoredumpEnable();
+    CoredumpEnable();                    /* 使能coredump */
 
-    PreRunPostPrivsDropInit(suricata.run_mode);
+    PreRunPostPrivsDropInit(suricata.run_mode);  /* 初始化输出模块 */
 
-    PostConfLoadedDetectSetup(&suricata);
+    PostConfLoadedDetectSetup(&suricata);        /* 加载引擎规则等 */
     if (suricata.run_mode == RUNMODE_ENGINE_ANALYSIS) {
         goto out;
     } else if (suricata.run_mode == RUNMODE_CONF_TEST){
@@ -2782,32 +2782,32 @@ int SuricataMain(int argc, char **argv)
         goto out;
     }
 
-    SCSetStartTime(&suricata);
+    SCSetStartTime(&suricata);                   /* 记录启动时间 */
     RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode);
-    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) {
-        UnixManagerThreadSpawnNonRunmode();
+    if (suricata.run_mode != RUNMODE_UNIX_SOCKET) { /* pcap入口函数 -> TmThreadsSlotPktAcqLoop() */
+        UnixManagerThreadSpawnNonRunmode();      /* 选择运行模型，并初始化管理、统计线程 */
     }
 
     /* Wait till all the threads have been initialized */
     if (TmThreadWaitOnThreadInit() == TM_ECODE_FAILED) {
         SCLogError(SC_ERR_INITIALIZATION, "Engine initialization failed, "
-                   "aborting...");
+                   "aborting...");               /* 等待子线程初始化完毕 */
         exit(EXIT_FAILURE);
     }
 
-    SC_ATOMIC_SET(engine_stage, SURICATA_RUNTIME);
+    SC_ATOMIC_SET(engine_stage, SURICATA_RUNTIME);/* 设置引擎为运行态 */
     PacketPoolPostRunmodes();
 
     /* Un-pause all the paused threads */
-    TmThreadContinueThreads();
+    TmThreadContinueThreads();                    /* 启动各线程 */
 
-    PostRunStartedDetectSetup(&suricata);
+    PostRunStartedDetectSetup(&suricata);         /* 引擎已经运行，做最后必要动作（如重新加载规则等） */
 
     SCPledge();
-    SuricataMainLoop(&suricata);
+    SuricataMainLoop(&suricata);                  /* 主线程循环 */
 
     /* Update the engine stage/status flag */
-    SC_ATOMIC_SET(engine_stage, SURICATA_DEINIT);
+    SC_ATOMIC_SET(engine_stage, SURICATA_DEINIT); /* 设置引擎为退出状态 */
 
     UnixSocketKillSocketThread();
     PostRunDeinit(suricata.run_mode, &suricata.start_time);

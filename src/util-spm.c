@@ -59,12 +59,12 @@
 #include "hs.h"
 #endif
 
-SpmTableElmt spm_table[SPM_TABLE_SIZE];
+SpmTableElmt spm_table[SPM_TABLE_SIZE];  /* 单模式匹配算法列表 */
 
 /**
  * \brief Returns the single pattern matcher algorithm to be used, based on the
  * spm-algo setting in yaml.
- */
+ *//* 返回配置(spm-algo关键字)的单模式匹配算法 */
 uint16_t SinglePatternMatchDefaultMatcher(void)
 {
     const char *spm_algo;
@@ -118,14 +118,14 @@ void SpmTableSetup(void)
 {
     memset(spm_table, 0, sizeof(spm_table));
 
-    SpmBMRegister();
+    SpmBMRegister();     /* 注册BM/Boyer-Moore算法 */
 #ifdef BUILD_HYPERSCAN
     #ifdef HAVE_HS_VALID_PLATFORM
         if (hs_valid_platform() == HS_SUCCESS) {
             SpmHSRegister();
         }
     #else
-        SpmHSRegister();
+        SpmHSRegister(); /* 注册hyper scan算法 */
     #endif
 #endif
 }
@@ -133,7 +133,7 @@ void SpmTableSetup(void)
 SpmGlobalThreadCtx *SpmInitGlobalThreadCtx(uint16_t matcher)
 {
     BUG_ON(spm_table[matcher].InitGlobalThreadCtx == NULL);
-    return spm_table[matcher].InitGlobalThreadCtx();
+    return spm_table[matcher].InitGlobalThreadCtx();   /* refer BMInitGlobalThreadCtx() */
 }
 
 void SpmDestroyGlobalThreadCtx(SpmGlobalThreadCtx *global_thread_ctx)
@@ -172,7 +172,7 @@ SpmCtx *SpmInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
     uint16_t matcher = global_thread_ctx->matcher;
     BUG_ON(spm_table[matcher].InitCtx == NULL);
     return spm_table[matcher].InitCtx(needle, needle_len, nocase,
-                                      global_thread_ctx);
+                                      global_thread_ctx); /* refer BMInitCtx() */
 }
 
 void SpmDestroyCtx(SpmCtx *ctx)

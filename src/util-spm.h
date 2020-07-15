@@ -28,7 +28,7 @@
 #include "util-spm-bs2bm.h"
 #include "util-spm-bm.h"
 
-enum {
+enum {  /* 单模匹配算法表 spm_table[] 索引 */
     SPM_BM, /* Boyer-Moore */
     SPM_HS, /* Hyperscan */
     /* Other SPM matchers will go here. */
@@ -41,20 +41,20 @@ uint16_t SinglePatternMatchDefaultMatcher(void);
  * tables, Hyperscan database etc) that is passed to the Scan call. */
 typedef struct SpmCtx_ {
     uint16_t matcher;
-    void *ctx;
+    void *ctx;          /* BM -> SpmBmCtx */
 } SpmCtx;
 
 /** Structure holding a global prototype for per-thread scratch space, passed
  * to each InitCtx call. */
 typedef struct SpmGlobalThreadCtx_ {
-    uint16_t matcher;
+    uint16_t matcher;   /* 如 SPM_HS */
     void *ctx;
 } SpmGlobalThreadCtx;
 
 /** Structure holding some mutable per-thread space for use by a matcher at
  * scan time. Constructed from SpmGlobalThreadCtx by the MakeThreadCtx call. */
 typedef struct SpmThreadCtx_ {
-    uint16_t matcher;
+    uint16_t matcher;   /* 如 SPM_HS */
     void *ctx;
 } SpmThreadCtx;
 

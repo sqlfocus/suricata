@@ -45,7 +45,7 @@ static int DetectFastPatternSetup(DetectEngineCtx *, Signature *, const char *);
 void DetectFastPatternRegisterTests(void);
 
 /* holds the list of sm match lists that need to be searched for a keyword
- * that has fp support */
+ * that has fp support *//* 快速模式匹配关键字列表，按优先级降序排序 */
 SCFPSupportSMList *sm_fp_support_smlist_list = NULL;
 
 /**
@@ -101,7 +101,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
          * was not already registered
          * and other lists with the same priority hide it.
          */
-        if (priority < tmp->priority)
+        if (priority < tmp->priority)   /* 按优先级查找插入点，优先级降序 */
             break;
 
         ip = tmp;
@@ -121,7 +121,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
     }
 
     SCFPSupportSMList *new = SCMalloc(sizeof(SCFPSupportSMList));
-    if (unlikely(new == NULL))
+    if (unlikely(new == NULL))          /* 链表插入操作 */
         exit(EXIT_FAILURE);
     memset(new, 0, sizeof(SCFPSupportSMList));
     new->list_id = list_id;

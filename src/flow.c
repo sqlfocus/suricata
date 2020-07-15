@@ -669,7 +669,7 @@ void FlowInitConfig(char quiet)
                 SC_ATOMIC_GET(flow_memuse), SC_ATOMIC_GET(flow_config.memcap));
     }
 
-    FlowInitFlowProto();
+    FlowInitFlowProto();            /* 流相关配置初始化，如超时时间等 */
 
     return;
 }

@@ -611,7 +611,7 @@ int SignatureHasStreamContent(const Signature *s)
  *          Use the default mpm if none is specified in the yaml file.
  *
  *  \retval mpm algo value
- */
+ *//* 返回配置（关键字mpm-algo）的多模式匹配算法 */
 uint16_t PatternMatchDefaultMatcher(void)
 {
     const char *mpm_algo;

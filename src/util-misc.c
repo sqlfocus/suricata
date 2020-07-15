@@ -29,10 +29,10 @@
 #include "util-unittest.h"
 #include "util-misc.h"
 
-#define PARSE_REGEX "^\\s*(\\d+(?:.\\d+)?)\\s*([a-zA-Z]{2})?\\s*$"
-static pcre *parse_regex = NULL;
+#define PARSE_REGEX "^\\s*(\\d+(?:.\\d+)?)\\s*([a-zA-Z]{2})?\\s*$"  /* 可匹配 "10 Mb" 等，数字+单位 */
+static pcre *parse_regex = NULL;    /* 匹配大小的正则式 */
 static pcre_extra *parse_regex_study = NULL;
-
+/* 初始化分析大小的规则，如"10Mb"/数字+单位 */
 void ParseSizeInit(void)
 {
     const char *eb = NULL;

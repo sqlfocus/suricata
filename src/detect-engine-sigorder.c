@@ -730,7 +730,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
     SCLogDebug("ordering signatures in memory");
 
     sig = de_ctx->sig_list;
-    while (sig != NULL) {
+    while (sig != NULL) {   /* 预处理规则 */
         sigw = SCSigAllocSignatureWrapper(sig);
         /* Push signature wrapper onto a list, order doesn't matter here. */
         sigw->next = sigw_list;
@@ -740,7 +740,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
         i++;
     }
 
-    /* Sort the list */
+    /* Sort the list */     /* 使用优先级函数排序规则 */
     sigw_list = SCSigOrder(sigw_list, de_ctx->sc_sig_order_funcs);
 
     SCLogDebug("Total Signatures to be processed by the"
@@ -750,7 +750,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
     de_ctx->sig_list = NULL;
     sigw = sigw_list;
     i = 0;
-    while (sigw != NULL) {
+    while (sigw != NULL) {  /* 更新规则列表，按优先级排序 */
         i++;
         sigw->sig->next = NULL;
         if (de_ctx->sig_list == NULL) {
@@ -779,13 +779,13 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
  *
  * \param de_ctx Pointer to the detection engine context from which the
  *               signatures have to be ordered.
- */
+ *//* 注册信号优先级函数 */
 void SCSigRegisterSignatureOrderingFuncs(DetectEngineCtx *de_ctx)
 {
     SCLogDebug("registering signature ordering functions");
 
-    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByActionCompare);
-    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowbitsCompare);
+    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByActionCompare);     /* 按照执行动作 */
+    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowbitsCompare);   /* */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowintCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowvarCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByPktvarCompare);

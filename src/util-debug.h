@@ -46,7 +46,7 @@
  * \brief The various log levels
  * NOTE: when adding new level, don't forget to update SCLogMapLogLevelToSyslogLevel()
   *      or it may result in logging to syslog with LOG_EMERG priority.
- */
+  *//* 自定义日志级别 */
 typedef enum {
     SC_LOG_NOTSET = -1,
     SC_LOG_NONE = 0,
@@ -65,17 +65,17 @@ typedef enum {
 
 /**
  * \brief The various output interfaces supported
- */
+ *//* 日志支持的输出接口 */
 typedef enum {
-    SC_LOG_OP_IFACE_CONSOLE,
-    SC_LOG_OP_IFACE_FILE,
-    SC_LOG_OP_IFACE_SYSLOG,
+    SC_LOG_OP_IFACE_CONSOLE,  /* console */
+    SC_LOG_OP_IFACE_FILE,     /* file */
+    SC_LOG_OP_IFACE_SYSLOG,   /* syslog */
     SC_LOG_OP_IFACE_MAX,
 } SCLogOPIface;
 
-typedef enum {
+typedef enum {  /* 日志支持的输出类型 */
     SC_LOG_OP_TYPE_REGULAR = 0,
-    SC_LOG_OP_TYPE_JSON,
+    SC_LOG_OP_TYPE_JSON,      /* json */
 } SCLogOPType;
 
 /* The default log_format, if it is not supplied by the user */
@@ -126,7 +126,7 @@ typedef struct SCLogOPIfaceCtx_ {
     FILE * file_d;
 
     /* registered to be set on a file rotation signal */
-    int rotation_flag;
+    int rotation_flag;              /* 日志文件rotate标识 */
 
     /* the facility code if the interface is SC_LOG_IFACE_SYSLOG */
     int facility;
@@ -138,7 +138,7 @@ typedef struct SCLogOPIfaceCtx_ {
     const char *log_format;
 
     /* Mutex used for locking around rotate/write to a file. */
-    SCMutex fp_mutex;
+    SCMutex fp_mutex;               /* 文件锁，用于文件rotate/write */
 
     struct SCLogOPIfaceCtx_ *next;
 } SCLogOPIfaceCtx;
@@ -171,16 +171,16 @@ typedef struct SCLogInitData_ {
  */
 typedef struct SCLogConfig_ {
     char *startup_message;
-    SCLogLevel log_level;
-    char *log_format;
+    SCLogLevel log_level;         /* 日志级别 */
+    char *log_format;             /* 日志格式 */
 
-    char *op_filter;
+    char *op_filter;              /* 输出过滤条件字符串，pcre正则式 */
     /* compiled pcre filter expression */
     pcre *op_filter_regex;
     pcre_extra *op_filter_regex_study;
 
     /* op ifaces used */
-    SCLogOPIfaceCtx *op_ifaces;
+    SCLogOPIfaceCtx *op_ifaces;   /* 日志输出方式列表 */
     /* no of op ifaces */
     uint8_t op_ifaces_cnt;
 } SCLogConfig;

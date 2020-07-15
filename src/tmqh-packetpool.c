@@ -54,7 +54,7 @@
 #define MAX_PENDING_RETURN_PACKETS 32
 static uint32_t max_pending_return_packets = MAX_PENDING_RETURN_PACKETS;
 
-thread_local PktPool thread_pkt_pool;
+thread_local PktPool thread_pkt_pool;   /* 接收线程的报文池 */
 
 static inline PktPool *GetThreadPacketPool(void)
 {
@@ -85,11 +85,11 @@ void PacketPoolWait(void)
 {
     PktPool *my_pool = GetThreadPacketPool();
 
-    if (PacketPoolIsEmpty(my_pool)) {
+    if (PacketPoolIsEmpty(my_pool)) {   /* 检查报文缓存池是否为空 */
         SCMutexLock(&my_pool->return_stack.mutex);
         SC_ATOMIC_ADD(my_pool->return_stack.sync_now, 1);
         SCCondWait(&my_pool->return_stack.cond, &my_pool->return_stack.mutex);
-        SCMutexUnlock(&my_pool->return_stack.mutex);
+        SCMutexUnlock(&my_pool->return_stack.mutex);  /* 空则等待 */
     }
 
     while(PacketPoolIsEmpty(my_pool))
@@ -163,7 +163,7 @@ static void PacketPoolStorePacket(Packet *p)
     p->flags &= ~PKT_ALLOC;
     p->pool = GetThreadPacketPool();
     p->ReleasePacket = PacketPoolReturnPacket;
-    PacketPoolReturnPacket(p);
+    PacketPoolReturnPacket(p);       /* 释放到报文池 */
 }
 
 static void PacketPoolGetReturnedPackets(PktPool *pool)
@@ -221,7 +221,7 @@ Packet *PacketPoolGetPacket(void)
 
 /** \brief Return packet to Packet pool
  *
- */
+ *//* 将报文归还到报文池 */
 void PacketPoolReturnPacket(Packet *p)
 {
     PktPool *my_pool = GetThreadPacketPool();
@@ -229,7 +229,7 @@ void PacketPoolReturnPacket(Packet *p)
     PACKET_RELEASE_REFS(p);
 
     PktPool *pool = p->pool;
-    if (pool == NULL) {
+    if (pool == NULL) {     /* case1: 报文为malloc申请，直接释放 */
         PacketFree(p);
         return;
     }
@@ -240,20 +240,20 @@ void PacketPoolReturnPacket(Packet *p)
     BUG_ON(my_pool->destroyed == 1);
 #endif /* DEBUG_VALIDATION */
 
-    if (pool == my_pool) {
+    if (pool == my_pool) {  /* case2: 此报文申请自本线程，直接释放 */
         /* Push back onto this thread's own stack, so no locking. */
         p->next = my_pool->head;
         my_pool->head = p;
-    } else {
+    } else {                /* case3: 申请自其他线程， */
         PktPool *pending_pool = my_pool->pending_pool;
-        if (pending_pool == NULL) {
+        if (pending_pool == NULL) {         /* 释放到临时缓存 */
             /* No pending packet, so store the current packet. */
             p->next = NULL;
             my_pool->pending_pool = pool;
             my_pool->pending_head = p;
             my_pool->pending_tail = p;
             my_pool->pending_count = 1;
-        } else if (pending_pool == pool) {
+        } else if (pending_pool == pool) {  /* 释放到临时缓存 */
             /* Another packet for the pending pool list. */
             p->next = my_pool->pending_head;
             my_pool->pending_head = p;
@@ -272,7 +272,7 @@ void PacketPoolReturnPacket(Packet *p)
                 my_pool->pending_tail = NULL;
                 my_pool->pending_count = 0;
             }
-        } else {
+        } else {                            /* 临时缓存一次性释放到此stack */
             /* Push onto return stack for this pool */
             SCMutexLock(&pool->return_stack.mutex);
             p->next = pool->return_stack.head;
@@ -303,7 +303,7 @@ void PacketPoolInit(void)
 {
     extern intmax_t max_pending_packets;
 
-    PktPool *my_pool = GetThreadPacketPool();
+    PktPool *my_pool = GetThreadPacketPool();  /* 获取报文池 */
 
 #ifdef DEBUG_VALIDATION
     BUG_ON(my_pool->initialized);
@@ -320,7 +320,7 @@ void PacketPoolInit(void)
                (uintmax_t)SIZE_OF_PACKET);
     int i = 0;
     for (i = 0; i < max_pending_packets; i++) {
-        Packet *p = PacketGetFromAlloc();
+        Packet *p = PacketGetFromAlloc();      /* 预分配报文，放置到报文池 */
         if (unlikely(p == NULL)) {
             SCLogError(SC_ERR_FATAL, "Fatal error encountered while allocating a packet. Exiting...");
             exit(EXIT_FAILURE);

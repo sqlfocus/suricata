@@ -135,7 +135,7 @@ static inline uint32_t FlowGetHash(const Packet *p)
             fhk.ports[pi] = p->dp;
 
             fhk.proto = (uint16_t)p->proto;
-            fhk.recur = (uint16_t)p->recursion_level;
+            fhk.recur = (uint16_t)p->recursion_level;  /* L4解码层数 */
             /* g_vlan_mask sets the vlan_ids to 0 if vlan.use-for-tracking
              * is disabled. */
             fhk.vlan_id[0] = p->vlan_id[0] & g_vlan_mask;
@@ -408,7 +408,7 @@ static inline int FlowCompareICMPv4(Flow *f, const Packet *p)
 void FlowSetupPacket(Packet *p)
 {
     p->flags |= PKT_WANTS_FLOW;
-    p->flow_hash = FlowGetHash(p);
+    p->flow_hash = FlowGetHash(p);  /* 计算hash值 */
 }
 
 int TcpSessionPacketSsnReuse(const Packet *p, const Flow *f, void *tcp_ssn);
@@ -690,7 +690,7 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
                 fb->head = f;
 
                 /* found our flow, lock & return */
-                FLOWLOCK_WRLOCK(f);
+                FLOWLOCK_WRLOCK(f);   /* 流重用，重新刷新流信息 */
                 if (unlikely(TcpSessionPacketSsnReuse(p, f, f->protoctx) == 1)) {
                     f = TcpReuseReplace(tv, dtv, fb, f, hash, p);
                     if (f == NULL) {

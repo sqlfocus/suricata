@@ -34,15 +34,15 @@
 #include "tmqh-packetpool.h"
 #include "tmqh-flow.h"
 
-Tmqh tmqh_table[TMQH_SIZE];
-
+Tmqh tmqh_table[TMQH_SIZE];      /* 队列处理函数表 */
+/* 注册队列处理函数，共simple、packetpool、flow三种形式 */
 void TmqhSetup (void)
 {
     memset(&tmqh_table, 0, sizeof(tmqh_table));
 
-    TmqhSimpleRegister();
-    TmqhPacketpoolRegister();
-    TmqhFlowRegister();
+    TmqhSimpleRegister();        /* simple */
+    TmqhPacketpoolRegister();    /* packetpool */
+    TmqhFlowRegister();          /* flow */
 }
 
 /** \brief Clean up registration time allocs */

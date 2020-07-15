@@ -52,19 +52,19 @@ typedef TmEcode (*TmSlotFunc)(ThreadVars *, Packet *, void *);
 typedef struct TmSlot_ {
     /* function pointers */
     union {
-        TmSlotFunc SlotFunc;
-        TmEcode (*PktAcqLoop)(ThreadVars *, void *, void *);
-        TmEcode (*Management)(ThreadVars *, void *);
+        TmSlotFunc SlotFunc;       /* TmModule->Func() */
+        TmEcode (*PktAcqLoop)(ThreadVars *, void *, void *);  /* TmModule->PktAcqLoop() */
+        TmEcode (*Management)(ThreadVars *, void *);          /* TmModule->Management() */
     };
     /** linked list of slots, used when a pipeline has multiple slots
      *  in a single thread. */
     struct TmSlot_ *slot_next;
 
-    SC_ATOMIC_DECLARE(void *, slot_data);
+    SC_ATOMIC_DECLARE(void *, slot_data);                    /* 存储特定模块环境, PcapThreadVars */
 
-    TmEcode (*SlotThreadInit)(ThreadVars *, const void *, void **);
-    void (*SlotThreadExitPrintStats)(ThreadVars *, void *);
-    TmEcode (*SlotThreadDeinit)(ThreadVars *, void *);
+    TmEcode (*SlotThreadInit)(ThreadVars *, const void *, void **); /* TmModule->ThreadInit() */
+    void (*SlotThreadExitPrintStats)(ThreadVars *, void *);  /* TmModule->ThreadExitPrintStats() */
+    TmEcode (*SlotThreadDeinit)(ThreadVars *, void *);       /* TmModule->ThreadDeinit() */
 
     /* data storage */
     const void *slot_initdata;
@@ -73,7 +73,7 @@ typedef struct TmSlot_ {
 
 } TmSlot;
 
-extern ThreadVars *tv_root[TVT_MAX];
+extern ThreadVars *tv_root[TVT_MAX];  /* 创建的线程列表 */
 
 extern SCMutex tv_root_lock;
 
@@ -185,17 +185,17 @@ static inline void TmThreadsHandleInjectedPackets(ThreadVars *tv)
 static inline TmEcode TmThreadsSlotProcessPkt(ThreadVars *tv, TmSlot *s, Packet *p)
 {
     if (s == NULL) {
-        tv->tmqh_out(tv, p);
+        tv->tmqh_out(tv, p);   /* 无继续处理函数，直接输出 */
         return TM_ECODE_OK;
     }
 
-    TmEcode r = TmThreadsSlotVarRun(tv, p, s);
+    TmEcode r = TmThreadsSlotVarRun(tv, p, s);  /* 运行报文处理链 */
     if (unlikely(r == TM_ECODE_FAILED)) {
         TmThreadsSlotProcessPktFail(tv, s, p);
         return TM_ECODE_FAILED;
     }
 
-    tv->tmqh_out(tv, p);
+    tv->tmqh_out(tv, p);       /* 输出, TMQH_PACKETPOOL -> TmqhOutputPacketpool() */
 
     TmThreadsHandleInjectedPackets(tv);
 

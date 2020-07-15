@@ -75,11 +75,11 @@ const char *thread_name_counter_wakeup = "CW";
  */
 typedef struct RunMode_ {
     /* the runmode type */
-    enum RunModes runmode;
-    const char *name;
+    enum RunModes runmode;     /* 模式类型 */
+    const char *name;          /* 模式名(single/autofp/workers)，及描述 */
     const char *description;
     /* runmode function */
-    int (*RunModeFunc)(void);
+    int (*RunModeFunc)(void);  /* 运行入口函数 */
 } RunMode;
 
 typedef struct RunModes_ {
@@ -87,9 +87,9 @@ typedef struct RunModes_ {
     RunMode *runmodes;
 } RunModes;
 
-static RunModes runmodes[RUNMODE_USER_MAX];
+static RunModes runmodes[RUNMODE_USER_MAX];  /* 引擎运行模式列表 */
 
-static char *active_runmode;
+static char *active_runmode;                 /* 当前引擎的运行模式 */
 
 /* free list for our outputs */
 typedef struct OutputFreeList_ {
@@ -205,26 +205,26 @@ const char *RunModeGetMainMode(void)
 
 /**
  * \brief Register all runmodes in the engine.
- */
+ *//* 注册所有可能的运行模式 */
 void RunModeRegisterRunModes(void)
 {
     memset(runmodes, 0, sizeof(runmodes));
 
-    RunModeIdsPcapRegister();
-    RunModeFilePcapRegister();
-    RunModeIdsPfringRegister();
+    RunModeIdsPcapRegister();     /* pcap模式，底层引擎为libpcap */
+    RunModeFilePcapRegister();    /* pcapfile模式，直接读取pcap文件 */
+    RunModeIdsPfringRegister();   /* pfring模式，底层引擎为pfring */
     RunModeIpsNFQRegister();
     RunModeIpsIPFWRegister();
     RunModeErfFileRegister();
     RunModeErfDagRegister();
     RunModeNapatechRegister();
     RunModeIdsAFPRegister();
-    RunModeIdsNetmapRegister();
+    RunModeIdsNetmapRegister();   /* netmap模式，底层引擎为netmap */
     RunModeIdsNflogRegister();
     RunModeUnixSocketRegister();
     RunModeIpsWinDivertRegister();
 #ifdef UNITTESTS
-    UtRunModeRegister();
+    UtRunModeRegister();          /* 单元测试模式 */
 #endif
     return;
 }
@@ -274,7 +274,7 @@ void RunModeListRunmodes(void)
 }
 
 /**
- */
+ *//* 选择运行模式 */
 void RunModeDispatch(int runmode, const char *custom_mode)
 {
     char *local_custom_mode = NULL;
@@ -291,7 +291,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
     if (custom_mode == NULL || strcmp(custom_mode, "auto") == 0) {
         switch (runmode) {
             case RUNMODE_PCAP_DEV:
-                custom_mode = RunModeIdsGetDefaultMode();
+                custom_mode = RunModeIdsGetDefaultMode();      /* autofp */
                 break;
             case RUNMODE_PCAP_FILE:
                 custom_mode = RunModeFilePcapGetDefaultMode();
@@ -352,7 +352,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
     }
 
     RunMode *mode = RunModeGetCustomMode(runmode, custom_mode);
-    if (mode == NULL) {
+    if (mode == NULL) {                      /* 获取运行模式配置, RUNMODE_PCAP_DEV */
         SCLogError(SC_ERR_RUNMODE, "The custom type \"%s\" doesn't exist "
                    "for this runmode type \"%s\".  Please use --list-runmodes to "
                    "see available custom types for this runmode",
@@ -364,7 +364,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
     if (active_runmode) {
         SCFree(active_runmode);
     }
-    active_runmode = SCStrdup(custom_mode);
+    active_runmode = SCStrdup(custom_mode);  /* 存储运行模式，以便于查询 */
     if (unlikely(active_runmode == NULL)) {
         SCLogError(SC_ERR_MEM_ALLOC, "Unable to dup active mode");
         exit(EXIT_FAILURE);
@@ -374,7 +374,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
         TmqhFlowPrintAutofpHandler();
     }
 
-    mode->RunModeFunc();
+    mode->RunModeFunc();                 /* 模式初始化函数, RunModeIdsPcapAutoFp() */
 
     if (local_custom_mode != NULL)
         SCFree(local_custom_mode);
@@ -384,12 +384,12 @@ void RunModeDispatch(int runmode, const char *custom_mode)
 
     if (runmode != RUNMODE_UNIX_SOCKET) {
         /* spawn management threads */
-        FlowManagerThreadSpawn();
-        FlowRecyclerThreadSpawn();
+        FlowManagerThreadSpawn();        /* 创建管理线程 */
+        FlowRecyclerThreadSpawn();             /* flow recycle */
         if (RunModeNeedsBypassManager()) {
-            BypassedFlowManagerThreadSpawn();
+            BypassedFlowManagerThreadSpawn();  /* flow bypass */
         }
-        StatsSpawnThreads();
+        StatsSpawnThreads();             /* 创建统计线程 */
     }
 }
 
@@ -421,12 +421,12 @@ void RunModeRegisterNewRunMode(enum RunModes runmode,
                                const char *description,
                                int (*RunModeFunc)(void))
 {
-    if (RunModeGetCustomMode(runmode, name) != NULL) {
+    if (RunModeGetCustomMode(runmode, name) != NULL) {  /* 不允许重复注册 */
         FatalError(SC_ERR_RUNMODE, "runmode '%s' has already "
                    "been registered. Please use an unique name.", name);
     }
 
-    void *ptmp = SCRealloc(runmodes[runmode].runmodes,
+    void *ptmp = SCRealloc(runmodes[runmode].runmodes,  /* 注册到 runmodes[] */
                      (runmodes[runmode].cnt + 1) * sizeof(RunMode));
     if (ptmp == NULL) {
         SCFree(runmodes[runmode].runmodes);
@@ -500,7 +500,7 @@ bool IsRunModeSystem(enum RunModes run_mode_to_check)
             return true;
     }
 }
-
+/* 判断运行模式是否为离线模式，离线时不需要监听网卡 */
 bool IsRunModeOffline(enum RunModes run_mode_to_check)
 {
     switch(run_mode_to_check) {
@@ -712,7 +712,7 @@ static void RunModeInitializeLuaOutput(ConfNode *conf, OutputCtx *parent_ctx)
 
 /**
  * Initialize the output modules.
- */
+ *//* 初始化输出模块 */
 void RunModeInitializeOutputs(void)
 {
     ConfNode *outputs = ConfGetNode("outputs");
@@ -896,7 +896,7 @@ void RunModeInitializeOutputs(void)
             AppLayerParserRegisterLoggerBits(IPPROTO_UDP, a, logger_bits[a]);
 
     }
-    OutputSetupActiveLoggers();
+    OutputSetupActiveLoggers();            /* 激活日志输出 */
 }
 
 float threading_detect_ratio = 1;
@@ -912,13 +912,13 @@ void RunModeInitialize(void)
     }
     /* try to get custom cpu mask value if needed */
     if (threading_set_cpu_affinity == TRUE) {
-        AffinitySetupLoadFromConfig();
+        AffinitySetupLoadFromConfig();  /* 解析配置，获取cpu亲昵性设置 */
     }
     if ((ConfGetFloat("threading.detect-thread-ratio", &threading_detect_ratio)) != 1) {
         if (ConfGetNode("threading.detect-thread-ratio") != NULL)
             WarnInvalidConfEntry("threading.detect-thread-ratio", "%s", "1");
         threading_detect_ratio = 1;
-    }
+    }                                   /* 比例，detect/cpu，可根据cpu数决定检测线程数 */
 
     SCLogDebug("threading.detect-thread-ratio %f", threading_detect_ratio);
 }

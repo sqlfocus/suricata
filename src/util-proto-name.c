@@ -30,13 +30,13 @@
 
 /** Lookup array to hold the information related to known protocol
  *  in /etc/protocols */
-char *known_proto[256];
+char *known_proto[256];      /* 传输层协议映射表 */
 static int init_once = 0;
 
 /**
  *  \brief  Function to load the protocol names from the specified protocol
  *          file.
- */
+ *//* 利用/etc/protocols表建立传输层协议映射表 */
 void SCProtoNameInit()
 {
     BUG_ON(init_once);

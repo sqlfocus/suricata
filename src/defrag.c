@@ -1063,7 +1063,7 @@ Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 
     return rp;
 }
-
+/* IP报文重组模块初始化 */
 void
 DefragInit(void)
 {
@@ -1073,10 +1073,10 @@ DefragInit(void)
     }
 
     /* Load the defrag-per-host lookup. */
-    DefragPolicyLoadFromConfig();
+    DefragPolicyLoadFromConfig();         /* 解析配置 */
 
     /* Allocate the DefragContext. */
-    defrag_context = DefragContextNew();
+    defrag_context = DefragContextNew();  /* 初始化重组环境 */
     if (defrag_context == NULL) {
         SCLogError(SC_ERR_MEM_ALLOC,
             "Failed to allocate memory for the Defrag module.");
@@ -1084,7 +1084,7 @@ DefragInit(void)
     }
 
     DefragSetDefaultTimeout(defrag_context->timeout);
-    DefragInitConfig(FALSE);
+    DefragInitConfig(FALSE);              /* 配置初始化 */
 }
 
 void DefragDestroy(void)

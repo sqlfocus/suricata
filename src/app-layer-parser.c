@@ -134,7 +134,7 @@ typedef struct AppLayerParserProtoCtx_
     /* Indicates the direction the parser is ready to see the data
      * the first time for a flow.  Values accepted -
      * STREAM_TOSERVER, STREAM_TOCLIENT */
-    uint8_t first_data_dir;
+    uint8_t first_data_dir;        /* 允许的首包方向 */
 
     /* Option flags such as supporting gaps or not. */
     uint32_t option_flags;
@@ -183,7 +183,7 @@ void UTHAppLayerParserStateGetIds(void *ptr, uint64_t *i1, uint64_t *i2, uint64_
 
 /* Static global version of the parser context.
  * Post 2.0 let's look at changing this to move it out to app-layer.c. */
-static AppLayerParserCtx alp_ctx;
+static AppLayerParserCtx alp_ctx;  /* 应用层协议解析环境 */
 
 int AppLayerParserProtoIsRegistered(uint8_t ipproto, AppProto alproto)
 {
@@ -393,7 +393,7 @@ void AppLayerParserRegisterOptionFlags(uint8_t ipproto, AppProto alproto,
 
     SCReturn;
 }
-
+/* 注册应用层协议的状态结构操控函数 */
 void AppLayerParserRegisterStateFuncs(uint8_t ipproto, AppProto alproto,
                            void *(*StateAlloc)(void),
                            void (*StateFree)(void *))
@@ -1549,7 +1549,7 @@ void AppLayerParserRegisterProtocolParsers(void)
 {
     SCEnter();
 
-    RegisterHTPParsers();
+    RegisterHTPParsers();          /* 注册HTTP协议解析 */
     RegisterSSLParsers();
     RegisterDCERPCParsers();
     RegisterDCERPCUDPParsers();

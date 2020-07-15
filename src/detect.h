@@ -523,7 +523,7 @@ typedef struct SignatureInitData_ {
     struct SigMatch_ **smlists_tail;
 } SignatureInitData;
 
-/** \brief Signature container */
+/** \brief Signature container *//* 规则数据结构 */
 typedef struct Signature_ {
     uint32_t flags;
     /* coccinelle: Signature:flags:SIG_FLAG_ */
@@ -762,14 +762,14 @@ enum DetectEngineType
  */
 #define FLOW_STATES 2
 
-/** \brief main detection engine ctx */
+/** \brief main detection engine ctx *//* 检测引擎信息结构 */
 typedef struct DetectEngineCtx_ {
     uint8_t flags;
     int failure_fatal;
 
     int tenant_id;
 
-    Signature *sig_list;
+    Signature *sig_list;          /* 规则列表，<TK!!!>已按优先级排序 */
     uint32_t sig_cnt;
 
     /* version of the srep data */
@@ -789,7 +789,7 @@ typedef struct DetectEngineCtx_ {
     uint32_t non_pf_store_cnt_max;
 
     /* used by the signature ordering module */
-    struct SCSigOrderFunc_ *sc_sig_order_funcs;
+    struct SCSigOrderFunc_ *sc_sig_order_funcs;    /* 规则处理函数列表，按优先级排列 */
 
     /* hash table used for holding the classification config info */
     HashTable *class_conf_ht;
@@ -802,7 +802,7 @@ typedef struct DetectEngineCtx_ {
     uint32_t gh_unique, gh_reuse;
 
     /* init phase vars */
-    HashListTable *sgh_hash_table;
+    HashListTable *sgh_hash_table;    /* 哈希表 */
 
     HashListTable *mpm_hash_table;
 
@@ -894,7 +894,7 @@ typedef struct DetectEngineCtx_ {
 #endif
     uint32_t prefilter_maxid;
 
-    char config_prefix[64];
+    char config_prefix[64];         /* 重新配置加载时，对应的前缀 */
 
     enum DetectEngineType type;
 
@@ -941,7 +941,7 @@ typedef struct DetectEngineCtx_ {
     HashListTable *prefilter_hash_table;
 
     /** time of last ruleset reload */
-    struct timeval last_reload;
+    struct timeval last_reload;          /* 规则加载后更新 */
 
     /** signatures stats */
     SigFileLoaderStat sig_stat;
@@ -1429,16 +1429,16 @@ typedef struct DetectEngineMasterCtx_ {
     int multi_tenant_enabled;
 
     /** version, incremented after each 'apply to threads' */
-    uint32_t version;
+    uint32_t version;            /* 版本号，每次引用到工作线程后++ */
 
     /** list of active detection engines. This list is used to generate the
      *  threads det_ctx's */
-    DetectEngineCtx *list;
+    DetectEngineCtx *list;       /* 激活的检测引擎 */
 
     /** free list, containing detection engines that will be removed but may
      *  still be referenced by det_ctx's. Freed as soon as all references are
      *  gone. */
-    DetectEngineCtx *free_list;
+    DetectEngineCtx *free_list;  /* 待释放的检测引擎 */
 
     enum DetectEngineTenantSelectors tenant_selector;
 

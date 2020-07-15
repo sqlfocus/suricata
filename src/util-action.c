@@ -36,7 +36,7 @@
 #include "util-unittest-helper.h"
 #include "util-debug.h"
 
-/* Default order: */
+/* 规则动作的优先级，可通过 action-order 关键字配置；此处为默认顺序 */
 uint8_t action_order_sigs[4] = {ACTION_PASS, ACTION_DROP, ACTION_REJECT, ACTION_ALERT};
 /* This order can be changed from config */
 

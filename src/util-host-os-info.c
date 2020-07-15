@@ -58,7 +58,7 @@ SCEnumCharMap sc_hinfo_os_policy_map[ ] = {
     { NULL,          -1 },
 };
 
-/** Radix tree that holds the host OS information */
+/** 主机和IP段之间的对应关系，以加强检测效果；Radix tree that holds the host OS information */
 static SCRadixTree *sc_hinfo_tree = NULL;
 
 
@@ -331,7 +331,7 @@ void SCHInfoCleanResources(void)
  * \brief Load the host os policy information from the configuration.
  *
  * \initonly (A mem alloc error should cause an exit failure)
- */
+ *//* 通过radix树存储“IP <--> HOST类型”之间的对应关系 */
 void SCHInfoLoadFromConfig(void)
 {
     ConfNode *root = ConfGetNode("host-os-policy");

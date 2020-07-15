@@ -26,7 +26,7 @@
 /* Run mode */
 enum RunModes {
     RUNMODE_UNKNOWN = 0,
-    RUNMODE_PCAP_DEV,
+    RUNMODE_PCAP_DEV,         /* 默认运行模式, RunModeIdsPcapAutoFp() */
     RUNMODE_PCAP_FILE,
     RUNMODE_PFRING,
     RUNMODE_NFQ,
@@ -34,20 +34,20 @@ enum RunModes {
     RUNMODE_IPFW,
     RUNMODE_ERF_FILE,
     RUNMODE_DAG,
-    RUNMODE_AFP_DEV,
+    RUNMODE_AFP_DEV,          /* HAVE_AF_PACKET时，默认运行模式 */
     RUNMODE_NETMAP,
     RUNMODE_UNITTEST,
     RUNMODE_NAPATECH,
     RUNMODE_UNIX_SOCKET,
     RUNMODE_WINDIVERT,
-    RUNMODE_USER_MAX, /* Last standard running mode */
-    RUNMODE_LIST_KEYWORDS,
+    RUNMODE_USER_MAX,         /* 以上为合法的引擎运行模式，Last standard running mode */
+    RUNMODE_LIST_KEYWORDS,    /* 以下为内部模式，在函数 StartInternalRunMode() 执行后进程退出 */
     RUNMODE_LIST_APP_LAYERS,
     RUNMODE_LIST_RUNMODES,
     RUNMODE_PRINT_VERSION,
-    RUNMODE_PRINT_BUILDINFO,
+    RUNMODE_PRINT_BUILDINFO,  /* 打印构建的配置信息 */
     RUNMODE_PRINT_USAGE,
-    RUNMODE_DUMP_CONFIG,
+    RUNMODE_DUMP_CONFIG,      /* 打印配置文件 */
     RUNMODE_CONF_TEST,
     RUNMODE_LIST_UNITTEST,
     RUNMODE_ENGINE_ANALYSIS,

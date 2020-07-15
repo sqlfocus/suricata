@@ -30,7 +30,7 @@
 #include "util-misc.h"
 #include "defrag-config.h"
 
-static SCRadixTree *defrag_tree = NULL;
+static SCRadixTree *defrag_tree = NULL;   /* IP碎片重组配置信息树 */
 
 static int default_timeout = 0;
 
@@ -152,7 +152,7 @@ void DefragPolicyLoadFromConfig(void)
     ConfNode *sc;
 
     TAILQ_FOREACH(sc, &server_config->head, next) {
-        ConfNode *p = NULL;
+        ConfNode *p = NULL;  /* 读取配置文件，初始化 defrag_tree */
 
         TAILQ_FOREACH(p, &sc->head, next) {
             SCLogDebug("parsing configuration for %s", p->name);

@@ -3135,9 +3135,9 @@ static int HTPRegisterPatternsForProtocolDetection(void)
         "CONNECT", "DELETE", "PATCH", "PROPFIND", "PROPPATCH", "MKCOL",
         "COPY", "MOVE", "LOCK", "UNLOCK", "CHECKOUT", "UNCHECKOUT", "CHECKIN",
         "UPDATE", "LABEL", "REPORT", "MKWORKSPACE", "MKACTIVITY", "MERGE",
-        "INVALID", "VERSION-CONTROL", "BASELINE-CONTROL", NULL};
-    const char *spacings[] = { "|20|", "|09|", NULL };
-    const char *versions[] = { "HTTP/0.9", "HTTP/1.0", "HTTP/1.1", NULL };
+        "INVALID", "VERSION-CONTROL", "BASELINE-CONTROL", NULL};  
+    const char *spacings[] = { "|20|", "|09|", NULL };            /* 16进制表示的空格 */
+    const char *versions[] = { "HTTP/0.9", "HTTP/1.0", "HTTP/1.1", NULL };  
 
     int methods_pos;
     int spacings_pos;
@@ -3149,16 +3149,16 @@ static int HTPRegisterPatternsForProtocolDetection(void)
     for (methods_pos = 0; methods[methods_pos]; methods_pos++) {
         for (spacings_pos = 0; spacings[spacings_pos]; spacings_pos++) {
 
-            /* Combine the method name and the spacing */
+            /* 构建HTTP协议起始关键字，"GET "等，Combine the method name and the spacing */
             snprintf(method_buffer, sizeof(method_buffer), "%s%s", methods[methods_pos], spacings[spacings_pos]);
 
             /* Register the new method+spacing pattern
              * 3 is subtracted from the length since the spacing is hex typed as |xx|
              * but the pattern matching should only be one char
-            */
+             *//* magic 3: 空格由“|20|”表示，占据了4个字符，后续会变更为空格占据1个字符 */
             register_result = AppLayerProtoDetectPMRegisterPatternCI(IPPROTO_TCP,
                     ALPROTO_HTTP, method_buffer, strlen(method_buffer)-3, 0, STREAM_TOSERVER);
-            if (register_result < 0) {
+            if (register_result < 0) {   /* 注册识别规则（到服务端），到单模识别引擎 */
                 return -1;
             }
         }
@@ -3169,7 +3169,7 @@ static int HTPRegisterPatternsForProtocolDetection(void)
         register_result = AppLayerProtoDetectPMRegisterPatternCI(IPPROTO_TCP,
                 ALPROTO_HTTP, versions[versions_pos], strlen(versions[versions_pos]),
                 0, STREAM_TOCLIENT);
-        if (register_result < 0) {
+        if (register_result < 0) {       /* 注册识别规则（到服务端），到单模识别引擎 */
             return -1;
         }
     }
@@ -3188,9 +3188,9 @@ void RegisterHTPParsers(void)
     const char *proto_name = "http";
 
     /** HTTP */
-    if (AppLayerProtoDetectConfProtoDetectionEnabled("tcp", proto_name)) {
-        AppLayerProtoDetectRegisterProtocol(ALPROTO_HTTP, proto_name);
-        if (HTPRegisterPatternsForProtocolDetection() < 0)
+    if (AppLayerProtoDetectConfProtoDetectionEnabled("tcp", proto_name)) { /* 检测是否使能协议检测 */
+        AppLayerProtoDetectRegisterProtocol(ALPROTO_HTTP, proto_name);     /* 赋值 alpd_ctx.alproto_names[] */
+        if (HTPRegisterPatternsForProtocolDetection() < 0)    /* 添加检测关键字对应的检测引擎上下文 */
             return;
     } else {
         SCLogInfo("Protocol detection and parser disabled for %s protocol",
@@ -3198,7 +3198,7 @@ void RegisterHTPParsers(void)
         return;
     }
 
-    if (AppLayerParserConfParserEnabled("tcp", proto_name)) {
+    if (AppLayerParserConfParserEnabled("tcp", proto_name)) { /* 添加http对应的解析操控函数 */
         AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);
         AppLayerParserRegisterTxFreeFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTransactionFree);
         AppLayerParserRegisterGetFilesFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetFiles);
@@ -3229,7 +3229,7 @@ void RegisterHTPParsers(void)
         SC_ATOMIC_INIT(htp_config_flags);
         AppLayerParserRegisterParserAcceptableDataDirection(IPPROTO_TCP,
                 ALPROTO_HTTP, STREAM_TOSERVER|STREAM_TOCLIENT);
-        HTPConfigure();
+        HTPConfigure();        /* 初始化http解析配置 */
     } else {
         SCLogInfo("Parsed disabled for %s protocol. Protocol detection"
                   "still on.", proto_name);

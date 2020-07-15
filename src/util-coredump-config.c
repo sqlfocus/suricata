@@ -125,7 +125,7 @@ int32_t CoredumpLoadConfig (void)
         SCLogInfo ("Max dump is %"PRIu64, (uint64_t) max_dump);
     }
 
-    CoredumpEnable();
+    CoredumpEnable();      /* 使能coredump */
 
     struct rlimit lim;     /*existing limit*/
     struct rlimit new_lim; /*desired limit*/

@@ -79,7 +79,7 @@ void TimeInit(void)
     SCSpinInit(&current_time_spinlock, 0);
 
     /* Initialize Time Zone settings. */
-    tzset();
+    tzset();       /* 设置时区 */
 }
 
 void TimeDeinit(void)

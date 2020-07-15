@@ -1516,7 +1516,7 @@ int DetectEnginePktInspectionSetup(Signature *s)
 }
 
 /* code to control the main thread to do a reload */
-
+/* 控制主线程是否重新加载引擎 */
 enum DetectEngineSyncState {
     IDLE,   /**< ready to start a reload */
     RELOAD, /**< command main thread to do the reload */
@@ -1970,13 +1970,13 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     TAILQ_INIT(&de_ctx->sig_stat.failed_sigs);
     de_ctx->sigerror = NULL;
     de_ctx->type = type;
-
+    /* 作为stub引擎，仅需要获取master引擎的版本号 */
     if (type == DETECT_ENGINE_TYPE_DD_STUB || type == DETECT_ENGINE_TYPE_MT_STUB) {
         de_ctx->version = DetectEngineGetVersion();
         SCLogDebug("stub %u with version %u", type, de_ctx->version);
         return de_ctx;
     }
-
+    /* 后续为 DETECT_ENGINE_TYPE_NORMAL/_TENANT 类型引擎初始化 */
     if (prefix != NULL) {
         strlcpy(de_ctx->config_prefix, prefix, sizeof(de_ctx->config_prefix));
     }
@@ -1985,7 +1985,7 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
         SCLogDebug("ConfGetBool could not load the value.");
     }
 
-    de_ctx->mpm_matcher = PatternMatchDefaultMatcher();
+    de_ctx->mpm_matcher = PatternMatchDefaultMatcher();       /* 得到配置关键字 spm-algo/mpm-algo 对应的匹配算法 */
     de_ctx->spm_matcher = SinglePatternMatchDefaultMatcher();
     SCLogConfig("pattern matchers: MPM: %s, SPM: %s",
         mpm_table[de_ctx->mpm_matcher].name,
@@ -1997,11 +1997,11 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
         goto error;
     }
 
-    if (DetectEngineCtxLoadConf(de_ctx) == -1) {
+    if (DetectEngineCtxLoadConf(de_ctx) == -1) { /* 加载配置文件 */
         goto error;
     }
 
-    SigGroupHeadHashInit(de_ctx);
+    SigGroupHeadHashInit(de_ctx);                /* 初始化引擎存放信号的哈希表 */
     MpmStoreInit(de_ctx);
     ThresholdHashInit(de_ctx);
     DetectParseDupSigHashInit(de_ctx);
@@ -2015,11 +2015,11 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     SCClassConfLoadClassficationConfigFile(de_ctx, NULL);
     SCRConfLoadReferenceConfigFile(de_ctx, NULL);
 
-    if (ActionInitConfig() < 0) {
+    if (ActionInitConfig() < 0) {                /* 加载动作顺序优先级 */
         goto error;
     }
 
-    de_ctx->version = DetectEngineGetVersion();
+    de_ctx->version = DetectEngineGetVersion();  /* 初始化引擎版本号 */
     VarNameStoreSetupStaging(de_ctx->version);
     SCLogDebug("dectx with version %u", de_ctx->version);
     return de_ctx;
@@ -3215,7 +3215,7 @@ uint32_t DetectEngineGetVersion(void)
     SCMutexUnlock(&master->lock);
     return version;
 }
-
+/* 更新bump版本号 */
 void DetectEngineBumpVersion(void)
 {
     DetectEngineMasterCtx *master = &g_master_de_ctx;
@@ -3224,7 +3224,7 @@ void DetectEngineBumpVersion(void)
     SCLogDebug("master version now %u", master->version);
     SCMutexUnlock(&master->lock);
 }
-
+/* 查找当前工作引擎 */
 DetectEngineCtx *DetectEngineGetCurrent(void)
 {
     DetectEngineMasterCtx *master = &g_master_de_ctx;
@@ -4055,7 +4055,7 @@ static int reloads = 0;
  *
  *  \retval -1 error
  *  \retval 0 ok
- */
+ *//* 重新加载引擎 */
 int DetectEngineReload(const SCInstance *suri)
 {
     DetectEngineCtx *new_de_ctx = NULL;
@@ -4071,10 +4071,10 @@ int DetectEngineReload(const SCInstance *suri)
         if (ConfYamlLoadFileWithPrefix(suri->conf_filename, prefix) != 0) {
             SCLogError(SC_ERR_CONF_YAML_ERROR, "failed to load yaml %s",
                     suri->conf_filename);
-            return -1;
+            return -1;       /* 加载新配置文件 */
         }
 
-        ConfNode *node = ConfGetNode(prefix);
+        ConfNode *node = ConfGetNode(prefix); /* 拿到新配置文件解析后的root节点 */
         if (node == NULL) {
             SCLogError(SC_ERR_CONF_YAML_ERROR, "failed to properly setup yaml %s",
                     suri->conf_filename);
@@ -4086,7 +4086,7 @@ int DetectEngineReload(const SCInstance *suri)
     }
 
     /* get a reference to the current de_ctx */
-    old_de_ctx = DetectEngineGetCurrent();
+    old_de_ctx = DetectEngineGetCurrent();    /* 获取当前工作引擎 */
     if (old_de_ctx == NULL)
         return -1;
     SCLogDebug("get ref to old_de_ctx %p", old_de_ctx);
@@ -4095,7 +4095,7 @@ int DetectEngineReload(const SCInstance *suri)
     if (!(old_de_ctx->type == DETECT_ENGINE_TYPE_NORMAL ||
           old_de_ctx->type == DETECT_ENGINE_TYPE_DD_STUB))
     {
-        DetectEngineDeReference(&old_de_ctx);
+        DetectEngineDeReference(&old_de_ctx); /* 判断引擎是否可重新加载 */
         SCLogNotice("rule reload complete");
         return -1;
     }
@@ -4108,7 +4108,7 @@ int DetectEngineReload(const SCInstance *suri)
         DetectEngineDeReference(&old_de_ctx);
         return -1;
     }
-    if (SigLoadSignatures(new_de_ctx,
+    if (SigLoadSignatures(new_de_ctx,         /* 加载规则 */
                           suri->sig_file, suri->sig_file_exclusive) != 0) {
         DetectEngineCtxFree(new_de_ctx);
         DetectEngineDeReference(&old_de_ctx);
@@ -4117,21 +4117,21 @@ int DetectEngineReload(const SCInstance *suri)
     SCLogDebug("set up new_de_ctx %p", new_de_ctx);
 
     /* add to master */
-    DetectEngineAddToMaster(new_de_ctx);
+    DetectEngineAddToMaster(new_de_ctx);      /* 添加到 g_master_de_ctx 链表 */
 
     /* move to old free list */
-    DetectEngineMoveToFreeList(old_de_ctx);
+    DetectEngineMoveToFreeList(old_de_ctx);   /* 将原引擎环境移除 */
     DetectEngineDeReference(&old_de_ctx);
 
     SCLogDebug("going to reload the threads to use new_de_ctx %p", new_de_ctx);
     /* update the threads */
-    DetectEngineReloadThreads(new_de_ctx);
+    DetectEngineReloadThreads(new_de_ctx);    /* 利用新环境更新工作线程 */
     SCLogDebug("threads now run new_de_ctx %p", new_de_ctx);
 
     /* walk free list, freeing the old_de_ctx */
     DetectEnginePruneFreeList();
 
-    DetectEngineBumpVersion();
+    DetectEngineBumpVersion();                /* 更新bump版本号 */
 
     SCLogDebug("old_de_ctx should have been freed");
 

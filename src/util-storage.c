@@ -42,10 +42,10 @@ typedef struct StorageList_ {
     struct StorageList_ *next;
 } StorageList;
 
-static StorageList *storage_list = NULL;
-static int storage_max_id[STORAGE_MAX];
+static StorageList *storage_list = NULL;     /* 注册用的存储链表，初始化完毕后释放 */
+static int storage_max_id[STORAGE_MAX];      /* 同类型存储的索引, 0~N */
 static int storage_registraton_closed = 0;
-static StorageMapping **storage_map = NULL;
+static StorageMapping **storage_map = NULL;  /* 存储类型二级映射表， STORAGE_MAX -> storage_max_id[], 用于跟踪各类型内存分配 */
 
 static const char *StoragePrintType(StorageEnum type)
 {
@@ -95,7 +95,7 @@ void StorageCleanup(void)
 
     storage_list = NULL;
 }
-
+/* 注册存储类型, storage_list */
 int StorageRegister(const StorageEnum type, const char *name, const unsigned int size, void *(*Alloc)(unsigned int), void (*Free)(void *))
 {
     if (storage_registraton_closed)
@@ -156,7 +156,7 @@ int StorageFinalize(void)
     }
     memset(storage_map, 0x00, sizeof(StorageMapping *) * STORAGE_MAX);
 
-    for (i = 0; i < STORAGE_MAX; i++) {
+    for (i = 0; i < STORAGE_MAX; i++) { /* 为各类型内存分配存储信息结构 */
         if (storage_max_id[i] > 0) {
             storage_map[i] = SCMalloc(sizeof(StorageMapping) * storage_max_id[i]);
             if (storage_map[i] == NULL)
@@ -165,7 +165,7 @@ int StorageFinalize(void)
         }
     }
 
-    StorageList *entry = storage_list;
+    StorageList *entry = storage_list;  /* 将注册到 storage_list 的存储类型映射到 storage_map */
     while (entry) {
         if (storage_map[entry->map.type] != NULL) {
             storage_map[entry->map.type][entry->id].name = entry->map.name;
@@ -179,7 +179,7 @@ int StorageFinalize(void)
         SCFree(entry);
         entry = next;
     };
-    storage_list = NULL;
+    storage_list = NULL;                /* 注册表清空 */
 
 #ifdef DEBUG
     for (i = 0; i < STORAGE_MAX; i++) {

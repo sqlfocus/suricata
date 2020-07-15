@@ -45,8 +45,8 @@
 #include "hs.h"
 #endif
 
-MpmTableElmt mpm_table[MPM_TABLE_SIZE];
-int mpm_default_matcher;
+MpmTableElmt mpm_table[MPM_TABLE_SIZE];   /* 多模式匹配表 */
+int mpm_default_matcher;                  /* 默认多模算法 */
 
 /**
  * \brief Register a new Mpm Context.
@@ -264,7 +264,7 @@ void MpmInitThreadCtx(MpmThreadCtx *mpm_thread_ctx, uint16_t matcher)
 void MpmInitCtx (MpmCtx *mpm_ctx, uint16_t matcher)
 {
     mpm_ctx->mpm_type = matcher;
-    mpm_table[matcher].InitCtx(mpm_ctx);
+    mpm_table[matcher].InitCtx(mpm_ctx);   /* refer SCACInitCtx() */
 }
 
 /* MPM matcher to use by default, i.e. when "mpm-algo" is set to "auto".
@@ -279,9 +279,9 @@ void MpmInitCtx (MpmCtx *mpm_ctx, uint16_t matcher)
 void MpmTableSetup(void)
 {
     memset(mpm_table, 0, sizeof(mpm_table));
-    mpm_default_matcher = DEFAULT_MPM;
+    mpm_default_matcher = DEFAULT_MPM;        /* 默认多模式匹配算法，hyper-scan */
 
-    MpmACRegister();
+    MpmACRegister();          /* 注册AC算法 */
     MpmACBSRegister();
     MpmACTileRegister();
 #ifdef BUILD_HYPERSCAN
@@ -297,7 +297,7 @@ void MpmTableSetup(void)
             MpmHSRegister();
         }
     #else
-        MpmHSRegister();
+        MpmHSRegister();   /* 注册HS算法 */
     #endif /* HAVE_HS_VALID_PLATFORM */
 #endif /* BUILD_HYPERSCAN */
 }

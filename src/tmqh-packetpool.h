@@ -41,13 +41,13 @@ typedef struct PktPool_ {
     /* link listed of free packets local to this thread.
      * No mutex is needed.
      */
-    Packet *head;
+    Packet *head;                    /* 本线程缓存报文链 */
     /* Packets waiting (pending) to be returned to the given Packet
      * Pool. Accumulate packets for the same pool until a theshold is
      * reached, then return them all at once.  Keep the head and tail
      * to fast insertion of the entire list onto a return stack.
      */
-    struct PktPool_ *pending_pool;
+    struct PktPool_ *pending_pool;   /* 作为 ->return_stack 的临时缓存 */
     Packet *pending_head;
     Packet *pending_tail;
     uint32_t pending_count;
@@ -64,7 +64,7 @@ typedef struct PktPool_ {
     /* Return stack, where other threads put packets that they free that belong
      * to this thread.
      */
-    PktPoolLockedStack return_stack;
+    PktPoolLockedStack return_stack; /* 其他线程申请报文，释放到此缓存池 */
 } PktPool;
 
 Packet *TmqhInputPacketpool(ThreadVars *);

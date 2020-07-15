@@ -74,7 +74,7 @@ thread_local uint64_t rwr_lock_cnt;
 static int SetCPUAffinity(uint16_t cpu);
 static void TmThreadDeinitMC(ThreadVars *tv);
 
-/* root of the threadvars list */
+/* 线程信息列表，root of the threadvars list */
 ThreadVars *tv_root[TVT_MAX] = { NULL };
 
 /* lock to protect tv_root */
@@ -115,7 +115,7 @@ TmEcode TmThreadsSlotVarRun(ThreadVars *tv, Packet *p, TmSlot *slot)
     for (TmSlot *s = slot; s != NULL; s = s->slot_next) {
         PACKET_PROFILING_TMM_START(p, s->tm_id);
         TmEcode r = s->SlotFunc(tv, p, SC_ATOMIC_GET(s->slot_data));
-        PACKET_PROFILING_TMM_END(p, s->tm_id);
+        PACKET_PROFILING_TMM_END(p, s->tm_id);   /* 运行注册的报文处理链 */
 
         /* handle error */
         if (unlikely(r == TM_ECODE_FAILED)) {
@@ -219,7 +219,7 @@ static int TmThreadTimeoutLoop(ThreadVars *tv, TmSlot *s)
         queue;
 
  */
-
+/* pcap live读取报文的线程主函数 */
 static void *TmThreadsSlotPktAcqLoop(void *td)
 {
     ThreadVars *tv = (ThreadVars *)td;
@@ -229,17 +229,17 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
     TmSlot *slot = NULL;
 
     /* Set the thread name */
-    if (SCSetThreadName(tv->name) < 0) {
+    if (SCSetThreadName(tv->name) < 0) {   /* 设置线程名 */
         SCLogWarning(SC_ERR_THREAD_INIT, "Unable to set thread name");
     }
 
     if (tv->thread_setup_flags != 0)
-        TmThreadSetupOptions(tv);
+        TmThreadSetupOptions(tv);          /* 设置亲昵性 */
 
     /* Drop the capabilities for this thread */
-    SCDropCaps(tv);
+    SCDropCaps(tv);                        /* 释放特殊权限 */
 
-    PacketPoolInit();
+    PacketPoolInit();                      /* 初始化本线程报文池，并预分配报文 */
 
     /* check if we are setup properly */
     if (s == NULL || s->PktAcqLoop == NULL || tv->tmqh_in == NULL || tv->tmqh_out == NULL) {
@@ -251,10 +251,10 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
         pthread_exit((void *) -1);
         return NULL;
     }
-
+    /* 报文处理链/pipeline初始化, TMM_RECEIVEPCAP TMM_DECODEPCAP */
     for (slot = s; slot != NULL; slot = slot->slot_next) {
-        if (slot->SlotThreadInit != NULL) {
-            void *slot_data = NULL;
+        if (slot->SlotThreadInit != NULL) { /* ReceivePcapThreadInit() */
+            void *slot_data = NULL;         /* DecodePcapThreadInit() */
             r = slot->SlotThreadInit(tv, slot->slot_initdata, &slot_data);
             if (r != TM_ECODE_OK) {
                 if (r == TM_ECODE_DONE) {
@@ -288,15 +288,15 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
 
     StatsSetupPrivate(tv);
 
-    TmThreadsSetFlag(tv, THV_INIT_DONE);
-
+    TmThreadsSetFlag(tv, THV_INIT_DONE);      /* 设置初始化完成标识 */
+    /* 主循环 */
     while(run) {
         if (TmThreadsCheckFlag(tv, THV_PAUSE)) {
             TmThreadsSetFlag(tv, THV_PAUSED);
-            TmThreadTestThreadUnPaused(tv);
+            TmThreadTestThreadUnPaused(tv);   /* 等待主循环启动线程 */
             TmThreadsUnsetFlag(tv, THV_PAUSED);
         }
-
+        /* TMM_RECEIVEPCAP -> ReceivePcapLoop() */
         r = s->PktAcqLoop(tv, SC_ATOMIC_GET(s->slot_data), s);
 
         if (r == TM_ECODE_FAILED) {
@@ -570,9 +570,9 @@ static TmEcode TmThreadSetSlots(ThreadVars *tv, const char *name, void *(*fn_p)(
     if (strcmp(name, "varslot") == 0) {
         tv->tm_func = TmThreadsSlotVar;
     } else if (strcmp(name, "pktacqloop") == 0) {
-        tv->tm_func = TmThreadsSlotPktAcqLoop;
+        tv->tm_func = TmThreadsSlotPktAcqLoop;   /* pcap读取报文的主入口函数 */
     } else if (strcmp(name, "management") == 0) {
-        tv->tm_func = TmThreadsManagement;
+        tv->tm_func = TmThreadsManagement;       /* 管理线程主入口函数 */
     } else if (strcmp(name, "command") == 0) {
         tv->tm_func = TmThreadsManagement;
     } else if (strcmp(name, "custom") == 0) {
@@ -640,7 +640,7 @@ void TmSlotSetFuncAppend(ThreadVars *tv, TmModule *tm, const void *data)
     slot->SlotThreadDeinit = tm->ThreadDeinit;
     /* we don't have to check for the return value "-1".  We wouldn't have
      * received a TM as arg, if it didn't exist */
-    slot->tm_id = TmModuleGetIDForTM(tm);
+    slot->tm_id = TmModuleGetIDForTM(tm);  /* tmm_modules[] 索引 */
 
     tv->tmm_flags |= tm->flags;
     tv->cap_flags |= tm->cap_flags;
@@ -907,7 +907,7 @@ TmEcode TmThreadSetupOptions(ThreadVars *tv)
  *                   and the mutex variables for this newly created TV.
  *
  * \retval the newly created TV instance, or NULL on error
- */
+ *//* 构造线程信息结构 */
 ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *inqh_name,
                            const char *outq_name, const char *outqh_name, const char *slots,
                            void * (*fn_p)(void *), int mucond)
@@ -930,15 +930,15 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
     strlcpy(tv->name, name, sizeof(tv->name));
 
     /* default state for every newly created thread */
-    TmThreadsSetFlag(tv, THV_PAUSE);
+    TmThreadsSetFlag(tv, THV_PAUSE);    /* 设置标记 */
     TmThreadsSetFlag(tv, THV_USE);
 
-    /* set the incoming queue */
+    /* 初始化输入队列，set the incoming queue */
     if (inq_name != NULL && strcmp(inq_name, "packetpool") != 0) {
         SCLogDebug("inq_name \"%s\"", inq_name);
 
         tmq = TmqGetQueueByName(inq_name);
-        if (tmq == NULL) {
+        if (tmq == NULL) {              /* 获取输入队列，无则创建 */
             tmq = TmqCreateQueue(inq_name);
             if (tmq == NULL)
                 goto error;
@@ -960,12 +960,12 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
         if (tmqh == NULL)
             goto error;
 
-        tv->tmqh_in = tmqh->InHandler;
+        tv->tmqh_in = tmqh->InHandler;  /* 获取输入队列的处理函数, tmqh_table[] */
         tv->inq_id = (uint8_t)id;
         SCLogDebug("tv->tmqh_in %p", tv->tmqh_in);
     }
 
-    /* set the outgoing queue */
+    /* 初始化输出队列，set the outgoing queue */
     if (outqh_name != NULL) {
         SCLogDebug("outqh_name \"%s\"", outqh_name);
 
@@ -975,7 +975,7 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
         }
 
         tmqh = TmqhGetQueueHandlerByName(outqh_name);
-        if (tmqh == NULL)
+        if (tmqh == NULL)               /* 获取输出队列的处理函数 */
             goto error;
 
         tv->tmqh_out = tmqh->OutHandler;
@@ -1006,11 +1006,11 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
     }
 
     if (TmThreadSetSlots(tv, slots, fn_p) != TM_ECODE_OK) {
-        goto error;
+        goto error;           /* 设置线程主处理函数 */
     }
 
     if (mucond != 0)
-        TmThreadInitMC(tv);
+        TmThreadInitMC(tv);   /* 初始化锁 */
 
     return tv;
 
@@ -1049,7 +1049,7 @@ ThreadVars *TmThreadCreatePacketHandler(const char *name, const char *inq_name,
 
     if (tv != NULL) {
         tv->type = TVT_PPT;
-        tv->id = TmThreadsRegisterThread(tv, tv->type);
+        tv->id = TmThreadsRegisterThread(tv, tv->type);  /* 存储到 thread_store */
     }
 
 
@@ -1077,7 +1077,7 @@ ThreadVars *TmThreadCreateMgmtThread(const char *name, void *(fn_p)(void *),
 
     if (tv != NULL) {
         tv->type = TVT_MGMT;
-        tv->id = TmThreadsRegisterThread(tv, tv->type);
+        tv->id = TmThreadsRegisterThread(tv, tv->type);  /* 加入 thread_store */
         TmThreadSetCPU(tv, MANAGEMENT_CPU_SET);
     }
 
@@ -1645,9 +1645,9 @@ TmEcode TmThreadSpawn(ThreadVars *tv)
         printf("ERROR; return code from pthread_create() is %" PRId32 "\n", rc);
         return TM_ECODE_FAILED;
     }
-
+    /* 等待线程启动 */
     TmThreadWaitForFlag(tv, THV_INIT_DONE | THV_RUNNING_DONE);
-
+    /* 加入 tv_root[] 链表 */
     TmThreadAppend(tv, tv->type);
     return TM_ECODE_OK;
 }
@@ -1796,7 +1796,7 @@ void TmThreadPauseThreads()
 
 /**
  * \brief Used to check the thread for certain conditions of failure.
- */
+ *//* 检查工作线程是否失败，如果失败则进程退出 */
 void TmThreadCheckThreadState(void)
 {
     SCMutexLock(&tv_root_lock);
@@ -1805,7 +1805,7 @@ void TmThreadCheckThreadState(void)
         while (tv) {
             if (TmThreadsCheckFlag(tv, THV_FAILED)) {
                 FatalError(SC_ERR_FATAL, "thread %s failed", tv->name);
-            }
+            }                 /* 如果线程存在失败，则整体进程退出 */
             tv = tv->next;
         }
     }
@@ -1974,10 +1974,10 @@ void TmThreadDumpThreads(void)
 }
 
 typedef struct Thread_ {
-    ThreadVars *tv;     /**< threadvars structure */
+    ThreadVars *tv;     /* < threadvars structure */
     const char *name;
-    int type;
-    int in_use;         /**< bool to indicate this is in use */
+    int type;           /* TVT_MGMT */
+    int in_use;         /* 是否正在使用 */
 
     struct timeval pktts;   /**< current packet time of this thread
                              *   (offline mode) */
@@ -1986,12 +1986,12 @@ typedef struct Thread_ {
 } Thread;
 
 typedef struct Threads_ {
-    Thread *threads;
+    Thread *threads;        /* 线程信息数组 */
     size_t threads_size;
     int threads_cnt;
 } Threads;
 
-static Threads thread_store = { NULL, 0, 0 };
+static Threads thread_store = { NULL, 0, 0 };  /* 已创建的线程列表 */
 static SCMutex thread_store_lock = SCMUTEX_INITIALIZER;
 
 void TmThreadsListThreads(void)

@@ -381,12 +381,12 @@ uint8_t *BoyerMooreNocase(const uint8_t *x, uint16_t m, const uint8_t *y, uint32
 }
 
 typedef struct SpmBmCtx_ {
-    BmCtx *bm_ctx;
-    uint8_t *needle;
+    BmCtx *bm_ctx;        /* BM算法相关环境 */
+    uint8_t *needle;      /* 内容字节数组 */
     uint16_t needle_len;
-    int nocase;
+    int nocase;           /* 是否区分大小写 */
 } SpmBmCtx;
-
+/* BM单模匹配引擎上下文初始化函数 */
 static SpmCtx *BMInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
                          SpmGlobalThreadCtx *global_thread_ctx)
 {
@@ -396,13 +396,13 @@ static SpmCtx *BMInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
         return NULL;
     }
     memset(ctx, 0, sizeof(*ctx));
-    ctx->matcher = SPM_BM;
+    ctx->matcher = SPM_BM;     /* 分配单模环境 */
 
     SpmBmCtx *sctx = SCMalloc(sizeof(SpmBmCtx));
     if (sctx == NULL) {
         SCLogDebug("Unable to alloc SpmBmCtx.");
         SCFree(ctx);
-        return NULL;
+        return NULL;           /* 分配BM单模环境 */
     }
     memset(sctx, 0, sizeof(*sctx));
 
@@ -416,7 +416,7 @@ static SpmCtx *BMInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
     memcpy(sctx->needle, needle, needle_len);
     sctx->needle_len = needle_len;
 
-    if (nocase) {
+    if (nocase) {              /* 初始化BM单模特定环境 */
         sctx->bm_ctx = BoyerMooreNocaseCtxInit(sctx->needle, sctx->needle_len);
         sctx->nocase = 1;
     } else {
@@ -498,7 +498,7 @@ static SpmThreadCtx *BMMakeThreadCtx(const SpmGlobalThreadCtx *global_thread_ctx
     thread_ctx->matcher = SPM_BM;
     return thread_ctx;
 }
-
+/* 注册Boyer-Moore算法 */
 void SpmBMRegister(void)
 {
     spm_table[SPM_BM].name = "bm";

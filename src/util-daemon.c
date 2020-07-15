@@ -170,7 +170,7 @@ void Daemonize (void)
  *
  * \retval 1 valid combination
  * \retval 0 invalid combination
- */
+ *//* pcap模式、单元测试模式不允许daemon化 */
 int CheckValidDaemonModes (int daemon, int mode)
 {
     if (daemon) {

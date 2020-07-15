@@ -48,3 +48,7 @@ qa/coccinelle/struct-flags.cocci
 
 /suricata-update/*
 !/suricata-update/Makefile.am
+
+GPATH
+GRTAGS
+GTAGS

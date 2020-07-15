@@ -400,12 +400,12 @@ void SigTableList(const char *keyword)
     }
     return;
 }
-
+/* 注册规则支持的字段/关键字（如sid、priority等），及解析过程所需函数 */
 void SigTableSetup(void)
 {
     memset(sigmatch_table, 0, sizeof(sigmatch_table));
 
-    DetectSidRegister();
+    DetectSidRegister();         /* 关键字sid注册到 sigmatch_table[] */
     DetectPriorityRegister();
     DetectPrefilterRegister();
     DetectRevRegister();

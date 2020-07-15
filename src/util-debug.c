@@ -48,7 +48,7 @@
 #include "conf.h"
 
 /* holds the string-enum mapping for the enums held in the table SCLogLevel */
-SCEnumCharMap sc_log_level_map[ ] = {
+SCEnumCharMap sc_log_level_map[ ] = {     /* 日志级别字符串到内部Enum之间的对应关系 */
     { "Not set",        SC_LOG_NOTSET},
     { "None",           SC_LOG_NONE },
     { "Emergency",      SC_LOG_EMERGENCY },
@@ -65,7 +65,7 @@ SCEnumCharMap sc_log_level_map[ ] = {
 };
 
 /* holds the string-enum mapping for the enums held in the table SCLogOPIface */
-SCEnumCharMap sc_log_op_iface_map[ ] = {
+SCEnumCharMap sc_log_op_iface_map[ ] = {  /* 日志输出方式映射表 */
     { "Console",        SC_LOG_OP_IFACE_CONSOLE },
     { "File",           SC_LOG_OP_IFACE_FILE },
     { "Syslog",         SC_LOG_OP_IFACE_SYSLOG },
@@ -81,7 +81,7 @@ static SCMutex sc_log_stream_lock;
 
 /**
  * \brief Holds the config state for the logging module
- */
+ *//* 日志模块的配置信息 */
 static SCLogConfig *sc_log_config = NULL;
 
 /**
@@ -91,12 +91,12 @@ static char *SCLogGetLogFilename(const char *);
 
 /**
  * \brief Holds the global log level.  Is the same as sc_log_config->log_level
- */
+ *//* 等价于 sc_log_config->log_level, 加速 */
 SCLogLevel sc_log_global_log_level;
 
 /**
  * \brief Used to indicate whether the logging module has been init or not
- */
+ *//* 日志模块是否已经初始化 */
 int sc_log_module_initialized = 0;
 
 /**
@@ -753,7 +753,7 @@ static inline SCLogOPIfaceCtx *SCLogInitFileOPIface(const char *file,
     iface_ctx->type = type;
 
     if ( (iface_ctx->file_d = fopen(file, "a")) == NULL) {
-        printf("Error opening file %s\n", file);
+        printf("Error opening file %s\n", file); /* 以append方式打开文件 */
         goto error;
     }
 
@@ -765,10 +765,10 @@ static inline SCLogOPIfaceCtx *SCLogInitFileOPIface(const char *file,
         goto error;
     }
 
-    SCMutexInit(&iface_ctx->fp_mutex, NULL);
+    SCMutexInit(&iface_ctx->fp_mutex, NULL);     /* 初始化锁，用于日志文件rotate */
     OutputRegisterFileRotationFlag(&iface_ctx->rotation_flag);
 
-    iface_ctx->log_level = log_level;
+    iface_ctx->log_level = log_level;            /* 初始化日志级别 */
 
     return iface_ctx;
 
@@ -799,7 +799,7 @@ error:
  *
  * \retval iface_ctx Pointer to the console output interface context created
  * \initonly
- */
+ *//* 初始化日志输出，console方式 */
 static inline SCLogOPIfaceCtx *SCLogInitConsoleOPIface(const char *log_format,
                                                        SCLogLevel log_level, SCLogOPType type)
 {
@@ -811,12 +811,12 @@ static inline SCLogOPIfaceCtx *SCLogInitConsoleOPIface(const char *log_format,
     }
 
     iface_ctx->iface = SC_LOG_OP_IFACE_CONSOLE;
-    iface_ctx->type = type;
+    iface_ctx->type = type;    /* 日志输出类型 SCLogOPType */
 
     /* console log format is overridden by envvars */
     const char *tmp_log_format = log_format;
     const char *s = getenv(SC_LOG_ENV_LOG_FORMAT);
-    if (s != NULL) {
+    if (s != NULL) {           /* 输出日志格式 */
 #if 0
         printf("Overriding setting for \"console.format\" because of env "
                 "var SC_LOG_FORMAT=\"%s\".\n", s);
@@ -833,7 +833,7 @@ static inline SCLogOPIfaceCtx *SCLogInitConsoleOPIface(const char *log_format,
     /* console log level is overridden by envvars */
     SCLogLevel tmp_log_level = log_level;
     s = getenv(SC_LOG_ENV_LOG_LEVEL);
-    if (s != NULL) {
+    if (s != NULL) {           /* 输出日志级别 */
         SCLogLevel l = SCMapEnumNameToValue(s, sc_log_level_map);
         if (l > SC_LOG_NOTSET && l < SC_LOG_LEVEL_MAX) {
 #if 0
@@ -955,7 +955,7 @@ static inline void SCLogSetLogLevel(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
     if (log_level > SC_LOG_NOTSET && log_level < SC_LOG_LEVEL_MAX)
         sc_lc->log_level = log_level;
     else {
-        sc_lc->log_level = SC_LOG_DEF_LOG_LEVEL;
+        sc_lc->log_level = SC_LOG_DEF_LOG_LEVEL; /* 默认 SC_LOG_INFO */
 #ifndef UNITTESTS
         if (sc_lid != NULL) {
             printf("Warning: Invalid/No global_log_level assigned by user.  Falling "
@@ -966,7 +966,7 @@ static inline void SCLogSetLogLevel(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
     }
 
     /* we also set it to a global var, as it is easier to access it */
-    sc_log_global_log_level = sc_lc->log_level;
+    sc_log_global_log_level = sc_lc->log_level;  /* 初始化全局变量，以便于访问加速 */
 
     return;
 }
@@ -975,9 +975,9 @@ static inline const char *SCLogGetDefaultLogFormat(void)
 {
     const char *prog_ver = GetProgramVersion();
     if (strstr(prog_ver, "RELEASE") != NULL) {
-        return SC_LOG_DEF_LOG_FORMAT_REL;
+        return SC_LOG_DEF_LOG_FORMAT_REL;    /* 默认日志格式，RELEASE版本 */
     }
-    return SC_LOG_DEF_LOG_FORMAT_DEV;
+    return SC_LOG_DEF_LOG_FORMAT_DEV;        /* DEV版本 */
 }
 
 /**
@@ -1001,7 +1001,7 @@ static inline void SCLogSetLogFormat(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
 
     /* deal with the global log format to be used */
     if (format == NULL || strlen(format) > SC_LOG_MAX_LOG_FORMAT_LEN) {
-        format = SCLogGetDefaultLogFormat();
+        format = SCLogGetDefaultLogFormat();    /* 默认日志格式 */
 #ifndef UNITTESTS
         if (sc_lid != NULL) {
             printf("Warning: Invalid/No global_log_format supplied by user or format "
@@ -1043,7 +1043,7 @@ static inline void SCLogSetOPIface(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
             op_iface = SCMapEnumNameToValue(s, sc_log_op_iface_map);
 
             if(op_iface < 0 || op_iface >= SC_LOG_OP_IFACE_MAX) {
-                op_iface = SC_LOG_DEF_LOG_OP_IFACE;
+                op_iface = SC_LOG_DEF_LOG_OP_IFACE; /* 默认输出为 SC_LOG_OP_IFACE_CONSOLE */
 #ifndef UNITTESTS
                 printf("Warning: Invalid output interface supplied by user.  "
                        "Falling back on default_output_interface \"%s\"\n",
@@ -1052,7 +1052,7 @@ static inline void SCLogSetOPIface(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
             }
         }
         else {
-            op_iface = SC_LOG_DEF_LOG_OP_IFACE;
+            op_iface = SC_LOG_DEF_LOG_OP_IFACE;     /* 默认输出为 SC_LOG_OP_IFACE_CONSOLE */
 #ifndef UNITTESTS
             if (sc_lid != NULL) {
                 printf("Warning: Output_interface not supplied by user.  Falling "
@@ -1068,7 +1068,7 @@ static inline void SCLogSetOPIface(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
                 break;
             case SC_LOG_OP_IFACE_FILE:
                 s = getenv(SC_LOG_ENV_LOG_FILE);
-                if (s == NULL) {
+                if (s == NULL) {  /* 默认文件名 /var/log/suricata/suricata.log */
                     char *str = SCLogGetLogFilename(SC_LOG_DEF_LOG_FILE);
                     if (str != NULL) {
                         op_ifaces_ctx = SCLogInitFileOPIface(str, NULL, SC_LOG_LEVEL_MAX,0);
@@ -1081,7 +1081,7 @@ static inline void SCLogSetOPIface(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
             case SC_LOG_OP_IFACE_SYSLOG:
                 s = getenv(SC_LOG_ENV_LOG_FACILITY);
                 if (s == NULL)
-                    s = SC_LOG_DEF_SYSLOG_FACILITY_STR;
+                    s = SC_LOG_DEF_SYSLOG_FACILITY_STR;   /* 默认输出到 LOG_LOCAL0 */
 
                 op_ifaces_ctx = SCLogInitSyslogOPIface(SCMapEnumNameToValue(s, SCSyslogGetFacilityMap()), NULL, -1,0);
                 break;
@@ -1098,7 +1098,7 @@ static inline void SCLogSetOPIface(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
  *
  * \param sc_lid The initialization data supplied.
  * \param sc_lc  The logging module context which has to be updated.
- */
+ *//* 初始化输出过滤器（pcre规则） */
 static inline void SCLogSetOPFilter(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
 {
     const char *filter = NULL;
@@ -1122,7 +1122,7 @@ static inline void SCLogSetOPFilter(SCLogInitData *sc_lid, SCLogConfig *sc_lc)
             return;
         }
         sc_lc->op_filter_regex = pcre_compile(filter, opts, &ep, &eo, NULL);
-        if (sc_lc->op_filter_regex == NULL) {
+        if (sc_lc->op_filter_regex == NULL) {  /* 日志过滤规则为pcre正则式 */
             SCFree(sc_lc->op_filter);
             printf("pcre compile of \"%s\" failed at offset %d : %s\n", filter,
                    eo, ep);
@@ -1295,12 +1295,12 @@ SCLogOPIfaceCtx *SCLogInitOPIfaceCtx(const char *iface_name,
  *               NULL, we would stick to the default configuration for the
  *               logging subsystem.
  * \initonly
- */
+ *//* 初始化日志模块 */
 void SCLogInitLogModule(SCLogInitData *sc_lid)
 {
     /* De-initialize the logging context, if it has already init by the
      * environment variables at the start of the engine */
-    SCLogDeInitLogModule();
+    SCLogDeInitLogModule();      /* 清理已初始化的日志环境 */
 
 #if defined (OS_WIN32)
     if (SCMutexInit(&sc_log_stream_lock, NULL) != 0) {
@@ -1315,13 +1315,13 @@ void SCLogInitLogModule(SCLogInitData *sc_lid)
         exit(EXIT_FAILURE);
     }
     memset(sc_log_config, 0, sizeof(SCLogConfig));
+    /* 根据传入参数初始化日志环境 */
+    SCLogSetLogLevel(sc_lid, sc_log_config);  /* 日志级别，默认INFO */
+    SCLogSetLogFormat(sc_lid, sc_log_config); /* 日志格式 */
+    SCLogSetOPIface(sc_lid, sc_log_config);   /* 输出方式，默认console */
+    SCLogSetOPFilter(sc_lid, sc_log_config);  /* 过滤规则，pcre正则式 */
 
-    SCLogSetLogLevel(sc_lid, sc_log_config);
-    SCLogSetLogFormat(sc_lid, sc_log_config);
-    SCLogSetOPIface(sc_lid, sc_log_config);
-    SCLogSetOPFilter(sc_lid, sc_log_config);
-
-    sc_log_module_initialized = 1;
+    sc_log_module_initialized = 1;            /* 日志模块初始化完毕 */
     sc_log_module_cleaned = 0;
 
     //SCOutputPrint(sc_did->startup_message);
@@ -1337,13 +1337,13 @@ void SCLogLoadConfig(int daemon, int verbose)
     int have_logging = 0;
     int max_level = 0;
     SCLogLevel min_level = 0;
-
+    /* SCInstance->verbose 对应-v重复次数，越多次日志级别越高，越详细 */
     /* If verbose logging was requested, set the minimum as
      * SC_LOG_NOTICE plus the extra verbosity. */
     if (verbose) {
         min_level = SC_LOG_NOTICE + verbose;
     }
-
+    /* 获取配置文件输出配置 */
     outputs = ConfGetNode("logging.outputs");
     if (outputs == NULL) {
         SCLogDebug("No logging.output configuration section found.");
@@ -1355,7 +1355,7 @@ void SCLogLoadConfig(int daemon, int verbose)
         SCLogDebug("Could not allocate memory for log init data");
         return;
     }
-
+    /* 获取日志级别，默认notice */
     /* Get default log level and format. */
     const char *default_log_level_s = NULL;
     if (ConfGet("logging.default-log-level", &default_log_level_s) == 1) {
@@ -1371,12 +1371,12 @@ void SCLogLoadConfig(int daemon, int verbose)
     else {
         sc_lid->global_log_level = MAX(min_level, SC_LOG_NOTICE);
     }
-
+    /* 获取日志格式 */
     if (ConfGet("logging.default-log-format", &sc_lid->global_log_format) != 1)
         sc_lid->global_log_format = SCLogGetDefaultLogFormat();
 
     (void)ConfGet("logging.default-output-filter", &sc_lid->op_filter);
-
+    /* 获取输出形式，及相关配置 */
     ConfNode *seq_node, *output;
     TAILQ_FOREACH(seq_node, &outputs->head, next) {
         SCLogLevel level = sc_lid->global_log_level;
@@ -1470,15 +1470,15 @@ void SCLogLoadConfig(int daemon, int verbose)
             SCLogAppendOPIfaceCtx(op_iface_ctx, sc_lid);
         }
     }
-
+    /* 检查，daemon状态下是否有对应的日志输出格式（如文件、syslog等） */
     if (daemon && (have_logging == 0)) {
         SCLogError(SC_ERR_MISSING_CONFIG_PARAM,
                    "NO logging compatible with daemon mode selected,"
                    " suricata won't be able to log. Please update "
                    " 'logging.outputs' in the YAML.");
     }
-
-    /* Set the global log level to that of the max level used. */
+     
+    /* 初始化日志模块 */
     sc_lid->global_log_level = MAX(sc_lid->global_log_level, max_level);
     SCLogInitLogModule(sc_lid);
 
@@ -1514,17 +1514,17 @@ static char *SCLogGetLogFilename(const char *filearg)
  */
 void SCLogDeInitLogModule(void)
 {
-    SCLogFreeLogConfig(sc_log_config);
+    SCLogFreeLogConfig(sc_log_config);  /* 清理配置信息 */
 
     /* reset the global logging_module variables */
-    sc_log_global_log_level = 0;
+    sc_log_global_log_level = 0;        /* 清理全局变量 */
     sc_log_module_initialized = 0;
     sc_log_module_cleaned = 1;
     sc_log_config = NULL;
 
-    /* de-init the FD filters */
-    SCLogReleaseFDFilters();
-    /* de-init the FG filters */
+    /* de-init the FD(function dependent) filters */
+    SCLogReleaseFDFilters();            /* 清理过滤函数列表 */
+    /* de-init the FG(fine gained) filters */
     SCLogReleaseFGFilters();
 
 #if defined (OS_WIN32)

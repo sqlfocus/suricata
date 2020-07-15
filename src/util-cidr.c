@@ -26,8 +26,8 @@
 #include "suricata-common.h"
 #include "util-cidr.h"
 
-static uint32_t cidrs[33];
-
+static uint32_t cidrs[33];   /* 掩码数组，掩码bit数 --> cidr值 */
+/* 初始化掩码数组 */
 void CIDRInit(void)
 {
     int i = 0;
