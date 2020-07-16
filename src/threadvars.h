@@ -112,7 +112,7 @@ typedef struct ThreadVars_ {
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */
-    struct PacketQueue_ *stream_pq;         /* 用于维护流超时报文 */
+    struct PacketQueue_ *stream_pq;         /* 维护此流报文 */
     struct PacketQueue_ *stream_pq_local;
 
     /* counters */

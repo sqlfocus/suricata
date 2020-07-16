@@ -485,7 +485,7 @@ void TmqhReleasePacketsToPacketPool(PacketQueue *pq)
         return;
 
     while ( (p = PacketDequeue(pq)) != NULL)
-        TmqhOutputPacketpool(NULL, p);
+        TmqhOutputPacketpool(NULL, p);   /* 释放到报文缓存池 */
 
     return;
 }

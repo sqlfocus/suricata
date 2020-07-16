@@ -236,7 +236,7 @@ void TmqhOutputFlowHash(ThreadVars *tv, Packet *p)
 
     PacketQueue *q = ctx->queues[qid].q;
     SCMutexLock(&q->mutex_q);
-    PacketEnqueue(q, p);
+    PacketEnqueue(q, p);       /* 添加到对应的队列 */
     SCCondSignal(&q->cond_q);
     SCMutexUnlock(&q->mutex_q);
 

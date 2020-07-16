@@ -145,7 +145,7 @@ static inline void TmThreadsSlotProcessPktFail(ThreadVars *tv, TmSlot *s, Packet
         TmqhOutputPacketpool(tv, p);
     }
     TmThreadsCleanDecodePQ(&tv->decode_pq);
-    if (tv->stream_pq_local) {
+    if (tv->stream_pq_local) {     /* 处理失败，则直接释 */
         SCMutexLock(&tv->stream_pq_local->mutex_q);
         TmqhReleasePacketsToPacketPool(tv->stream_pq_local);
         SCMutexUnlock(&tv->stream_pq_local->mutex_q);
@@ -191,12 +191,12 @@ static inline TmEcode TmThreadsSlotProcessPkt(ThreadVars *tv, TmSlot *s, Packet 
 
     TmEcode r = TmThreadsSlotVarRun(tv, p, s);  /* 运行报文处理链 */
     if (unlikely(r == TM_ECODE_FAILED)) {
-        TmThreadsSlotProcessPktFail(tv, s, p);
+        TmThreadsSlotProcessPktFail(tv, s, p);  /* 处理失败，则释放到报文缓存池 */
         return TM_ECODE_FAILED;
     }
-
-    tv->tmqh_out(tv, p);       /* 输出, TMQH_PACKETPOOL -> TmqhOutputPacketpool() */
-
+    /* 输出到后续处理队列，或直接回收报文 */
+    tv->tmqh_out(tv, p);       /* "workers", TMQH_PACKETPOOL -> TmqhOutputPacketpool() */
+                               /* "autofp", TMQH_FLOW -> TmqhOutputFlowHash() */
     TmThreadsHandleInjectedPackets(tv);
 
     return TM_ECODE_OK;

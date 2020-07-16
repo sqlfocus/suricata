@@ -60,11 +60,22 @@
           --PcapDumpCounters()        底层抓包统计，如接口丢包等
 
     
-* 解码
+* L1-L4解码
 从底层PCAP接收报文后，通过此函数处理L1-L4解码        
         
 --DecodePcap()
-    --
+  --DecodeLinkLayer()
+    --DecodeEthernet()
+      --DecodeNetworkLayer()
+        --DecodeIPV4()
+          --DecodeIPV4Packet()
+            --DecodeIPV4Options()  解析IP选项
+          --Defrag()               报文重组
+          --DecodeTCP()
+            --DecodeTCPPacket()
+              --DecodeTCPOptions() 解析TCP选项
+            --FlowSetupPacket()
+              --FlowGetHash()      计算hash值，设置 PKT_WANTS_FLOW 标识
     
     
 * tmm_modules[TMM_FLOWWORKER]->Func, 流处理入口

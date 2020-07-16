@@ -540,7 +540,7 @@ typedef struct Packet_
 
     /* ptr to the payload of the packet
      * with it's length. */
-    uint8_t *payload;
+    uint8_t *payload;       /* 应用层负载，及长度 */
     uint16_t payload_len;
 
     /* IPS action to take */
@@ -550,7 +550,7 @@ typedef struct Packet_
 
     /* storage: set to pointer to heap and extended via allocation if necessary */
     uint32_t pktlen;
-    uint8_t *ext_pkt;      /*  */
+    uint8_t *ext_pkt;       /*  */
 
     /* Incoming interface */
     struct LiveDevice_ *livedev;
@@ -570,7 +570,7 @@ typedef struct Packet_
     AppLayerDecoderEvents *app_layer_events;
 
     /* double linked list ptrs */
-    struct Packet_ *next;
+    struct Packet_ *next;   /* 双向链表指针 */
     struct Packet_ *prev;
 
     /** data linktype in host order */
