@@ -257,7 +257,7 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     return 0;
 }
 
-/**
+/**PCAP LIVE的workers模式初始化
  */
 static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc ModThreadsCount,
                               const char *recv_mod_name,

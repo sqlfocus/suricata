@@ -55,7 +55,7 @@ typedef struct PcapThreadVars_
     /* thread specific handle */
     pcap_t *pcap_handle;
     /* handle state */
-    unsigned char pcap_state;   /* PCAP_STATE_UP */
+    unsigned char pcap_state; /* PCAP_STATE_UP */
     /* thread specific bpf */
     struct bpf_program filter;
     /* ptr to string from config */
@@ -76,7 +76,7 @@ typedef struct PcapThreadVars_
     uint16_t capture_kernel_ifdrops;
 
     ThreadVars *tv;
-    TmSlot *slot;
+    TmSlot *slot;             /* 抓取报文后，后续处理函数链 */
 
     /** callback result -- set if one of the thread module failed. */
     int cb_result;
@@ -221,7 +221,7 @@ static void PcapCallbackLoop(char *user, struct pcap_pkthdr *h, u_char *pkt)
     }
 
     /* Trigger one dump of stats every second */
-    TimeGet(&current_time);
+    TimeGet(&current_time);              /* 秒级pcap统计 */
     if (current_time.tv_sec != ptv->last_stats_dump) {
         PcapDumpCounters(ptv);
         ptv->last_stats_dump = current_time.tv_sec;
@@ -245,7 +245,7 @@ static TmEcode ReceivePcapLoop(ThreadVars *tv, void *data, void *slot)
     PcapThreadVars *ptv = (PcapThreadVars *)data;
     TmSlot *s = (TmSlot *)slot;
 
-    ptv->slot = s->slot_next;/* 指向后续报文处理链, TMM_DECODEPCAP -> DecodePcap() */
+    ptv->slot = s->slot_next;/* 指向后续报文处理链, 如 TMM_DECODEPCAP -> DecodePcap() */
     ptv->cb_result = TM_ECODE_OK;
 
     while (1) {

@@ -306,7 +306,7 @@ int RunModeIdsPcapAutoFp(void)
  *
  * Start N threads with each thread doing all the work.
  *
- */
+ *//* PCAP LIVE处理流程的workers版本 */
 int RunModeIdsPcapWorkers(void)
 {
     int ret;

@@ -271,7 +271,7 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
 
         /* if the flowworker module is the first, get the threads input queue */
         if (slot == (TmSlot *)tv->tm_slots && (slot->tm_id == TMM_FLOWWORKER)) {
-            tv->stream_pq = tv->inq->pq;
+            tv->stream_pq = tv->inq->pq;    /* 流处理模块特殊处理 */
             tv->tm_flowworker = slot;
             SCLogDebug("pre-stream packetqueue %p (inq)", tv->stream_pq);
         /* setup a queue */

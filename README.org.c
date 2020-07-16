@@ -9,12 +9,64 @@
       --StreamTcpInitConfig()
   --RunModeDispatch()
     --RunModeGetCustomMode()       选择运行模型, runmodes[RUNMODE_PCAP_DEV]
-    --RunMode->RunModeFunc()       模式初始化,
+    --RunMode->RunModeFunc()       运行模式初始化, RunModeIdsPcapWorkers()
     --FlowManagerThreadSpawn()
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
 
+    
+* 运行模式初始化，RunMode->RunModeFunc()
+解析 RUNMODE_PCAP_DEV 模式的"workers"/run-to-death运行方式
+根据底层网卡数创建线程，每个网卡的线程数和接收通道数匹配，线程名"W#01-eth0"
 
+--RunModeIdsPcapWorkers()
+  --RunModeSetLiveCaptureWorkers()
+    --RunModeSetLiveCaptureWorkersForDevice()
+      --TmThreadCreatePacketHandler()
+        --TmThreadCreate()         初始化线程环境 ThreadVars
+          --TmqGetQueueByName()/TmqCreateQueue()  获取/创建队列, tmq_list[]
+            --输入->inq  --- "packetpool"
+            --输出->outq --- "packetpool"
+          --TmqhGetQueueHandlerByName()           获取队列处理函数, tmqh_table[]
+            --输入->tmqh_in --- "packetpool" -> TMQH_PACKETPOOL
+            --输出->tmqh_out--- "packetpool" -> TMQH_PACKETPOOL
+          --TmThreadSetSlots()     设置主处理函数
+            --"pktacqloop" --- ->tm_func = TmThreadsSlotPktAcqLoop()
+        --TmThreadsRegisterThread()注册到 thread_store
+      --TmSlotSetFuncAppend()      添加4个处理函数, ThreadVars->tm_slots
+        --"ReceivePcap"   -> TMM_RECEIVEPCAP
+        --"DecodePcap"    -> TMM_DECODEPCAP
+        --"FlowWorker"    -> TMM_FLOWWORKER
+        --"RespondReject" -> TMM_RESPONDREJECT
+      --TmThreadSpawn()            创建线程
 
+* RUNMODE_PCAP_DEV运行模式
+分析此模式下"workers"工作方式的运行代码
+
+--TmThreadsSlotPktAcqLoop()
+  --PacketPoolInit()               初始化报文池
+  --TmSlot->SlotThreadInit()       初始化PIPELINE处理函数环境
+    --ReceivePcapThreadInit()
+    --DecodePcapThreadInit()
+    --FlowWorkerThreadInit()
+  --while(True)
+    --ReceivePcapLoop()            主循环, ThreadVars->tm_slots[0]->PktAcqLoop
+      --pcap_dispatch()
+        --PcapCallbackLoop()
+          --PacketCopyData()          读取报文
+          --TmThreadsSlotProcessPkt() 运行函数处理链
+            --DecodePcap()
+            --FlowWorker()
+            --RespondRejectFunc()
+          --PcapDumpCounters()        底层抓包统计，如接口丢包等
+
+    
+* 解码
+从底层PCAP接收报文后，通过此函数处理L1-L4解码        
+        
+--DecodePcap()
+    --
+    
+    
 * tmm_modules[TMM_FLOWWORKER]->Func, 流处理入口
 流表hash数组是共享的，因此具有锁保护
                               
@@ -32,6 +84,7 @@
   --------UDP处理-------
   --AppLayerHandleUdp()
 
+    
 * 流管理线程
 线程主函数"management" <==> ThreadVars->tm_func = TmThreadsManagement()
 处理链"FlowManager" <==> tmm_modules[TMM_FLOWMANAGER]->Management = FlowManager()

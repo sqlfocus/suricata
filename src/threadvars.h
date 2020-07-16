@@ -99,7 +99,7 @@ typedef struct ThreadVars_ {
     /** pointer to the flowworker in the pipeline. Used as starting point
      *  for injected packets. Can be NULL if the flowworker is not part
      *  of this thread. */
-    struct TmSlot_ *tm_flowworker;
+    struct TmSlot_ *tm_flowworker;/* 指向tm_slots[]中的 TMM_FLOWWORKER 处理函数 */
 
     /** outgoing queue and handler */
     Tmq *outq;
@@ -112,7 +112,7 @@ typedef struct ThreadVars_ {
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */
-    struct PacketQueue_ *stream_pq;
+    struct PacketQueue_ *stream_pq;         /* 用于维护流超时报文 */
     struct PacketQueue_ *stream_pq_local;
 
     /* counters */
