@@ -42,7 +42,7 @@ typedef struct FlowQueue_
 {
     Flow *top;
     Flow *bot;
-    uint32_t len;
+    uint32_t len;         /* 队列长度 */
 #ifdef DBG_PERF
     uint32_t dbg_maxlen;
 #endif /* DBG_PERF */

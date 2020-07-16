@@ -92,12 +92,12 @@ FlowProtoTimeout flow_timeouts_emerg[FLOW_PROTO_MAX];
 FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];
 
 /** spare/unused/prealloced flows live here */
-FlowQueue flow_spare_q;
+FlowQueue flow_spare_q;   /* 预分配的流表 */
 
-FlowConfig flow_config;
+FlowConfig flow_config;   /* 流全局配置信息 */
 
 /** flow memuse counter (atomic), for enforcing memcap limit */
-SC_ATOMIC_DECLARE(uint64_t, flow_memuse);
+SC_ATOMIC_DECLARE(uint64_t, flow_memuse);   /* 已使用的内存，跟踪 FlowConfig->memcap */
 
 void FlowRegisterTests(void);
 void FlowInitFlowProto(void);
@@ -166,7 +166,7 @@ int FlowUpdateSpareFlows(void)
     len = flow_spare_q.len;
     FQLOCK_UNLOCK(&flow_spare_q);
 
-    if (len < flow_config.prealloc) {
+    if (len < flow_config.prealloc) {       /* 空闲较少，分配 */
         toalloc = flow_config.prealloc - len;
 
         uint32_t i;
@@ -177,7 +177,7 @@ int FlowUpdateSpareFlows(void)
 
             FlowEnqueue(&flow_spare_q,f);
         }
-    } else if (len > flow_config.prealloc) {
+    } else if (len > flow_config.prealloc) {/* 空闲较多，释放 */
         tofree = len - flow_config.prealloc;
 
         uint32_t i;
@@ -421,7 +421,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
     if (state != FLOW_STATE_CAPTURE_BYPASSED) {
 #endif
         /* update the last seen timestamp of this flow */
-        COPY_TIMESTAMP(&p->ts, &f->lastts);
+        COPY_TIMESTAMP(&p->ts, &f->lastts);   /* 更新命中时间 */
 #ifdef CAPTURE_OFFLOAD
     } else {
         /* still seeing packet, we downgrade to local bypass */
@@ -445,7 +445,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
         p->flowflags = FLOW_PKT_TOSERVER;
         if (!(f->flags & FLOW_TO_DST_SEEN)) {
             if (FlowUpdateSeenFlag(p)) {
-                f->flags |= FLOW_TO_DST_SEEN;
+                f->flags |= FLOW_TO_DST_SEEN;  /* 有报文发往服务器端 */
                 p->flowflags |= FLOW_PKT_TOSERVER_FIRST;
             }
         }
@@ -478,7 +478,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
     } else if ((f->flags & (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) ==
             (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) {
         SCLogDebug("pkt %p FLOW_PKT_ESTABLISHED", p);
-        p->flowflags |= FLOW_PKT_ESTABLISHED;
+        p->flowflags |= FLOW_PKT_ESTABLISHED;   /* 已看到正反向报文 */
 
         if (f->proto != IPPROTO_TCP) {
             FlowUpdateState(f, FLOW_STATE_ESTABLISHED);
@@ -486,7 +486,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
     }
 
     /*set the detection bypass flags*/
-    if (f->flags & FLOW_NOPACKET_INSPECTION) {
+    if (f->flags & FLOW_NOPACKET_INSPECTION) {  /* 根据流设置报文标识 */
         SCLogDebug("setting FLOW_NOPACKET_INSPECTION flag on flow %p", f);
         DecodeSetNoPacketInspectionFlag(p);
     }
@@ -497,7 +497,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
 
 
     /* update flow's ttl fields if needed */
-    if (PKT_IS_IPV4(p)) {
+    if (PKT_IS_IPV4(p)) {                       /* 更新ttl */
         FlowUpdateTTL(f, p, IPV4_GET_IPTTL(p));
     } else if (PKT_IS_IPV6(p)) {
         FlowUpdateTTL(f, p, IPV6_GET_HLIM(p));
@@ -527,7 +527,7 @@ void FlowHandlePacket(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 }
 
 /** \brief initialize the configuration
- *  \warning Not thread safe */
+ *  \warning Not thread safe *//* 流模块初始化 */
 void FlowInitConfig(char quiet)
 {
     SCLogDebug("initializing flow engine...");
@@ -537,8 +537,8 @@ void FlowInitConfig(char quiet)
     SC_ATOMIC_INIT(flow_memuse);
     SC_ATOMIC_INIT(flow_prune_idx);
     SC_ATOMIC_INIT(flow_config.memcap);
-    FlowQueueInit(&flow_spare_q);
-    FlowQueueInit(&flow_recycle_q);
+    FlowQueueInit(&flow_spare_q);       /* 预分配流表队列 */
+    FlowQueueInit(&flow_recycle_q);     /* 待回收流队列 */
 
     /* set defaults */
     flow_config.hash_rand   = (uint32_t)RandomGet();
@@ -548,7 +548,7 @@ void FlowInitConfig(char quiet)
 
     /* If we have specific config, overwrite the defaults with them,
      * otherwise, leave the default values */
-    intmax_t val = 0;
+    intmax_t val = 0;                   /* 读取配置文件，覆盖默认值 */
     if (ConfGetInt("flow.emergency-recovery", &val) == 1) {
         if (val <= 100 && val >= 1) {
             flow_config.emergency_recovery = (uint8_t)val;
@@ -611,7 +611,7 @@ void FlowInitConfig(char quiet)
                "%"PRIu32", prealloc: %"PRIu32, SC_ATOMIC_GET(flow_config.memcap),
                flow_config.hash_size, flow_config.prealloc);
 
-    /* alloc hash memory */
+    /* alloc hash memory */             /* 分配流的hash表, flow_hash */
     uint64_t hash_size = flow_config.hash_size * sizeof(FlowBucket);
     if (!(FLOW_CHECK_MEMCAP(hash_size))) {
         SCLogError(SC_ERR_FLOW_INIT, "allocating flow hash failed: "
@@ -643,7 +643,7 @@ void FlowInitConfig(char quiet)
                   (uintmax_t)sizeof(FlowBucket));
     }
 
-    /* pre allocate flows */
+    /* pre allocate flows */            /* 预分配流表，并加入 flow_spare_q 队列 */
     for (i = 0; i < flow_config.prealloc; i++) {
         if (!(FLOW_CHECK_MEMCAP(sizeof(Flow) + FlowStorageSize()))) {
             SCLogError(SC_ERR_FLOW_INIT, "preallocating flows failed: "
@@ -669,7 +669,7 @@ void FlowInitConfig(char quiet)
                 SC_ATOMIC_GET(flow_memuse), SC_ATOMIC_GET(flow_config.memcap));
     }
 
-    FlowInitFlowProto();            /* 流相关配置初始化，如超时时间等 */
+    FlowInitFlowProto();                /* 初始化各协议相关的超时时间等 */
 
     return;
 }

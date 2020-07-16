@@ -50,7 +50,7 @@
  */
 Flow *FlowAlloc(void)
 {
-    Flow *f;
+    Flow *f;            /* 流表项及 STORAGE_FLOW 类型的额外存储 */
     size_t size = sizeof(Flow) + FlowStorageSize();
 
     if (!(FLOW_CHECK_MEMCAP(size))) {
@@ -67,7 +67,7 @@ Flow *FlowAlloc(void)
     memset(f, 0, size);
 
     /* coverity[missing_lock] */
-    FLOW_INITIALIZE(f);
+    FLOW_INITIALIZE(f); /* 流表项初始化 */
     return f;
 }
 

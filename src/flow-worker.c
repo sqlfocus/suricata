@@ -78,7 +78,7 @@ static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packe
     FlowHandlePacketUpdate(p->flow, p);   /* 更新流表项 */
 
     int state = SC_ATOMIC_GET(p->flow->flow_state);
-    switch (state) {
+    switch (state) {                      /* 更新bypass统计 */
 #ifdef CAPTURE_OFFLOAD
         case FLOW_STATE_CAPTURE_BYPASSED:
             StatsAddUI64(tv, fw->both_bypass_pkts, 1);
@@ -199,7 +199,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     }
 
     /* handle Flow */
-    if (p->flags & PKT_WANTS_FLOW) {
+    if (p->flags & PKT_WANTS_FLOW) {      /* case: 查找/新建流 */
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_FLOW);
 
         FlowHandlePacket(tv, fw->dtv, p);    /* 查找或建流 */
@@ -216,7 +216,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 
     /* if PKT_WANTS_FLOW is not set, but PKT_HAS_FLOW is, then this is a
      * pseudo packet created by the flow manager. */
-    } else if (p->flags & PKT_HAS_FLOW) {
+    } else if (p->flags & PKT_HAS_FLOW) { /* case: 已经有对应的流，比如已经查找过了 */
         FLOWLOCK_WRLOCK(p->flow);
     }
 
@@ -237,7 +237,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         }
 
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_STREAM);
-        StreamTcp(tv, p, fw->stream_thread, &fw->pq);
+        StreamTcp(tv, p, fw->stream_thread, &fw->pq);  /* 流汇聚 */
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_STREAM);
 
         if (FlowChangeProto(p->flow)) {
@@ -254,7 +254,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
             //StreamTcp(tv, x, fw->stream_thread, &fw->pq, NULL);
             if (detect_thread != NULL) {
                 FLOWWORKER_PROFILING_START(x, PROFILE_FLOWWORKER_DETECT);
-                Detect(tv, x, detect_thread);
+                Detect(tv, x, detect_thread);          /* 流检测 */
                 FLOWWORKER_PROFILING_END(x, PROFILE_FLOWWORKER_DETECT);
             }
 

@@ -259,7 +259,7 @@ enum TcpState
 
 typedef struct TcpSession_ {
     PoolThreadReserved res;
-    uint8_t state:4;                        /**< tcp state from state enum */
+    uint8_t state:4;                        /* TCP_LAST_ACK */
     uint8_t pstate:4;                       /**< previous state */
     uint8_t queue_len;                      /**< length of queue list below */
     int8_t data_first_seen_dir;
@@ -271,7 +271,7 @@ typedef struct TcpSession_ {
     TcpStream server;
     TcpStream client;
     TcpStateQueue *queue;                   /**< list of SYN/ACK candidates */
-} TcpSession;
+} TcpSession;     /* TCP会话信息，用于跟踪流，流重组等 */
 
 #define StreamTcpSetStreamFlagAppProtoDetectionCompleted(stream) \
     ((stream)->flags |= STREAMTCP_STREAM_FLAG_APPPROTO_DETECTION_COMPLETED)

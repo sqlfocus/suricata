@@ -49,7 +49,7 @@
 
 #define FLOW_DEFAULT_FLOW_PRUNE 5
 
-FlowBucket *flow_hash;
+FlowBucket *flow_hash;       /* 存放流的hash表 */
 SC_ATOMIC_EXTERN(unsigned int, flow_prune_idx);
 SC_ATOMIC_EXTERN(unsigned int, flow_flags);
 
@@ -423,7 +423,7 @@ static inline int FlowCompare(Flow *f, const Packet *p)
 
         /* if this session is 'reused', we don't return it anymore,
          * so return false on the compare */
-        if (f->flags & FLOW_TCP_REUSED)
+        if (f->flags & FLOW_TCP_REUSED)   /* 被重用的流不返回 */
             return 0;
 
         return 1;
@@ -554,7 +554,7 @@ static Flow *TcpReuseReplace(ThreadVars *tv, DecodeThreadVars *dtv,
                              const uint32_t hash, const Packet *p)
 {
     /* tag flow as reused so future lookups won't find it */
-    old_f->flags |= FLOW_TCP_REUSED;
+    old_f->flags |= FLOW_TCP_REUSED;    /* 设置重用标志 */
     /* get some settings that we move over to the new flow */
     FlowThreadId thread_id[2] = { old_f->thread_id[0], old_f->thread_id[1] };
 
@@ -562,7 +562,7 @@ static Flow *TcpReuseReplace(ThreadVars *tv, DecodeThreadVars *dtv,
     FLOWLOCK_UNLOCK(old_f);
 
     /* Get a new flow. It will be either a locked flow or NULL */
-    Flow *f = FlowGetNew(tv, dtv, p);
+    Flow *f = FlowGetNew(tv, dtv, p);   /* 重新建流 */
     if (f == NULL) {
         return NULL;
     }
@@ -575,7 +575,7 @@ static Flow *TcpReuseReplace(ThreadVars *tv, DecodeThreadVars *dtv,
     fb->head = f;
 
     /* initialize and return */
-    FlowInit(f, p);
+    FlowInit(f, p);                     /* 初始化，仅保留了 Flow->thread_id[] */
     f->flow_hash = hash;
     f->fb = fb;
 
@@ -613,7 +613,7 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
     SCLogDebug("fb %p fb->head %p", fb, fb->head);
 
     /* see if the bucket already has a flow */
-    if (fb->head == NULL) {
+    if (fb->head == NULL) {  /* case: hash桶为空 */
         f = FlowGetNew(tv, dtv, p);
         if (f == NULL) {
             FBLOCK_UNLOCK(fb);
@@ -625,12 +625,12 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
         fb->tail = f;
 
         /* got one, now lock, initialize and return */
-        FlowInit(f, p);
+        FlowInit(f, p);                     /* 利用报文信息初始化流表 */
         f->flow_hash = hash;
         f->fb = fb;
-        FlowUpdateState(f, FLOW_STATE_NEW);
+        FlowUpdateState(f, FLOW_STATE_NEW); /* 设置流表状态，并刷新hash桶更新时间 */
 
-        FlowReference(dest, f);
+        FlowReference(dest, f);             /* 赋值 Packet->flow */
 
         FBLOCK_UNLOCK(fb);
         return f;
@@ -690,12 +690,12 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
                 fb->head = f;
 
                 /* found our flow, lock & return */
-                FLOWLOCK_WRLOCK(f);   /* 流重用，重新刷新流信息 */
+                FLOWLOCK_WRLOCK(f);   /* 给流上锁 */
                 if (unlikely(TcpSessionPacketSsnReuse(p, f, f->protoctx) == 1)) {
                     f = TcpReuseReplace(tv, dtv, fb, f, hash, p);
-                    if (f == NULL) {
-                        FBLOCK_UNLOCK(fb);
-                        return NULL;
+                    if (f == NULL) {  /* 判断流是否存在重用(冲突)，如果允许重用，则 */
+                        FBLOCK_UNLOCK(fb);  /* 设置 FLOW_TCP_REUSED 标识，以使得 */
+                        return NULL;        /* 老流表不再可见；并重新分配新流表 */
                     }
                 }
 

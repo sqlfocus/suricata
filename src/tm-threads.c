@@ -477,11 +477,11 @@ error:
     pthread_exit((void *) -1);
     return NULL;
 }
-
+/* 管理线程主入口函数 */
 static void *TmThreadsManagement(void *td)
 {
     ThreadVars *tv = (ThreadVars *)td;
-    TmSlot *s = (TmSlot *)tv->tm_slots;
+    TmSlot *s = (TmSlot *)tv->tm_slots;   /* tmm_modules[TMM_FLOWMANAGER]->Management = FlowManager() */
     TmEcode r = TM_ECODE_OK;
 
     BUG_ON(s == NULL);
@@ -502,7 +502,7 @@ static void *TmThreadsManagement(void *td)
     if (s->SlotThreadInit != NULL) {
         void *slot_data = NULL;
         r = s->SlotThreadInit(tv, s->slot_initdata, &slot_data);
-        if (r != TM_ECODE_OK) {
+        if (r != TM_ECODE_OK) {           /* TMM_FLOWMANAGER -> FlowManagerThreadInit() */
             TmThreadsSetFlag(tv, THV_CLOSED | THV_RUNNING_DONE);
             pthread_exit((void *) -1);
             return NULL;
@@ -512,12 +512,12 @@ static void *TmThreadsManagement(void *td)
 
     StatsSetupPrivate(tv);
 
-    TmThreadsSetFlag(tv, THV_INIT_DONE);
+    TmThreadsSetFlag(tv, THV_INIT_DONE);  /* 设置初始化完成标志 */
 
     r = s->Management(tv, SC_ATOMIC_GET(s->slot_data));
-    /* handle error */
+    /* handle error */                    /* 处理循环, FlowManager() */
     if (r == TM_ECODE_FAILED) {
-        TmThreadsSetFlag(tv, THV_FAILED);
+        TmThreadsSetFlag(tv, THV_FAILED); /* 后续为线程循环退出后的清理工作 */
     }
 
     if (TmThreadsCheckFlag(tv, THV_KILL)) {
@@ -630,11 +630,11 @@ void TmSlotSetFuncAppend(ThreadVars *tv, TmModule *tm, const void *data)
     slot->SlotThreadInit = tm->ThreadInit;
     slot->slot_initdata = data;
     if (tm->Func) {
-        slot->SlotFunc = tm->Func;
+        slot->SlotFunc = tm->Func;            /* 通用模块 */
     } else if (tm->PktAcqLoop) {
-        slot->PktAcqLoop = tm->PktAcqLoop;
+        slot->PktAcqLoop = tm->PktAcqLoop;    /* 报文抓取模块 */
     } else if (tm->Management) {
-        slot->Management = tm->Management;
+        slot->Management = tm->Management;    /* 管理线程 */
     }
     slot->SlotThreadExitPrintStats = tm->ThreadExitPrintStats;
     slot->SlotThreadDeinit = tm->ThreadDeinit;
@@ -1100,16 +1100,16 @@ ThreadVars *TmThreadCreateMgmtThreadByName(const char *name, const char *module,
                                      int mucond)
 {
     ThreadVars *tv = NULL;
-
+    /* 线程主处理函数为 "management" -> TmThreadsManagement() */
     tv = TmThreadCreate(name, NULL, NULL, NULL, NULL, "management", NULL, mucond);
 
     if (tv != NULL) {
         tv->type = TVT_MGMT;
         tv->id = TmThreadsRegisterThread(tv, tv->type);
         TmThreadSetCPU(tv, MANAGEMENT_CPU_SET);
-
-        TmModule *m = TmModuleGetByName(module);
-        if (m) {
+        /* 注册"FlowManager"处理模块 */
+        TmModule *m = TmModuleGetByName(module);  /* "FlowManager" -> TMM_FLOWMANAGER  */
+        if (m) {                                  /* tmm_modules[]->Management = FlowManager() */
             TmSlotSetFuncAppend(tv, m, NULL);
         }
     }

@@ -38,7 +38,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_QUIET      TRUE
 #define FLOW_VERBOSE    FALSE
 
-#define TOSERVER 0
+#define TOSERVER 0      /* 相对于创建流的报文而言，如果syn+ack创建流，关注 FLOW_DIR_REVERSED */
 #define TOCLIENT 1
 
 /* per flow flags */
@@ -277,10 +277,10 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 /* global flow config */
 typedef struct FlowCnf_
 {
-    uint32_t hash_rand;
-    uint32_t hash_size;
+    uint32_t hash_rand;      /* hash种子 */
+    uint32_t hash_size;      /* hash桶个数 */
     uint32_t max_flows;
-    uint32_t prealloc;
+    uint32_t prealloc;       /* 预分配的hash表项数 */
 
     uint32_t timeout_new;
     uint32_t timeout_est;
@@ -290,7 +290,7 @@ typedef struct FlowCnf_
     uint32_t emergency_recovery;
 
     SC_ATOMIC_DECLARE(uint64_t, memcap);
-} FlowConfig;
+} FlowConfig;          /* 流全局配置信息 */
 
 /* Hash key for the flow hash */
 typedef struct FlowKey_
@@ -372,11 +372,11 @@ typedef struct Flow_
     /* time stamp of last update (last packet). Set/updated under the
      * flow and flow hash row locks, safe to read under either the
      * flow lock or flow hash row lock. */
-    struct timeval lastts;
+    struct timeval lastts;           /* 上次收到报文时间 */
 
     /* end of flow "header" */
 
-    SC_ATOMIC_DECLARE(FlowStateType, flow_state);
+    SC_ATOMIC_DECLARE(FlowStateType, flow_state);   /* 流状态, FLOW_STATE_NEW */
 
     /** how many pkts and stream msgs are using the flow *right now*. This
      *  variable is atomic so not protected by the Flow mutex "m".
@@ -413,11 +413,11 @@ typedef struct Flow_
 #endif
 
     /** protocol specific data pointer, e.g. for TcpSession */
-    void *protoctx;
+    void *protoctx;        /* 特定于协议的信息，如 TCP -> TcpSession */
 
     /** mapping to Flow's protocol specific protocols for timeouts
         and state and free functions. */
-    uint8_t protomap;
+    uint8_t protomap;      /* FLOW_PROTO_TCP */
 
     uint8_t flow_end_flags;
     /* coccinelle: Flow:flow_end_flags:FLOW_END_FLAG_ */
@@ -466,20 +466,20 @@ typedef struct Flow_
     /** hash list pointers, protected by fb->s */
     struct Flow_ *hnext; /* hash list */
     struct Flow_ *hprev;
-    struct FlowBucket_ *fb;
+    struct FlowBucket_ *fb;    /* 对应的hash桶 */
 
     /** queue list pointers, protected by queue mutex */
     struct Flow_ *lnext; /* list */
     struct Flow_ *lprev;
-    struct timeval startts;
+    struct timeval startts;    /* 创建时间 */
 
-    uint32_t todstpktcnt;
+    uint32_t todstpktcnt;      /* 报文、字节数统计 */
     uint32_t tosrcpktcnt;
     uint64_t todstbytecnt;
     uint64_t tosrcbytecnt;
 } Flow;
 
-enum FlowState {
+enum FlowState {               /* 流表状态 */
     FLOW_STATE_NEW = 0,
     FLOW_STATE_ESTABLISHED,
     FLOW_STATE_CLOSED,

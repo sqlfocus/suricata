@@ -28,7 +28,7 @@
 
 typedef enum StorageEnum_ {
     STORAGE_HOST,
-    STORAGE_FLOW,
+    STORAGE_FLOW,     /* 流表存储，紧跟在流表后分配内存 */
     STORAGE_IPPAIR,
     STORAGE_DEVICE,
 

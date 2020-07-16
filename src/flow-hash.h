@@ -53,7 +53,7 @@ typedef struct FlowBucket_ {
      *  to 0 by workers, either when new flows are added or when a
      *  flow state changes. The flow manager sets this to INT_MAX for
      *  empty buckets. */
-    SC_ATOMIC_DECLARE(int32_t, next_ts);
+    SC_ATOMIC_DECLARE(int32_t, next_ts);   /* 桶内流表老化相关变量 */
 } __attribute__((aligned(CLS))) FlowBucket;
 
 #ifdef FBLOCK_SPIN

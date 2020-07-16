@@ -72,10 +72,10 @@
 extern int run_mode;
 
 /** queue to pass flows to cleanup/log thread(s) */
-FlowQueue flow_recycle_q;
+FlowQueue flow_recycle_q;            /* 待回收流队列 */
 
 /* multi flow mananger support */
-static uint32_t flowmgr_number = 1;
+static uint32_t flowmgr_number = 1;  /* 流管理线程数 */   
 /* atomic counter for flow managers, to assign instance id */
 SC_ATOMIC_DECLARE(uint32_t, flowmgr_cnt);
 
@@ -617,8 +617,8 @@ static uint32_t FlowCleanupHash(void)
 extern int g_detect_disabled;
 
 typedef struct FlowManagerThreadData_ {
-    uint32_t instance;
-    uint32_t min;
+    uint32_t instance;     /* 管理线程索引号，[0, N-1] */
+    uint32_t min;          /* 管理的hash桶索引范围, flow_hash */
     uint32_t max;
 
     uint16_t flow_mgr_cnt_clo;
@@ -654,13 +654,13 @@ static TmEcode FlowManagerThreadInit(ThreadVars *t, const void *initdata, void *
     if (ftd == NULL)
         return TM_ECODE_FAILED;
 
-    ftd->instance = SC_ATOMIC_ADD(flowmgr_cnt, 1);
+    ftd->instance = SC_ATOMIC_ADD(flowmgr_cnt, 1);  /* 更新线程索引号 */
     SCLogDebug("flow manager instance %u", ftd->instance);
 
     /* set the min and max value used for hash row walking
      * each thread has it's own section of the flow hash */
     uint32_t range = flow_config.hash_size / flowmgr_number;
-    if (ftd->instance == 0)
+    if (ftd->instance == 0)                         /* 设置其管理流表hash桶的范围 */
         ftd->max = range;
     else if ((ftd->instance + 1) == flowmgr_number) {
         ftd->min = (range * (ftd->instance - 1));
@@ -701,7 +701,7 @@ static TmEcode FlowManagerThreadInit(ThreadVars *t, const void *initdata, void *
     ftd->flow_bypassed_pkts = StatsRegisterCounter("flow_bypassed.pkts", t);
     ftd->flow_bypassed_bytes = StatsRegisterCounter("flow_bypassed.bytes", t);
 
-    PacketPoolInit();
+    PacketPoolInit();           /* 初始化报文缓存池 */
     return TM_ECODE_OK;
 }
 
@@ -718,7 +718,7 @@ static TmEcode FlowManagerThreadDeinit(ThreadVars *t, void *data)
  *  \param td ThreadVars casted to void ptr
  *
  *  Keeps an eye on the spare list, alloc flows if needed...
- */
+ *//* 管理流入口 */
 static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
 {
     FlowManagerThreadData *ftd = thread_data;
@@ -752,7 +752,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         }
 
         if (SC_ATOMIC_GET(flow_flags) & FLOW_EMERGENCY) {
-            emerg = TRUE;
+            emerg = TRUE;               /* 进入流紧急状态（空闲流表过少） */
 
             if (emerg == TRUE && prev_emerg == FALSE) {
                 prev_emerg = TRUE;
@@ -769,10 +769,10 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         SCLogDebug("ts %" PRIdMAX "", (intmax_t)ts.tv_sec);
 
         /* see if we still have enough spare flows */
-        if (ftd->instance == 0)
-            FlowUpdateSpareFlows();
+        if (ftd->instance == 0)         /* 0号管理线程，平衡空闲流表量 */
+            FlowUpdateSpareFlows();     /* 少则分配多则释放 */
 
-        /* try to time out flows */
+        /* try to time out flows */     /* 流老化 */
         FlowTimeoutCounters counters = { 0, 0, 0, 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0};
         FlowTimeoutHash(&ts, 0 /* check all */, ftd->min, ftd->max, &counters);
 
@@ -820,7 +820,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
 
         /* Don't fear, FlowManagerThread is here...
          * clear emergency bit if we have at least xx flows pruned. */
-        if (emerg == TRUE) {
+        if (emerg == TRUE) {            /* 如果流表释放够多，则清理紧急状态 */
             SCLogDebug("flow_sparse_q.len = %"PRIu32" prealloc: %"PRIu32
                        "flow_spare_q status: %"PRIu32"%% flows at the queue",
                        len, flow_config.prealloc, len * 100 / flow_config.prealloc);
@@ -879,7 +879,7 @@ void FlowManagerThreadSpawn()
     intmax_t setting = 1;
     (void)ConfGetInt("flow.managers", &setting);
 
-    if (setting < 1 || setting > 1024) {
+    if (setting < 1 || setting > 1024) {   /* 获取管理线程数量，默认1  */
         FatalError(SC_ERR_INVALID_ARGUMENTS,
                 "invalid flow.managers setting %"PRIdMAX, setting);
     }
@@ -892,16 +892,16 @@ void FlowManagerThreadSpawn()
     StatsRegisterGlobalCounter("flow.memuse", FlowGetMemuse);
 
     for (uint32_t u = 0; u < flowmgr_number; u++) {
-        char name[TM_THREAD_NAME_MAX];
+        char name[TM_THREAD_NAME_MAX];     /* 线程名：FM#01 */
         snprintf(name, sizeof(name), "%s#%02u", thread_name_flow_mgr, u+1);
 
         ThreadVars *tv_flowmgr = TmThreadCreateMgmtThreadByName(name,
                 "FlowManager", 0);
-        BUG_ON(tv_flowmgr == NULL);
+        BUG_ON(tv_flowmgr == NULL);        /* 创建流管理线程 */
 
         if (tv_flowmgr == NULL) {
             FatalError(SC_ERR_FATAL, "flow manager thread creation failed");
-        }
+        }                                  /* 等待启动 */
         if (TmThreadSpawn(tv_flowmgr) != TM_ECODE_OK) {
             FatalError(SC_ERR_FATAL, "flow manager thread spawn failed");
         }
