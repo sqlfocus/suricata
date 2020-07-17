@@ -882,12 +882,12 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         tracker->seen_last = 1;
     }
 
-    if (tracker->seen_last) {
+    if (tracker->seen_last) { /* 已经拿到最后的分片，则重组整个报文 */
         if (tracker->af == AF_INET) {
-            r = Defrag4Reassemble(tv, tracker, p);
+            r = Defrag4Reassemble(tv, tracker, p);           /* 重组报文 */
             if (r != NULL && tv != NULL && dtv != NULL) {
                 StatsIncr(tv, dtv->counter_defrag_ipv4_reassembled);
-                if (DecodeIPV4(tv, dtv, r, (void *)r->ip4h,
+                if (DecodeIPV4(tv, dtv, r, (void *)r->ip4h,  /* L1-L4解码 */
                                IPV4_GET_IPLEN(r)) != TM_ECODE_OK) {
 
                     UNSET_TUNNEL_PKT(r);
@@ -928,7 +928,7 @@ done:
             ENGINE_SET_EVENT(p, IPV6_FRAG_OVERLAP);
         }
     }
-    return r;
+    return r;                 /* 返回重组后的报文 */
 }
 
 /**
@@ -944,14 +944,14 @@ DefragGetOsPolicy(Packet *p)
 {
     int policy = -1;
 
-    if (PKT_IS_IPV4(p)) {
+    if (PKT_IS_IPV4(p)) {  /* 更具目的IP获取IP重组策略 */
         policy = SCHInfoGetIPv4HostOSFlavour((uint8_t *)GET_IPV4_DST_ADDR_PTR(p));
     }
     else if (PKT_IS_IPV6(p)) {
         policy = SCHInfoGetIPv6HostOSFlavour((uint8_t *)GET_IPV6_DST_ADDR(p));
     }
 
-    if (policy == -1) {
+    if (policy == -1) {    /* 默认BSD */
         return default_policy;
     }
 
@@ -1017,7 +1017,7 @@ DefragGetTracker(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
  * \retval A new Packet resembling the re-assembled packet if the most
  *     recent fragment allowed the packet to be re-assembled, otherwise
  *     NULL is returned.
- */
+ *//* IP报文碎片重组 */
 Packet *
 Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 {
@@ -1041,7 +1041,7 @@ Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
     }
 
     if (frag_offset == 0 && more_frags == 0) {
-        return NULL;
+        return NULL;          /* 判断是否为碎片 */
     }
 
     if (tv != NULL && dtv != NULL) {
@@ -1055,9 +1055,9 @@ Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 
     /* return a locked tracker or NULL */
     tracker = DefragGetTracker(tv, dtv, p);
-    if (tracker == NULL)
+    if (tracker == NULL)      /* 查找/新建碎片跟踪结构 */
         return NULL;
-
+                              /* 碎片重组 */
     Packet *rp = DefragInsertFrag(tv, dtv, tracker, p);
     DefragTrackerRelease(tracker);
 

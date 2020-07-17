@@ -694,18 +694,18 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
  *
  *  \retval 0 ok
  *  \retval -1 error
- */
+ *//* UDP处理入口 */
 int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *f)
 {
     SCEnter();
 
-    if (f->alproto == ALPROTO_FAILED) {
+    if (f->alproto == ALPROTO_FAILED) {     /* 协议检测失败，不再处理此流 */
         SCReturnInt(0);
     }
 
     int r = 0;
     uint8_t flags = 0;
-    if (p->flowflags & FLOW_PKT_TOSERVER) {
+    if (p->flowflags & FLOW_PKT_TOSERVER) { /* 获取报文方向 */
         flags |= STREAM_TOSERVER;
     } else {
         flags |= STREAM_TOCLIENT;
@@ -714,7 +714,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
     AppLayerProfilingReset(tctx);
 
     /* if the protocol is still unknown, run detection */
-    if (f->alproto == ALPROTO_UNKNOWN) {
+    if (f->alproto == ALPROTO_UNKNOWN) {    /* 协议尚未识别，运行协议识别算法 */
         SCLogDebug("Detecting AL proto on udp mesg (len %" PRIu32 ")",
                    p->payload_len);
 
@@ -723,7 +723,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
         f->alproto = AppLayerProtoDetectGetProto(tctx->alpd_tctx,
                                   f, p->payload, p->payload_len,
                                   IPPROTO_UDP, flags, &reverse_flow);
-        PACKET_PROFILING_APP_PD_END(tctx);
+        PACKET_PROFILING_APP_PD_END(tctx);  /* 协议识别 */
 
         if (f->alproto != ALPROTO_UNKNOWN) {
             AppLayerIncFlowCounter(tv, f);
@@ -734,19 +734,19 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
                 FlowSwap(f);
                 SWAP_FLAGS(flags, STREAM_TOSERVER, STREAM_TOCLIENT);
             }
-
+                                            /* 协议层解析 */
             PACKET_PROFILING_APP_START(tctx, f->alproto);
             r = AppLayerParserParse(tv, tctx->alp_tctx, f, f->alproto,
                                     flags, p->payload, p->payload_len);
             PACKET_PROFILING_APP_END(tctx, f->alproto);
         } else {
-            f->alproto = ALPROTO_FAILED;
+            f->alproto = ALPROTO_FAILED;    /* 识别失败，后续不再继续流处理 */
             AppLayerIncFlowCounter(tv, f);
             SCLogDebug("ALPROTO_UNKNOWN flow %p", f);
         }
         PACKET_PROFILING_APP_STORE(tctx, p);
         /* we do only inspection in one direction, so flag both
-         * sides as done here */
+         * sides as done here */            /* 更新流标识 */
         FlagPacketFlow(p, f, STREAM_TOSERVER);
         FlagPacketFlow(p, f, STREAM_TOCLIENT);
     } else {
@@ -758,7 +758,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
         r = AppLayerParserParse(tv, tctx->alp_tctx, f, f->alproto,
                 flags, p->payload, p->payload_len);
         PACKET_PROFILING_APP_END(tctx, f->alproto);
-        PACKET_PROFILING_APP_STORE(tctx, p);
+        PACKET_PROFILING_APP_STORE(tctx, p);/* 协议层解析 */
     }
 
     SCReturnInt(r);

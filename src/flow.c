@@ -459,7 +459,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
         f->tosrcbytecnt += GET_PKT_LEN(p);
         p->flowflags = FLOW_PKT_TOCLIENT;
         if (!(f->flags & FLOW_TO_SRC_SEEN)) {
-            if (FlowUpdateSeenFlag(p)) {
+            if (FlowUpdateSeenFlag(p)) {       /* 有报文发往客户端 */
                 f->flags |= FLOW_TO_SRC_SEEN;
                 p->flowflags |= FLOW_PKT_TOCLIENT_FIRST;
             }
@@ -473,20 +473,20 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
 
     if (SC_ATOMIC_GET(f->flow_state) == FLOW_STATE_ESTABLISHED) {
         SCLogDebug("pkt %p FLOW_PKT_ESTABLISHED", p);
-        p->flowflags |= FLOW_PKT_ESTABLISHED;
+        p->flowflags |= FLOW_PKT_ESTABLISHED;   /* 设置报文中流状态 */
 
     } else if ((f->flags & (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) ==
             (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) {
         SCLogDebug("pkt %p FLOW_PKT_ESTABLISHED", p);
         p->flowflags |= FLOW_PKT_ESTABLISHED;   /* 已看到正反向报文 */
 
-        if (f->proto != IPPROTO_TCP) {
-            FlowUpdateState(f, FLOW_STATE_ESTABLISHED);
+        if (f->proto != IPPROTO_TCP) {          /* 非TCP协议设置流建立状态 */
+            FlowUpdateState(f, FLOW_STATE_ESTABLISHED);  /* TCP需要查看3次握手 */
         }
     }
 
     /*set the detection bypass flags*/
-    if (f->flags & FLOW_NOPACKET_INSPECTION) {  /* 根据流设置报文标识 */
+    if (f->flags & FLOW_NOPACKET_INSPECTION) {  /* 设置报文不过DETECT标识 */
         SCLogDebug("setting FLOW_NOPACKET_INSPECTION flag on flow %p", f);
         DecodeSetNoPacketInspectionFlag(p);
     }

@@ -223,7 +223,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     SCLogDebug("packet %"PRIu64" has flow? %s", p->pcap_cnt, p->flow ? "yes" : "no");
 
     /* handle TCP and app layer */
-    if (p->flow && PKT_IS_TCP(p)) {
+    if (p->flow && PKT_IS_TCP(p)) {       /* TCP协议处理 */
         SCLogDebug("packet %"PRIu64" is TCP. Direction %s", p->pcap_cnt, PKT_IS_TOSERVER(p) ? "TOSERVER" : "TOCLIENT");
         DEBUG_ASSERT_FLOW_LOCKED(p->flow);
 
@@ -274,7 +274,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     }
 
     PacketUpdateEngineEventCounters(tv, fw->dtv, p);
-
+                                         /* 包解析、流检测事件统计 */
     /* handle Detect */
     DEBUG_ASSERT_FLOW_LOCKED(p->flow);
     SCLogDebug("packet %"PRIu64" calling Detect", p->pcap_cnt);
@@ -285,11 +285,11 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_DETECT);
     }
 
-    // Outputs.
+    // Outputs.                          /* 日志输出 */
     OutputLoggerLog(tv, p, fw->output_thread);
 
     /* Prune any stored files. */
-    FlowPruneFiles(p);
+    FlowPruneFiles(p);                   /* 释放缓存的文件 */
 
     /*  Release tcp segments. Done here after alerting can use them. */
     if (p->flow != NULL && p->proto == IPPROTO_TCP) {
@@ -299,7 +299,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_TCPPRUNE);
     }
 
-    if (p->flow) {
+    if (p->flow) {                       /* 释放检测环境 */
         DEBUG_ASSERT_FLOW_LOCKED(p->flow);
 
         /* run tx cleanup last */

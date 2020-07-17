@@ -129,9 +129,9 @@ void PacketUpdateEngineEventCounters(ThreadVars *tv,
         const uint8_t e = p->events.events[i];
 
         if (e <= DECODE_EVENT_PACKET_MAX && !stats_decoder_events)
-            continue;
+            continue;  /* 判断是否需要统计解析事件，如解析错误等 */
         else if (e > DECODE_EVENT_PACKET_MAX && !stats_stream_events)
-            continue;
+            continue;  /* 是否有流检测事件 */
         StatsIncr(tv, dtv->counter_engine_events[e]);
     }
 }

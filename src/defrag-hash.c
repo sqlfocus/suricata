@@ -139,9 +139,9 @@ static void DefragTrackerInit(DefragTracker *dt, Packet *p)
     dt->proto = IP_GET_IPPROTO(p);
     dt->vlan_id[0] = p->vlan_id[0];
     dt->vlan_id[1] = p->vlan_id[1];
-    dt->policy = DefragGetOsPolicy(p);
+    dt->policy = DefragGetOsPolicy(p); /* 更具目的服务系统，选择重组偏好 */
     dt->host_timeout = DefragPolicyGetHostTimeout(p);
-    dt->remove = 0;
+    dt->remove = 0;                    /* 考虑特定拼装超时延迟 */
     dt->seen_last = 0;
 
     (void) DefragTrackerIncrUsecnt(dt);
@@ -475,7 +475,7 @@ static DefragTracker *DefragTrackerGetNew(Packet *p)
     DefragTracker *dt = NULL;
 
     /* get a tracker from the spare queue */
-    dt = DefragTrackerDequeue(&defragtracker_spare_q);
+    dt = DefragTrackerDequeue(&defragtracker_spare_q);  /* 从缓存池拿 */
     if (dt == NULL) {
         /* If we reached the max memcap, we get a used tracker */
         if (!(DEFRAG_CHECK_MEMCAP(sizeof(DefragTracker)))) {
@@ -528,13 +528,13 @@ DefragTracker *DefragGetTrackerFromHash (Packet *p)
     DefragTracker *dt = NULL;
 
     /* get the key to our bucket */
-    uint32_t key = DefragHashGetKey(p);
-    /* get our hash bucket and lock it */
+    uint32_t key = DefragHashGetKey(p);   /* 获取五元组哈希值 */
+    /* get our hash bucket and lock it */ /* 从碎片哈希表获取桶索引 */
     DefragTrackerHashRow *hb = &defragtracker_hash[key];
     DRLOCK_LOCK(hb);
 
     /* see if the bucket already has a tracker */
-    if (hb->head == NULL) {
+    if (hb->head == NULL) {               /* 如果桶空，则创建新元素 */
         dt = DefragTrackerGetNew(p);
         if (dt == NULL) {
             DRLOCK_UNLOCK(hb);
@@ -546,14 +546,14 @@ DefragTracker *DefragGetTrackerFromHash (Packet *p)
         hb->tail = dt;
 
         /* got one, now lock, initialize and return */
-        DefragTrackerInit(dt,p);
+        DefragTrackerInit(dt,p);          /* 初始化重组策略，超时时间等 */
 
         DRLOCK_UNLOCK(hb);
         return dt;
     }
 
     /* ok, we have a tracker in the bucket. Let's find out if it is our tracker */
-    dt = hb->head;
+    dt = hb->head;                        /* 遍历hash链表，查找匹配项 */
 
     /* see if this is the tracker we are looking for */
     if (dt->remove || DefragTrackerCompare(dt, p) == 0) {

@@ -58,7 +58,7 @@ enum AppProtoEnum {
 
     /* used by the probing parser when alproto detection fails
      * permanently for that particular stream */
-    ALPROTO_FAILED,
+    ALPROTO_FAILED,          /* 检测引擎协议识别失败 */
 #ifdef UNITTESTS
     ALPROTO_TEST,
 #endif /* UNITESTS */

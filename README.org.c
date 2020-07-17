@@ -87,13 +87,22 @@
       --FlowGetNew()                 桶空/未找到则新建流
       --FlowCompare()                n元组匹配查找
       --TcpReuseReplace()            流重用
-  --FlowUpdate()                   更新流
-    --FlowHandlePacketUpdate()
+  --FlowUpdate()
+    --FlowHandlePacketUpdate()     更新流表项
   --------TCP处理-------
   --StreamTcp()                    流汇聚
   --Detect()                       流检测
   --------UDP处理-------
   --AppLayerHandleUdp()
+    --AppLayerProtoDetectGetProto()协议识别
+    --AppLayerParserParse()        应用层解析
+  ----------------------
+  --PacketUpdateEngineEventCounters()包解析、流检测事件统计
+  --Detect()
+  --OutputLoggerLog()
+  --FlowPruneFiles()               释放缓存的文件
+  --StreamTcpPruneSession()        释放流重组
+  --AppLayerParserTransactionsCleanup()   释放检测环境
 
     
 * 流管理线程
