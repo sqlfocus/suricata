@@ -123,7 +123,7 @@ typedef struct SCLogOPIfaceCtx_ {
     /* the output file to be used if the interface is SC_LOG_IFACE_FILE */
     const char *file;
     /* the output file descriptor for the above file */
-    FILE * file_d;
+    FILE * file_d;                  /* 文件句柄 */
 
     /* registered to be set on a file rotation signal */
     int rotation_flag;              /* 日志文件rotate标识 */
@@ -161,7 +161,7 @@ typedef struct SCLogInitData_ {
     const char *op_filter;
 
     /* list of output interfaces to be used */
-    SCLogOPIfaceCtx *op_ifaces;
+    SCLogOPIfaceCtx *op_ifaces;    /* 输出结构信息，如console/file/syslog等 */
     /* no of op ifaces */
     uint8_t op_ifaces_cnt;
 } SCLogInitData;

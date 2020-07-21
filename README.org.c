@@ -1,7 +1,24 @@
 本文档介绍suricata主流程，以便于快速浏览
+  1. 可参考单元测试 RunUnittests() 入口，了解环境初始化，以便于支持lib编译
 
 --SuricataMain()
+  --InitGlobal()
+    --RunModeRegisterRunModes()    注册运行模式, runmodes[RUNMODE_PCAP_DEV]
+  --ParseCommandLine()             解析命令行，赋值运行模式  SCInstance->run_mode
+  --LoadYamlConfig()
+  --SCLogLoadConfig()              初始化日志输出
+    --SCLogInitLogModule()
   --PostConfLoadedSetup()
+    --MpmTableSetup()              注册多模匹配算法, mpm_table[MPM_HS]
+      --MpmHSRegister()
+    --SpmTableSetup()              注册单模匹配算法, spm_table[SPM_HS]
+      --SpmHSRegister()
+    --AppLayerSetup()              应用层协议解析、检测环境
+      --AppLayerParserRegisterProtocolParsers()
+      --AppLayerProtoDetectPrepareState()
+    --SCHInfoLoadFromConfig()      加载主机os信息等，以更好的适配检测策略
+    --SigTableSetup()              注册检测规则关键字及处理函数, sigmatch_table[]
+    --TmqhSetup()
     --RegisterAllModules()         注册线程模块, tmm_modules[]
     --PreRunInit()
       --DefragInit()
@@ -13,6 +30,29 @@
     --FlowManagerThreadSpawn()
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
 
+* 重要的全局变量
+SCInstance suricata        全局数据
+    
+
+* 应用层协议解析、检测环境初始化 AppLayerSetup()
+本函数构建应用层协议解析，及基于规则检测的环境
+    
+--AppLayerSetup()
+  --AppLayerProtoDetectSetup()     初始化 alpd_ctx/AppLayerProtoDetectCtx
+  --AppLayerParserSetup()          初始化 alp_ctx/AppLayerParserCtx
+  --AppLayerParserRegisterProtocolParsers()
+    --RegisterHTPParsers()
+      --HTPRegisterPatternsForProtocolDetection()
+        --AppLayerProtoDetectPMRegisterPatternCI()  注册GET等关键字，单模引擎
+          --AppLayerProtoDetectPMRegisterPattern()  更新 alpd_ctx->ctx_ipp[].ctx_pm[].head
+      --AppLayerParserRegisterParser()              报文解析操作, 更新 alp_ctx.ctxs[]
+      --HTPConfigure()             分析http配置信息, 存储到 cfgtree/cfglist构建多模匹配引擎
+      --AppLayerProtoDetectPPParseConfPorts()
+        --AppLayerProtoDetectPPRegister()           注册知名端口号(SSL为例), alpd_ctx->ctx_pp[]
+  --AppLayerProtoDetectPrepareState()               
+    --AppLayerProtoDetectPMSetContentIDs()
+    --AppLayerProtoDetectPMMapSignatures()          将上述注册的单模规则，编译构建为多模引擎
+    --AppLayerProtoDetectPMPrepareMpm()             alpd_ctx.ctx_ipp[].ctx_pm[].mpm_ctx
     
 * 运行模式初始化，RunMode->RunModeFunc()
 解析 RUNMODE_PCAP_DEV 模式的"workers"/run-to-death运行方式

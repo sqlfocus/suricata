@@ -264,7 +264,7 @@ void MpmInitThreadCtx(MpmThreadCtx *mpm_thread_ctx, uint16_t matcher)
 void MpmInitCtx (MpmCtx *mpm_ctx, uint16_t matcher)
 {
     mpm_ctx->mpm_type = matcher;
-    mpm_table[matcher].InitCtx(mpm_ctx);   /* refer SCACInitCtx() */
+    mpm_table[matcher].InitCtx(mpm_ctx);   /* SCHSInitCtx() */
 }
 
 /* MPM matcher to use by default, i.e. when "mpm-algo" is set to "auto".

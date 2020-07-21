@@ -42,13 +42,13 @@ static int MatchEvent(unsigned int id, unsigned long long from,
 {
     uint64_t *match_offset = context;
     BUG_ON(*match_offset != UINT64_MAX);
-    *match_offset = to;
+    *match_offset = to;    /* 记录匹配偏移 */
     return 1; /* Terminate matching. */
 }
 
 typedef struct SpmHsCtx_ {
-    hs_database_t *db;
-    uint16_t needle_len;
+    hs_database_t *db;    /* 单条规则编译结果 */
+    uint16_t needle_len;  /* 规则长度 */
 } SpmHsCtx;
 
 static void HSDestroyCtx(SpmCtx *ctx)
@@ -69,7 +69,7 @@ static int HSBuildDatabase(const uint8_t *needle, uint16_t needle_len,
                             SpmGlobalThreadCtx *global_thread_ctx)
 {
     char *expr = HSRenderPattern(needle, needle_len);
-    if (expr == NULL) {
+    if (expr == NULL) {      /* 变换规则形式为16进制字符串 */
         SCLogDebug("HSRenderPattern returned NULL");
         return -1;
     }
@@ -80,7 +80,7 @@ static int HSBuildDatabase(const uint8_t *needle, uint16_t needle_len,
     hs_compile_error_t *compile_err = NULL;
     hs_error_t err = hs_compile(expr, flags, HS_MODE_BLOCK, NULL, &db,
                                 &compile_err);
-    if (err != HS_SUCCESS) {
+    if (err != HS_SUCCESS) { /* 编译规则 */
         SCLogError(SC_ERR_FATAL, "Unable to compile '%s' with Hyperscan, "
                                  "returned %d.", expr, err);
         exit(EXIT_FAILURE);
@@ -91,7 +91,7 @@ static int HSBuildDatabase(const uint8_t *needle, uint16_t needle_len,
     /* Update scratch for this database. */
     hs_scratch_t *scratch = global_thread_ctx->ctx;
     err = hs_alloc_scratch(db, &scratch);
-    if (err != HS_SUCCESS) {
+    if (err != HS_SUCCESS) { /* 更新全局scratch, global_thread_ctx->ctx */
         /* If scratch allocation failed, this is not recoverable:  other SPM
          * contexts may need this scratch space. */
         SCLogError(SC_ERR_FATAL,
@@ -124,7 +124,7 @@ static SpmCtx *HSInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
     }
     ctx->ctx = sctx;
 
-    memset(sctx, 0, sizeof(SpmHsCtx));
+    memset(sctx, 0, sizeof(SpmHsCtx));  /* 编译规则 */
     if (HSBuildDatabase(needle, needle_len, nocase, sctx,
                         global_thread_ctx) != 0) {
         SCLogDebug("HSBuildDatabase failed.");
@@ -145,7 +145,7 @@ static uint8_t *HSScan(const SpmCtx *ctx, SpmThreadCtx *thread_ctx,
         return NULL;
     }
 
-    uint64_t match_offset = UINT64_MAX;
+    uint64_t match_offset = UINT64_MAX;  /* 匹配，并调用 MatchEvent() 获得匹配偏移 */
     hs_error_t err = hs_scan(sctx->db, (const char *)haystack, haystack_len, 0,
                              scratch, MatchEvent, &match_offset);
     if (err != HS_SUCCESS && err != HS_SCAN_TERMINATED) {
@@ -162,7 +162,7 @@ static uint8_t *HSScan(const SpmCtx *ctx, SpmThreadCtx *thread_ctx,
 
     BUG_ON(match_offset < sctx->needle_len);
 
-    /* Note: existing API returns non-const ptr */
+    /* Note: existing API returns non-const ptr */ /* 返回匹配起始位置 */
     return (uint8_t *)haystack + (match_offset - sctx->needle_len);
 }
 
@@ -228,13 +228,13 @@ static SpmThreadCtx *HSMakeThreadCtx(const SpmGlobalThreadCtx *global_thread_ctx
 void SpmHSRegister(void)
 {
     spm_table[SPM_HS].name = "hs";
-    spm_table[SPM_HS].InitGlobalThreadCtx = HSInitGlobalThreadCtx;
+    spm_table[SPM_HS].InitGlobalThreadCtx = HSInitGlobalThreadCtx; /* SpmGlobalThreadCtx */
     spm_table[SPM_HS].DestroyGlobalThreadCtx = HSDestroyGlobalThreadCtx;
-    spm_table[SPM_HS].MakeThreadCtx = HSMakeThreadCtx;
+    spm_table[SPM_HS].MakeThreadCtx = HSMakeThreadCtx;        /* SpmThreadCtx */
     spm_table[SPM_HS].DestroyThreadCtx = HSDestroyThreadCtx;
-    spm_table[SPM_HS].InitCtx = HSInitCtx;
+    spm_table[SPM_HS].InitCtx = HSInitCtx;  /* 编译规则, SpmCtx */
     spm_table[SPM_HS].DestroyCtx = HSDestroyCtx;
-    spm_table[SPM_HS].Scan = HSScan;
+    spm_table[SPM_HS].Scan = HSScan;        /* 扫描 */
 }
 
 #endif /* BUILD_HYPERSCAN */

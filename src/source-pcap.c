@@ -560,7 +560,7 @@ static TmEcode DecodePcapThreadInit(ThreadVars *tv, const void *initdata, void *
     SCEnter();
 
     DecodeThreadVars *dtv = DecodeThreadVarsAlloc(tv);
-    if (dtv == NULL)
+    if (dtv == NULL)      /* 分配并初始化解析线程环境 */
         SCReturnInt(TM_ECODE_FAILED);
 
     DecodeRegisterPerfCounters(dtv, tv);

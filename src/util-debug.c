@@ -1441,7 +1441,7 @@ void SCLogLoadConfig(int daemon, int verbose)
             }
             if (path == NULL)
                 FatalError(SC_ERR_FATAL, "failed to setup output to file");
-            have_logging = 1;
+            have_logging = 1;     /* call fopen() */
             op_iface_ctx = SCLogInitFileOPIface(path, format, level, type);
             SCFree(path);
         }
@@ -1459,7 +1459,7 @@ void SCLogLoadConfig(int daemon, int verbose)
                 }
             }
             SCLogDebug("Initializing syslog logging with format \"%s\"", format);
-            have_logging = 1;
+            have_logging = 1;     /* call openlog() */
             op_iface_ctx = SCLogInitSyslogOPIface(facility, format, level, type);
         }
         else {

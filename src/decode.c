@@ -624,11 +624,11 @@ DecodeThreadVars *DecodeThreadVarsAlloc(ThreadVars *tv)
         return NULL;
     memset(dtv, 0, sizeof(DecodeThreadVars));
 
-    dtv->app_tctx = AppLayerGetCtxThread(tv);
+    dtv->app_tctx = AppLayerGetCtxThread(tv);   /* 构建UDP解析环境 */
 
     if (OutputFlowLogThreadInit(tv, NULL, &dtv->output_flow_thread_data) != TM_ECODE_OK) {
         SCLogError(SC_ERR_THREAD_INIT, "initializing flow log API for thread failed");
-        DecodeThreadVarsFree(tv, dtv);
+        DecodeThreadVarsFree(tv, dtv);          /* 日志输出初始化 */
         return NULL;
     }
 

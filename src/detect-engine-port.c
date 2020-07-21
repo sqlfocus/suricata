@@ -1247,14 +1247,14 @@ int DetectPortParse(const DetectEngineCtx *de_ctx,
 
     int r = DetectPortParseDo(de_ctx, head, &nhead, str,
             /* start with negate no */ 0, NULL, 0);
-    if (r < 0)
+    if (r < 0)        /* 解析端口字符串 */
         goto error;
 
     SCLogDebug("head %p %p, nhead %p", head, *head, nhead);
 
     /* merge the 'not' address groups */
     if (DetectPortParseMergeNotPorts(de_ctx, head, &nhead) < 0)
-        goto error;
+        goto error;   /* 合并端口范围 */
 
     /* free the temp negate head */
     DetectPortCleanupList(de_ctx, nhead);

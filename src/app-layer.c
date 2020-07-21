@@ -55,9 +55,9 @@
  */
 struct AppLayerThreadCtx_ {
     /* App layer protocol detection thread context, from AppLayerProtoDetectGetCtxThread(). */
-    AppLayerProtoDetectThreadCtx *alpd_tctx;
+    AppLayerProtoDetectThreadCtx *alpd_tctx;  /* 检测环境 */
     /* App layer parser thread context, from AppLayerParserThreadCtxAlloc(). */
-    AppLayerParserThreadCtx *alp_tctx;
+    AppLayerParserThreadCtx *alp_tctx;        /* 解析环境 */
 
 #ifdef PROFILING
     uint64_t ticks_start;
@@ -804,13 +804,13 @@ int AppLayerSetup(void)
 {
     SCEnter();
 
-    AppLayerProtoDetectSetup();  /* 初始化用到的模式匹配器环境 */
-    AppLayerParserSetup();       /* 传输层+应用层协议号的列表, alp_ctx */
+    AppLayerProtoDetectSetup();  /* 初始化模式匹配器环境, alpd_ctx/AppLayerProtoDetectCt */
+    AppLayerParserSetup();       /* 初始化应用层协议环境, alp_ctx */
 
-    AppLayerParserRegisterProtocolParsers();
-    AppLayerProtoDetectPrepareState();
-                                 /* 注册协议解析函数、添加协议识别单模引擎规则 */
-    AppLayerSetupCounters();     /* */
+    AppLayerParserRegisterProtocolParsers();  /* 注册协议解析函数, 注册识别关键字，构建单模式引擎 */
+    AppLayerProtoDetectPrepareState();        /* 根据单模规则构建多模引擎 */
+                                 
+    AppLayerSetupCounters();     /* 初始化统计计数器名 */
 
     SCReturnInt(0);
 }
@@ -837,9 +837,9 @@ AppLayerThreadCtx *AppLayerGetCtxThread(ThreadVars *tv)
     memset(app_tctx, 0, sizeof(*app_tctx));
 
     if ((app_tctx->alpd_tctx = AppLayerProtoDetectGetCtxThread()) == NULL)
-        goto error;
+        goto error;    /* 检测环境 */
     if ((app_tctx->alp_tctx = AppLayerParserThreadCtxAlloc()) == NULL)
-        goto error;
+        goto error;    /* 解析环境 */
 
     goto done;
  error:

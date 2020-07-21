@@ -93,7 +93,7 @@ struct AppLayerParserThreadCtx_ {
 typedef struct AppLayerParserProtoCtx_
 {
     /* 0 - to_server, 1 - to_client. */
-    AppLayerParserFPtr Parser[2];
+    AppLayerParserFPtr Parser[2]; /* 如 HTPHandleRequestData()/HTPHandleResponseData() */
     bool logger;
     uint32_t logger_bits;   /**< registered loggers for this proto */
 
@@ -150,7 +150,7 @@ typedef struct AppLayerParserProtoCtx_
 
 typedef struct AppLayerParserCtx_ {
     AppLayerParserProtoCtx ctxs[FLOW_PROTO_MAX][ALPROTO_MAX];
-} AppLayerParserCtx;
+} AppLayerParserCtx;    /* 协议解析所需信息 */
 
 struct AppLayerParserState_ {
     /* coccinelle: AppLayerParserState:flags:APP_LAYER_PARSER_ */
@@ -1549,8 +1549,8 @@ void AppLayerParserRegisterProtocolParsers(void)
 {
     SCEnter();
 
-    RegisterHTPParsers();          /* 注册HTTP协议解析 */
-    RegisterSSLParsers();
+    RegisterHTPParsers();          /* 注册HTTP协议识别关键字、解析函数 */
+    RegisterSSLParsers();          /* 注册SSL协议 */
     RegisterDCERPCParsers();
     RegisterDCERPCUDPParsers();
     RegisterSMBParsers();

@@ -33,16 +33,16 @@ typedef struct SCHSPattern_ {
     /* flags describing the pattern */
     uint8_t flags;
     /* holds the original pattern that was added */
-    uint8_t *original_pat;
+    uint8_t *original_pat;      /* 添加时的pattern */
     /* pattern id */
-    uint32_t id;
+    uint32_t id;                /* id/offset/depth作为区分的要素 */
 
     uint16_t offset;
     uint16_t depth;
 
     /* sid(s) for this pattern */
     uint32_t sids_size;
-    SigIntId *sids;
+    SigIntId *sids;             /* 对应的sid列表 */
 
     /* only used at ctx init time, when this structure is part of a hash
      * table. */
@@ -51,19 +51,19 @@ typedef struct SCHSPattern_ {
 
 typedef struct SCHSCtx_ {
     /* hash used during ctx initialization */
-    SCHSPattern **init_hash;
+    SCHSPattern **init_hash;    /* 规则hash表，编译后内存释放 */
 
     /* pattern database and pattern arrays. */
-    void *pattern_db;
+    void *pattern_db;           /* hyperscan编译结果, PatternDatabase */
 
     /* size of database, for accounting. */
-    size_t hs_db_size;
+    size_t hs_db_size;          /* 编译结果大小 */
 } SCHSCtx;
 
 typedef struct SCHSThreadCtx_ {
     /* Hyperscan scratch space region for this thread, capable of handling any
      * database that has been compiled. */
-    void *scratch;
+    void *scratch;        /* MPM_HS -> hs_scratch_t */
 
     /* size of scratch space, for accounting. */
     size_t scratch_size;

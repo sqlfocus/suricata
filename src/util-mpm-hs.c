@@ -75,7 +75,7 @@ static SCMutex g_scratch_proto_mutex = SCMUTEX_INITIALIZER;
 
 /* Global hash table of Hyperscan databases, used for de-duplication. Access is
  * serialised via g_db_table_mutex. */
-static HashTable *g_db_table = NULL;
+static HashTable *g_db_table = NULL;   /* 存放hyperscan编译结果的全局数据表 */
 static SCMutex g_db_table_mutex = SCMUTEX_INITIALIZER;
 
 /**
@@ -124,7 +124,7 @@ static void SCHSSetAllocators(void)
  */
 static inline uint32_t SCHSInitHashRaw(uint8_t *pat, uint16_t patlen)
 {
-    uint32_t hash = patlen * pat[0];
+    uint32_t hash = patlen * pat[0];   /* 计算hash值的方式比较特别 */
     if (patlen > 1)
         hash += pat[1];
 
@@ -155,7 +155,7 @@ static inline SCHSPattern *SCHSInitHashLookup(SCHSCtx *ctx, uint8_t *pat,
     }
 
     SCHSPattern *t = ctx->init_hash[hash];
-    for (; t != NULL; t = t->next) {
+    for (; t != NULL; t = t->next) {   /* 区分三要素，id/offset/depth */
         /* Since Hyperscan uses offset/depth, we must distinguish between
          * patterns with the same ID but different offset/depth here. */
         if (t->id == pid && t->offset == offset && t->depth == depth) {
@@ -286,9 +286,9 @@ static int SCHSAddPattern(MpmCtx *mpm_ctx, uint8_t *pat, uint16_t patlen,
     }
 
     /* check if we have already inserted this pattern */
-    SCHSPattern *p =
+    SCHSPattern *p =          /* 查找hash桶 */
         SCHSInitHashLookup(ctx, pat, patlen, offset, depth, flags, pid);
-    if (p == NULL) {
+    if (p == NULL) {          /* 空桶，直接加入 */
         SCLogDebug("Allocing new pattern");
 
         /* p will never be NULL */
@@ -449,12 +449,12 @@ static void SCHSFreeCompileData(SCHSCompileData *cd)
 }
 
 typedef struct PatternDatabase_ {
-    SCHSPattern **parray;
-    hs_database_t *hs_db;
+    SCHSPattern **parray;   /* pattern结构的指针数组 */
+    hs_database_t *hs_db;   /* 编译结果 */
     uint32_t pattern_cnt;
 
     /* Reference count: number of MPM contexts using this pattern database. */
-    uint32_t ref_cnt;
+    uint32_t ref_cnt;       /* 引用计数 */
 } PatternDatabase;
 
 static uint32_t SCHSPatternHash(const SCHSPattern *p, uint32_t hash)
@@ -492,7 +492,7 @@ static char SCHSPatternCompare(const SCHSPattern *p1, const SCHSPattern *p2)
 
     return 1;
 }
-
+/* 利用PatternDatabase内几乎所有pattern的信息计算hash值 */
 static uint32_t PatternDatabaseHash(HashTable *ht, void *data, uint16_t len)
 {
     const PatternDatabase *pd = data;
@@ -592,8 +592,8 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
 
     hs_error_t err;
     hs_compile_error_t *compile_err = NULL;
-    SCHSCompileData *cd = NULL;
-    PatternDatabase *pd = NULL;
+    SCHSCompileData *cd = NULL;   /* 构造编译参数 */
+    PatternDatabase *pd = NULL;   /* 存放待编译结果 */
 
     cd = SCHSAllocCompileData(mpm_ctx->pattern_cnt);
     if (cd == NULL) {
@@ -608,7 +608,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     /* populate the pattern array with the patterns in the hash */
     for (uint32_t i = 0, p = 0; i < INIT_HASH_SIZE; i++) {
         SCHSPattern *node = ctx->init_hash[i], *nnode = NULL;
-        while (node != NULL) {
+        while (node != NULL) {  /* 读取待编译规则集 */
             nnode = node->next;
             node->next = NULL;
             pd->parray[p++] = node;
@@ -617,7 +617,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     }
 
     /* we no longer need the hash, so free its memory */
-    SCFree(ctx->init_hash);
+    SCFree(ctx->init_hash);     /* 释放存放pattern的哈希数组 */
     ctx->init_hash = NULL;
 
     /* Serialise whole database compilation as a relatively easy way to ensure
@@ -625,7 +625,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     SCMutexLock(&g_db_table_mutex);
 
     /* Init global pattern database hash if necessary. */
-    if (g_db_table == NULL) {
+    if (g_db_table == NULL) {   /* 初始化hyperscan全局编译结果hash表 */
         g_db_table = HashTableInit(INIT_DB_HASH_SIZE, PatternDatabaseHash,
                                    PatternDatabaseCompare,
                                    PatternDatabaseTableFree);
@@ -653,7 +653,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     }
 
     BUG_ON(ctx->pattern_db != NULL); /* already built? */
-
+                                /* 构造待编译的信息数组 */
     for (uint32_t i = 0; i < pd->pattern_cnt; i++) {
         const SCHSPattern *p = pd->parray[i];
 
@@ -662,7 +662,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
         if (p->flags & MPM_PATTERN_FLAG_NOCASE) {
             cd->flags[i] |= HS_FLAG_CASELESS;
         }
-
+                                /* 变换形式，16进制字符串 */
         cd->expressions[i] = HSRenderPattern(p->original_pat, p->len);
 
         if (p->flags & (MPM_PATTERN_FLAG_OFFSET | MPM_PATTERN_FLAG_DEPTH)) {
@@ -685,7 +685,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     }
 
     BUG_ON(mpm_ctx->pattern_cnt == 0);
-
+                                /* 编译hyperscan规则 */
     err = hs_compile_ext_multi((const char *const *)cd->expressions, cd->flags,
                                cd->ids, (const hs_expr_ext_t *const *)cd->ext,
                                cd->pattern_cnt, HS_MODE_BLOCK, NULL, &pd->hs_db,
@@ -701,11 +701,11 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
         goto error;
     }
 
-    ctx->pattern_db = pd;
+    ctx->pattern_db = pd;       /* 记录编译结果, PatternDatabase */
 
     SCMutexLock(&g_scratch_proto_mutex);
-    err = hs_alloc_scratch(pd->hs_db, &g_scratch_proto);
-    SCMutexUnlock(&g_scratch_proto_mutex);
+    err = hs_alloc_scratch(pd->hs_db, &g_scratch_proto);  
+    SCMutexUnlock(&g_scratch_proto_mutex);  /* 初始化 g_scratch_proto */
     if (err != HS_SUCCESS) {
         SCLogError(SC_ERR_FATAL, "failed to allocate scratch");
         SCMutexUnlock(&g_db_table_mutex);
@@ -713,7 +713,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
     }
 
     err = hs_database_size(pd->hs_db, &ctx->hs_db_size);
-    if (err != HS_SUCCESS) {
+    if (err != HS_SUCCESS) {    /* 记录编译结果数据库大小 */
         SCLogError(SC_ERR_FATAL, "failed to query database size");
         SCMutexUnlock(&g_db_table_mutex);
         goto error;
@@ -726,7 +726,7 @@ int SCHSPreparePatterns(MpmCtx *mpm_ctx)
                " bytes", mpm_ctx->pattern_cnt, (uintmax_t)ctx->hs_db_size);
 
     /* Cache this database globally for later. */
-    pd->ref_cnt = 1;
+    pd->ref_cnt = 1;            /* 加入hash表，待索引 */
     int r = HashTableAdd(g_db_table, pd, 1);
     SCMutexUnlock(&g_db_table_mutex);
     if (r < 0)
@@ -777,7 +777,7 @@ void SCHSInitThreadCtx(MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx)
         SCLogDebug("No scratch space prototype");
         return;
     }
-
+                                     /* 利用 g_scratch_proto 初始化 SCHSThreadCtx->scratch */
     hs_error_t err = hs_clone_scratch(g_scratch_proto,
                                       (hs_scratch_t **)&ctx->scratch);
 
@@ -789,7 +789,7 @@ void SCHSInitThreadCtx(MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx)
     }
 
     err = hs_scratch_size(ctx->scratch, &ctx->scratch_size);
-    if (err != HS_SUCCESS) {
+    if (err != HS_SUCCESS) {         /* 获取scratch空间大小 */
         SCLogError(SC_ERR_FATAL, "Unable to query scratch size");
         exit(EXIT_FAILURE);
     }
@@ -908,7 +908,7 @@ static int SCHSMatchEvent(unsigned int id, unsigned long long from,
     SCLogDebug("Hyperscan Match %" PRIu32 ": id=%" PRIu32 " @ %" PRIuMAX
                " (pat id=%" PRIu32 ")",
                cctx->match_count, (uint32_t)id, (uintmax_t)to, pat->id);
-
+    /* 记录匹配到的规则的SID */
     PrefilterAddSids(pmq, pat->sids, pat->sids_size);
 
     cctx->match_count++;
@@ -938,7 +938,7 @@ uint32_t SCHSSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx,
     if (unlikely(buflen == 0)) {
         return 0;
     }
-
+                                     /* 作为参数传入 SCHSMatchEvent() */
     SCHSCallbackCtx cctx = {.ctx = ctx, .pmq = pmq, .match_count = 0};
 
     /* scratch should have been cloned from g_scratch_proto at thread init. */
@@ -948,14 +948,14 @@ uint32_t SCHSSearch(const MpmCtx *mpm_ctx, MpmThreadCtx *mpm_thread_ctx,
 
     hs_error_t err = hs_scan(pd->hs_db, (const char *)buf, buflen, 0, scratch,
                              SCHSMatchEvent, &cctx);
-    if (err != HS_SUCCESS) {
+    if (err != HS_SUCCESS) {         /* 块模式匹配扫描，匹配回调函数 SCHSMatchEvent() */
         /* An error value (other than HS_SCAN_TERMINATED) from hs_scan()
          * indicates that it was passed an invalid database or scratch region,
          * which is not something we can recover from at scan time. */
         SCLogError(SC_ERR_FATAL, "Hyperscan returned error %d", err);
         exit(EXIT_FAILURE);
     } else {
-        ret = cctx.match_count;
+        ret = cctx.match_count;      /* 返回匹配规则数 */
     }
 
     return ret;
@@ -1053,14 +1053,14 @@ void SCHSPrintInfo(MpmCtx *mpm_ctx)
 void MpmHSRegister(void)
 {
     mpm_table[MPM_HS].name = "hs";
-    mpm_table[MPM_HS].InitCtx = SCHSInitCtx;
-    mpm_table[MPM_HS].InitThreadCtx = SCHSInitThreadCtx;
+    mpm_table[MPM_HS].InitCtx = SCHSInitCtx;    /* 初始化总体环境 MpmCtx */
+    mpm_table[MPM_HS].InitThreadCtx = SCHSInitThreadCtx;  /* 初始化线程环境 MpmThreadCtx */
     mpm_table[MPM_HS].DestroyCtx = SCHSDestroyCtx;
     mpm_table[MPM_HS].DestroyThreadCtx = SCHSDestroyThreadCtx;
-    mpm_table[MPM_HS].AddPattern = SCHSAddPatternCS;
+    mpm_table[MPM_HS].AddPattern = SCHSAddPatternCS;      /* 添加规则 */
     mpm_table[MPM_HS].AddPatternNocase = SCHSAddPatternCI;
-    mpm_table[MPM_HS].Prepare = SCHSPreparePatterns;
-    mpm_table[MPM_HS].Search = SCHSSearch;
+    mpm_table[MPM_HS].Prepare = SCHSPreparePatterns;      /* 编译规则表 */
+    mpm_table[MPM_HS].Search = SCHSSearch;      /* 搜索入口函数 */
     mpm_table[MPM_HS].PrintCtx = SCHSPrintInfo;
     mpm_table[MPM_HS].PrintThreadCtx = SCHSPrintSearchStats;
     mpm_table[MPM_HS].RegisterUnittests = SCHSRegisterTests;

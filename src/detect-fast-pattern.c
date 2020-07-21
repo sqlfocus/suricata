@@ -101,7 +101,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
          * was not already registered
          * and other lists with the same priority hide it.
          */
-        if (priority < tmp->priority)   /* 按优先级查找插入点，优先级降序 */
+        if (priority < tmp->priority)  /* 按优先级查找插入点，优先级降序 */
             break;
 
         ip = tmp;
@@ -109,7 +109,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
 
     if (sm_fp_support_smlist_list == NULL) {
         SCFPSupportSMList *new = SCMalloc(sizeof(SCFPSupportSMList));
-        if (unlikely(new == NULL))
+        if (unlikely(new == NULL))     /* 全局链表为空，则直接插入 */
             exit(EXIT_FAILURE);
         memset(new, 0, sizeof(SCFPSupportSMList));
         new->list_id = list_id;
@@ -141,7 +141,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
  * \brief Registers the keywords(SMs) that should be given fp support.
  */
 void SupportFastPatternForSigMatchTypes(void)
-{
+{   /* 注册快速模式匹配关键字，插入 sm_fp_support_smlist_list 链表 */
     SupportFastPatternForSigMatchList(DETECT_SM_LIST_PMATCH, 3);
 
     /* other types are handled by DetectMpmAppLayerRegister() */

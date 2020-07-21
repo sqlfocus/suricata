@@ -33,11 +33,11 @@ typedef struct PrefilterRuleStore_ {
     /* used for storing rule id's */
 
     /* Array of rule IDs found. */
-    SigIntId *rule_id_array;
+    SigIntId *rule_id_array;      /* 对应的模式索引, AppLayerProtoDetectCtx->ctx_ipp[].ctx_pm[].map[] */
     /* Number of rule IDs in the array. */
-    uint32_t rule_id_array_cnt;
+    uint32_t rule_id_array_cnt;   /* rule_id_array[]有效规则数 */
     /* The number of slots allocated for storing rule IDs */
-    uint32_t rule_id_array_size;
+    uint32_t rule_id_array_size;  /* rule_id_array[]有效空间 */
 
 } PrefilterRuleStore;
 

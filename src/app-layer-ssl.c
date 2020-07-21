@@ -2962,7 +2962,7 @@ void RegisterSSLParsers(void)
                                           0, 3,
                                           STREAM_TOSERVER,
                                           SSLProbingParser, NULL);
-        } else {
+        } else {     /* 注册知名端口，443 */
             if (AppLayerProtoDetectPPParseConfPorts("tcp", IPPROTO_TCP,
                                                     proto_name, ALPROTO_TLS,
                                                     0, 3,

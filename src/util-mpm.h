@@ -44,7 +44,7 @@ enum {  /* 多模式匹配表 mpm_table[] 索引，对应算法种类 */
 typedef uint32_t MpmPatternIndex;
 
 typedef struct MpmThreadCtx_ {
-    void *ctx;
+    void *ctx;     /* MPM_HS -> SCHSThreadCtx */
 
     uint32_t memory_cnt;
     uint32_t memory_size;
@@ -86,26 +86,26 @@ typedef struct MpmPattern_ {
 #define MPMCTX_FLAGS_NODEPTH    BIT_U8(1)
 
 typedef struct MpmCtx_ {
-    void *ctx;
-    uint8_t mpm_type;       /* MPM_AC */
+    void *ctx;              /* SCHSCtx */
+    uint8_t mpm_type;       /* MPM_HS */
 
     uint8_t flags;
 
     uint16_t maxdepth;
 
     /* unique patterns */
-    uint32_t pattern_cnt;
+    uint32_t pattern_cnt;   /* ->ctx中总共pattern数/去重的模式数 */
 
-    uint16_t minlen;
-    uint16_t maxlen;
+    uint16_t minlen;        /* 模式的长度的最小值 */
+    uint16_t maxlen;        /* 模式的长度的最大值 */
 
     uint32_t memory_cnt;    /* 已使用的内存 */
     uint32_t memory_size;
 
-    uint32_t max_pat_id;
+    uint32_t max_pat_id;    /* 该模式上下文的模式的最大ID */
 
     /* hash used during ctx initialization */
-    MpmPattern **init_hash; /* */
+    MpmPattern **init_hash; /* 初始化期间用于快速去重 */
 } MpmCtx;
 
 /* if we want to retrieve an unique mpm context from the mpm context factory

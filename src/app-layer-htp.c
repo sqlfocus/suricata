@@ -3190,15 +3190,15 @@ void RegisterHTPParsers(void)
     /** HTTP */
     if (AppLayerProtoDetectConfProtoDetectionEnabled("tcp", proto_name)) { /* 检测是否使能协议检测 */
         AppLayerProtoDetectRegisterProtocol(ALPROTO_HTTP, proto_name);     /* 赋值 alpd_ctx.alproto_names[] */
-        if (HTPRegisterPatternsForProtocolDetection() < 0)    /* 添加检测关键字对应的检测引擎上下文 */
+        if (HTPRegisterPatternsForProtocolDetection() < 0)
             return;
-    } else {
+    } else {            /* 注册检测关键，构建单模引擎 */
         SCLogInfo("Protocol detection and parser disabled for %s protocol",
                   proto_name);
         return;
     }
-
-    if (AppLayerParserConfParserEnabled("tcp", proto_name)) { /* 添加http对应的解析操控函数 */
+                        /* 添加http对应的解析操控函数 */
+    if (AppLayerParserConfParserEnabled("tcp", proto_name)) { 
         AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);
         AppLayerParserRegisterTxFreeFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTransactionFree);
         AppLayerParserRegisterGetFilesFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetFiles);
@@ -3229,7 +3229,7 @@ void RegisterHTPParsers(void)
         SC_ATOMIC_INIT(htp_config_flags);
         AppLayerParserRegisterParserAcceptableDataDirection(IPPROTO_TCP,
                 ALPROTO_HTTP, STREAM_TOSERVER|STREAM_TOCLIENT);
-        HTPConfigure();        /* 初始化http解析配置 */
+        HTPConfigure(); /* 初始化http解析配置 */
     } else {
         SCLogInfo("Parsed disabled for %s protocol. Protocol detection"
                   "still on.", proto_name);

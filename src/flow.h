@@ -417,7 +417,7 @@ typedef struct Flow_
 
     /** mapping to Flow's protocol specific protocols for timeouts
         and state and free functions. */
-    uint8_t protomap;      /* FLOW_PROTO_TCP */
+    uint8_t protomap;      /* 为了省空间, 映射TCP/UDP等协议到顺序数组 FLOW_PROTO_TCP */
 
     uint8_t flow_end_flags;
     /* coccinelle: Flow:flow_end_flags:FLOW_END_FLAG_ */

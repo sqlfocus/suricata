@@ -40,22 +40,22 @@ uint16_t SinglePatternMatchDefaultMatcher(void);
 /** Structure holding an immutable "built" SPM matcher (such as the Boyer-Moore
  * tables, Hyperscan database etc) that is passed to the Scan call. */
 typedef struct SpmCtx_ {
-    uint16_t matcher;
-    void *ctx;          /* BM -> SpmBmCtx */
+    uint16_t matcher;   /* SPM_HS */
+    void *ctx;          /* SpmHsCtx */
 } SpmCtx;
 
 /** Structure holding a global prototype for per-thread scratch space, passed
  * to each InitCtx call. */
 typedef struct SpmGlobalThreadCtx_ {
-    uint16_t matcher;   /* 如 SPM_HS */
-    void *ctx;
+    uint16_t matcher;   /* SPM_HS */
+    void *ctx;          /* hs_scratch_t */
 } SpmGlobalThreadCtx;
 
 /** Structure holding some mutable per-thread space for use by a matcher at
  * scan time. Constructed from SpmGlobalThreadCtx by the MakeThreadCtx call. */
 typedef struct SpmThreadCtx_ {
-    uint16_t matcher;   /* 如 SPM_HS */
-    void *ctx;
+    uint16_t matcher;   /* SPM_HS */
+    void *ctx;          /* hs_scratch_t */
 } SpmThreadCtx;
 
 typedef struct SpmTableElmt_ {

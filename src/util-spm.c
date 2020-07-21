@@ -133,7 +133,7 @@ void SpmTableSetup(void)
 SpmGlobalThreadCtx *SpmInitGlobalThreadCtx(uint16_t matcher)
 {
     BUG_ON(spm_table[matcher].InitGlobalThreadCtx == NULL);
-    return spm_table[matcher].InitGlobalThreadCtx();   /* refer BMInitGlobalThreadCtx() */
+    return spm_table[matcher].InitGlobalThreadCtx();   /* HSInitGlobalThreadCtx() */
 }
 
 void SpmDestroyGlobalThreadCtx(SpmGlobalThreadCtx *global_thread_ctx)
@@ -172,7 +172,7 @@ SpmCtx *SpmInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
     uint16_t matcher = global_thread_ctx->matcher;
     BUG_ON(spm_table[matcher].InitCtx == NULL);
     return spm_table[matcher].InitCtx(needle, needle_len, nocase,
-                                      global_thread_ctx); /* refer BMInitCtx() */
+                                      global_thread_ctx); /* HSInitCtx() -> SpmCtx */
 }
 
 void SpmDestroyCtx(SpmCtx *ctx)
@@ -188,7 +188,7 @@ void SpmDestroyCtx(SpmCtx *ctx)
 uint8_t *SpmScan(const SpmCtx *ctx, SpmThreadCtx *thread_ctx,
                  const uint8_t *haystack, uint32_t haystack_len)
 {
-    uint16_t matcher = ctx->matcher;
+    uint16_t matcher = ctx->matcher;  /* SPM_HS -> HSScan(), 返回匹配起始位置 */
     return spm_table[matcher].Scan(ctx, thread_ctx, haystack, haystack_len);
 }
 
