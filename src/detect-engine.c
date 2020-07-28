@@ -98,8 +98,8 @@ static uint32_t DetectEngineTentantGetIdFromLivedev(const void *ctx, const Packe
 static uint32_t DetectEngineTentantGetIdFromVlanId(const void *ctx, const Packet *p);
 static uint32_t DetectEngineTentantGetIdFromPcap(const void *ctx, const Packet *p);
 
-static DetectEngineAppInspectionEngine *g_app_inspect_engines = NULL;
-static DetectEnginePktInspectionEngine *g_pkt_inspect_engines = NULL;
+static DetectEngineAppInspectionEngine *g_app_inspect_engines = NULL;  /* 应用检测引擎链表 */
+static DetectEnginePktInspectionEngine *g_pkt_inspect_engines = NULL;  /* 报文检测引擎链表 */
 
 SCEnumCharMap det_ctx_event_table[ ] = {
 #ifdef UNITTESTS
@@ -235,7 +235,7 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
 {
     DetectBufferTypeRegister(name);
     const int sm_list = DetectBufferTypeGetByName(name);
-    if (sm_list == -1) {
+    if (sm_list == -1) {    /* 注册+获取检测类型ID */
         FatalError(SC_ERR_INITIALIZATION,
             "failed to register inspect engine %s", name);
     }
@@ -256,14 +256,14 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
 
     int direction;
     if (dir == SIG_FLAG_TOSERVER) {
-        direction = 0;
+        direction = 0;      /* 方向变更为索引 */
     } else {
         direction = 1;
     }
 
     DetectEngineAppInspectionEngine *new_engine = SCMalloc(sizeof(DetectEngineAppInspectionEngine));
     if (unlikely(new_engine == NULL)) {
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE); /* 初始化检测引擎结构 */
     }
     memset(new_engine, 0, sizeof(*new_engine));
     new_engine->alproto = alproto;
@@ -273,7 +273,7 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
     new_engine->v2.Callback = Callback2;
     new_engine->v2.GetData = GetData;
 
-    if (g_app_inspect_engines == NULL) {
+    if (g_app_inspect_engines == NULL) {  /* 加入检测引擎列表 g_app_inspect_engines */
         g_app_inspect_engines = new_engine;
     } else {
         DetectEngineAppInspectionEngine *t = g_app_inspect_engines;
@@ -476,7 +476,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
     const int files_id = DetectBufferTypeGetByName("files");
 
     /* convert lists to SigMatchData arrays */
-    int i = 0;
+    int i = 0;               /* 将匹配链表转换为匹配数组 */
     for (i = DETECT_SM_LIST_DYNAMIC_START; i < nlists; i++) {
         if (s->init_data->smlists[i] == NULL)
             continue;
@@ -726,7 +726,7 @@ void DetectEngineAppInspectionEngineSignatureFree(DetectEngineCtx *de_ctx, Signa
 
 #include "util-hash-lookup3.h"
 
-static HashListTable *g_buffer_type_hash = NULL;
+static HashListTable *g_buffer_type_hash = NULL;   /* 保存动态注册的buffer检测类型，如"http_uri"等 */
 static int g_buffer_type_id = DETECT_SM_LIST_DYNAMIC_START;
 static int g_buffer_type_reg_closed = 0;
 
@@ -828,15 +828,15 @@ static DetectBufferType *DetectBufferTypeLookupByName(const char *string)
     DetectBufferType *res = HashListTableLookup(g_buffer_type_hash, &map, 0);
     return res;
 }
-
+/* 注册buffer检测关键字 */
 int DetectBufferTypeRegister(const char *name)
 {
     BUG_ON(g_buffer_type_reg_closed);
     if (g_buffer_type_hash == NULL)
-        DetectBufferTypeInit();
+        DetectBufferTypeInit();   /* 初始化哈希表 g_buffer_type_hash */
 
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
-    if (!exists) {
+    if (!exists) {                /* 添加到hash表，返回对应的类型ID */
         return DetectBufferTypeAdd(name);
     } else {
         return exists->id;
@@ -859,7 +859,7 @@ void DetectBufferTypeSupportsMpm(const char *name)
     DetectBufferTypeRegister(name);
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
     BUG_ON(!exists);
-    exists->mpm = TRUE;
+    exists->mpm = TRUE;                  /* 此buffer检测类型支持多模引擎 */
     SCLogDebug("%p %s -- %d supports mpm", exists, name, exists->id);
 }
 
@@ -869,7 +869,7 @@ void DetectBufferTypeSupportsTransformations(const char *name)
     DetectBufferTypeRegister(name);
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
     BUG_ON(!exists);
-    exists->supports_transforms = true;
+    exists->supports_transforms = true;  /* 此buffer检测类型支持转换 */
     SCLogDebug("%p %s -- %d supports transformations", exists, name, exists->id);
 }
 
@@ -961,7 +961,7 @@ void DetectBufferRunSetupCallback(const DetectEngineCtx *de_ctx,
 {
     const DetectBufferType *map = DetectBufferTypeGetById(de_ctx, id);
     if (map && map->SetupCallback) {
-        map->SetupCallback(de_ctx, s);
+        map->SetupCallback(de_ctx, s); /* "http_uri" -> DetectHttpUriSetupCallback() */
     }
 }
 
@@ -969,9 +969,9 @@ void DetectBufferTypeRegisterValidateCallback(const char *name,
         bool (*ValidateCallback)(const Signature *, const char **sigerror))
 {
     BUG_ON(g_buffer_type_reg_closed);
-    DetectBufferTypeRegister(name);
+    DetectBufferTypeRegister(name);    /* 注册类型 */
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
-    BUG_ON(!exists);
+    BUG_ON(!exists);                   /* 添加回调函数 */
     exists->ValidateCallback = ValidateCallback;
 }
 
@@ -1231,7 +1231,7 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
 
     SCLogDebug("DETECT_SM_LIST_DYNAMIC_START %u", DETECT_SM_LIST_DYNAMIC_START);
     HashListTableBucket *b = HashListTableGetListHead(g_buffer_type_hash);
-    while (b) {
+    while (b) {   /* 从全局hash表，读取检测类型，初始化检测类型数组 */
         DetectBufferType *map = HashListTableGetListData(b);
         de_ctx->buffer_type_map[map->id] = map;
         SCLogDebug("name %s id %d mpm %s packet %s -- %s. "
@@ -1240,7 +1240,7 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
                 map->description, map->SetupCallback, map->ValidateCallback);
         b = HashListTableGetListNext(b);
     }
-
+                  /* 初始化检测类型哈希表 */
     de_ctx->buffer_type_hash = HashListTableInit(256,
             DetectBufferTypeHashFunc,
             DetectBufferTypeCompareFunc,
@@ -1251,10 +1251,10 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
     de_ctx->buffer_type_id = g_buffer_type_id;
 
     PrefilterInit(de_ctx);
-    DetectMpmInitializeAppMpms(de_ctx);
-    DetectAppLayerInspectEngineCopyListToDetectCtx(de_ctx);
-    DetectMpmInitializePktMpms(de_ctx);
-    DetectPktInspectEngineCopyListToDetectCtx(de_ctx);
+    DetectMpmInitializeAppMpms(de_ctx);   /* 初始化 DetectEngineCtx->app_mpms_list */
+    DetectAppLayerInspectEngineCopyListToDetectCtx(de_ctx); /* 初始化 DetectEngineCtx->app_inspect_engines */
+    DetectMpmInitializePktMpms(de_ctx);   /* 初始化 DetectEngineCtx->pkt_mpms_list */
+    DetectPktInspectEngineCopyListToDetectCtx(de_ctx);      /* 初始化 DetectEngineCtx->pkt_inspect_engines */
 }
 
 static void DetectBufferTypeFreeDetectEngine(DetectEngineCtx *de_ctx)
@@ -1984,24 +1984,24 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     if (ConfGetBool("engine.init-failure-fatal", (int *)&(de_ctx->failure_fatal)) != 1) {
         SCLogDebug("ConfGetBool could not load the value.");
     }
-
-    de_ctx->mpm_matcher = PatternMatchDefaultMatcher();       /* 得到配置关键字 spm-algo/mpm-algo 对应的匹配算法 */
+                                    /* 初始化模式匹配引擎类型, MPM_HS/SPM_HS */
+    de_ctx->mpm_matcher = PatternMatchDefaultMatcher();
     de_ctx->spm_matcher = SinglePatternMatchDefaultMatcher();
     SCLogConfig("pattern matchers: MPM: %s, SPM: %s",
         mpm_table[de_ctx->mpm_matcher].name,
         spm_table[de_ctx->spm_matcher].name);
-
+                                    /* 初始化单模引擎上下文 */
     de_ctx->spm_global_thread_ctx = SpmInitGlobalThreadCtx(de_ctx->spm_matcher);
     if (de_ctx->spm_global_thread_ctx == NULL) {
         SCLogDebug("Unable to alloc SpmGlobalThreadCtx.");
         goto error;
     }
-
-    if (DetectEngineCtxLoadConf(de_ctx) == -1) { /* 加载配置文件 */
+                                    /* 加载配置文件相关配置 */
+    if (DetectEngineCtxLoadConf(de_ctx) == -1) {
         goto error;
     }
 
-    SigGroupHeadHashInit(de_ctx);                /* 初始化引擎存放信号的哈希表 */
+    SigGroupHeadHashInit(de_ctx);   /* 各种哈希表初始化 */
     MpmStoreInit(de_ctx);
     ThresholdHashInit(de_ctx);
     DetectParseDupSigHashInit(de_ctx);
@@ -2010,17 +2010,17 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     DetectBufferTypeSetupDetectEngine(de_ctx);
 
     /* init iprep... ignore errors for now */
-    (void)SRepInit(de_ctx);
+    (void)SRepInit(de_ctx);         /* 加载IP信誉库 */
 
-    SCClassConfLoadClassficationConfigFile(de_ctx, NULL);
-    SCRConfLoadReferenceConfigFile(de_ctx, NULL);
+    SCClassConfLoadClassficationConfigFile(de_ctx, NULL);   /* 解析 classification.config */
+    SCRConfLoadReferenceConfigFile(de_ctx, NULL);           /* 解析 reference.config */
 
-    if (ActionInitConfig() < 0) {                /* 加载动作顺序优先级 */
+    if (ActionInitConfig() < 0) {                /* 加载动作顺序优先级, action_order_sigs[] */
         goto error;
     }
 
     de_ctx->version = DetectEngineGetVersion();  /* 初始化引擎版本号 */
-    VarNameStoreSetupStaging(de_ctx->version);
+    VarNameStoreSetupStaging(de_ctx->version);   /* */
     SCLogDebug("dectx with version %u", de_ctx->version);
     return de_ctx;
 error:
@@ -2173,13 +2173,13 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
     const char *sgh_mpm_context = NULL;
     const char *de_ctx_profile = NULL;
 
-    (void)ConfGet("detect.profile", &de_ctx_profile);
-    (void)ConfGet("detect.sgh-mpm-context", &sgh_mpm_context);
+    (void)ConfGet("detect.profile", &de_ctx_profile);          /* "medium" */
+    (void)ConfGet("detect.sgh-mpm-context", &sgh_mpm_context); /* "auto" */
 
     ConfNode *de_ctx_custom = ConfGetNode("detect-engine");
     ConfNode *opt = NULL;
 
-    if (de_ctx_custom != NULL) {
+    if (de_ctx_custom != NULL) {   /* 读取自定义配置 */
         TAILQ_FOREACH(opt, &de_ctx_custom->head, next) {
             if (de_ctx_profile == NULL) {
                 if (opt->val && strcmp(opt->val, "profile") == 0) {
@@ -2195,7 +2195,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         }
     }
 
-    if (de_ctx_profile != NULL) {
+    if (de_ctx_profile != NULL) {  /* 设置profile级别 */
         if (strcmp(de_ctx_profile, "low") == 0 ||
             strcmp(de_ctx_profile, "lowest") == 0) {        // legacy
             profile = ENGINE_PROFILE_LOW;
@@ -2228,7 +2228,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
 #ifdef BUILD_HYPERSCAN
             de_ctx->mpm_matcher == MPM_HS ||
 #endif
-            de_ctx->mpm_matcher == MPM_AC_BS) {
+            de_ctx->mpm_matcher == MPM_AC_BS) { /* 选择默认的多模特征环境 */
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE;
         } else {
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_FULL;
@@ -2398,7 +2398,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         ports = "53, 80, 139, 443, 445, 1433, 3306, 3389, 6666, 6667, 8080";
         SCLogConfig("grouping: tcp-whitelist (default) %s", ports);
 
-    }
+    }                         /* 解析端口白名单 */
     if (DetectPortParse(de_ctx, &de_ctx->tcp_whitelist, ports) != 0) {
         SCLogWarning(SC_ERR_INVALID_YAML_CONF_ENTRY, "'%s' is not a valid value "
                 "for detect.grouping.tcp-whitelist", ports);
@@ -2438,7 +2438,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
     }
 
     de_ctx->prefilter_setting = DETECT_PREFILTER_MPM;
-    const char *pf_setting = NULL;
+    const char *pf_setting = NULL;         /* 默认前置滤波仅使用MPM */
     if (ConfGet("detect.prefilter.default", &pf_setting) == 1 && pf_setting) {
         if (strcasecmp(pf_setting, "mpm") == 0) {
             de_ctx->prefilter_setting = DETECT_PREFILTER_MPM;
@@ -3961,7 +3961,7 @@ int DetectEngineAddToMaster(DetectEngineCtx *de_ctx)
 
     DetectEngineMasterCtx *master = &g_master_de_ctx;
     SCMutexLock(&master->lock);
-    r = DetectEngineAddToList(de_ctx);
+    r = DetectEngineAddToList(de_ctx);  /* 加入运行列表 */
     SCMutexUnlock(&master->lock);
     return r;
 }

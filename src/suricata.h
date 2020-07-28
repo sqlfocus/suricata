@@ -145,7 +145,7 @@ typedef struct SCInstance_ {
     bool set_logdir;
     bool set_datadir;
 
-    int delayed_detect;        /* 在规则载入前就开始处理数据包，以减少IPS模式下down time */
+    int delayed_detect;        /* 延迟检测标志: 在规则载入前就开始处理数据包，以减少IPS模式下down time */
     int disabled_detect;       /* 是否禁止检测引擎，0/1 */
     int daemon;                /* 是否作为精灵进程运行，由配置参数-D决定 */
     int offline;               /* 是否为离线模式，如PCAP FILE模式 */

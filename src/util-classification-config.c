@@ -48,7 +48,7 @@
 #define SC_CLASS_CONF_DEF_CONF_FILEPATH CONFIG_DIR "/classification.config"
 #endif
 
-static pcre *regex = NULL;
+static pcre *regex = NULL;    /* 对应 DETECT_CLASSCONFIG_REGEX 的PCRE编译结果 */
 static pcre_extra *regex_study = NULL;
 
 uint32_t SCClassConfClasstypeHashFunc(HashTable *ht, void *data, uint16_t datalen);
@@ -113,14 +113,14 @@ void SCClassConfDeinit(void)
  *       initialized.
  *
  * \retval fp NULL on error
- */
+ *//* 解析/etc/suricata/classification.config，并存储到哈希表 */
 static FILE *SCClassConfInitContextAndLocalResources(DetectEngineCtx *de_ctx, FILE *fd)
 {
     /* init the hash table to be used by the classification config Classtypes */
     de_ctx->class_conf_ht = HashTableInit(128, SCClassConfClasstypeHashFunc,
                                           SCClassConfClasstypeHashCompareFunc,
                                           SCClassConfClasstypeHashFree);
-    if (de_ctx->class_conf_ht == NULL) {
+    if (de_ctx->class_conf_ht == NULL) { /* 初始化哈希表 */
         SCLogError(SC_ERR_HASH_TABLE_INIT, "Error initializing the hash "
                    "table");
         return NULL;
@@ -130,7 +130,7 @@ static FILE *SCClassConfInitContextAndLocalResources(DetectEngineCtx *de_ctx, FI
      * avoid using a dummy classification file for testing purposes and
      * instead use an input stream against a buffer containing the
      * classification strings */
-    if (fd == NULL) {
+    if (fd == NULL) {                    /* 读取文件 */
         const char *filename = SCClassConfGetConfFilename(de_ctx);
         if ( (fd = fopen(filename, "r")) == NULL) {
 #ifdef UNITTESTS
@@ -161,7 +161,7 @@ static const char *SCClassConfGetConfFilename(const DetectEngineCtx *de_ctx)
     const char *log_filename = NULL;
 
     if (de_ctx != NULL && strlen(de_ctx->config_prefix) > 0) {
-        char config_value[256];
+        char config_value[256];  /* 搜索配置文件，否则使用默认配置文件名 */
         snprintf(config_value, sizeof(config_value),
                  "%s.classification-file", de_ctx->config_prefix);
 
@@ -256,7 +256,7 @@ int SCClassConfAddClasstype(DetectEngineCtx *de_ctx, char *rawstr, uint16_t inde
     int ov[MAX_SUBSTRINGS];
 
     ret = pcre_exec(regex, regex_study, rawstr, strlen(rawstr), 0, 0, ov, 30);
-    if (ret < 0) {
+    if (ret < 0) {  /* 示例: config classification: protocol-command-decode,Generic Protocol Command Decode,3 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "Invalid Classtype in "
                    "classification.config file");
         goto error;
@@ -264,21 +264,21 @@ int SCClassConfAddClasstype(DetectEngineCtx *de_ctx, char *rawstr, uint16_t inde
 
     /* retrieve the classtype name */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 1, ct_name, sizeof(ct_name));
-    if (ret < 0) {
+    if (ret < 0) {  /* 获取 类型名（protocol-command-decode） */
         SCLogInfo("pcre_copy_substring() failed");
         goto error;
     }
 
     /* retrieve the classtype description */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 2, ct_desc, sizeof(ct_desc));
-    if (ret < 0) {
+    if (ret < 0) {  /* 获取 类型描述（Generic Protocol Command Decode） */
         SCLogInfo("pcre_copy_substring() failed");
         goto error;
     }
 
     /* retrieve the classtype priority */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 3, ct_priority_str, sizeof(ct_priority_str));
-    if (ret < 0) {
+    if (ret < 0) {  /* 获取类型优先级（3） */
         SCLogInfo("pcre_copy_substring() failed");
         goto error;
     }
@@ -288,16 +288,16 @@ int SCClassConfAddClasstype(DetectEngineCtx *de_ctx, char *rawstr, uint16_t inde
 
     /* Create a new instance of the parsed Classtype string */
     ct_new = SCClassConfAllocClasstype(ct_id, ct_name, ct_desc, ct_priority);
-    if (ct_new == NULL)
+    if (ct_new == NULL)       /* 初始化 SCClassConfClasstype, 以存储解析结果 */
         goto error;
 
     /* Check if the Classtype is present in the HashTable.  In case it's present
      * ignore it, as it is a duplicate.  If not present, add it to the table */
     ct_lookup = HashTableLookup(de_ctx->class_conf_ht, ct_new, 0);
-    if (ct_lookup == NULL) {
+    if (ct_lookup == NULL) {  /* 加入哈希表 DetectEngineCtx->class_conf_ht */
         if (HashTableAdd(de_ctx->class_conf_ht, ct_new, 0) < 0)
             SCLogDebug("HashTable Add failed");
-    } else {
+    } else {                  /* 重复类型，直接保留老类型，丢弃新类型 */
         SCLogDebug("Duplicate classtype found inside classification.config");
         if (ct_new->classtype_desc) SCFree(ct_new->classtype_desc);
         if (ct_new->classtype) SCFree(ct_new->classtype);
@@ -355,7 +355,7 @@ static void SCClassConfParseFile(DetectEngineCtx *de_ctx, FILE *fd)
         if (SCClassConfIsLineBlankOrComment(line))
             continue;
 
-        SCClassConfAddClasstype(de_ctx, line, i);
+        SCClassConfAddClasstype(de_ctx, line, i);  /* 逐行解析 */
         i++;
     }
 
@@ -527,7 +527,7 @@ void SCClassConfClasstypeHashFree(void *ch)
 void SCClassConfLoadClassficationConfigFile(DetectEngineCtx *de_ctx, FILE *fd)
 {
     fd = SCClassConfInitContextAndLocalResources(de_ctx, fd);
-    if (fd == NULL) {
+    if (fd == NULL) {    /* 打开配置文件, /etc/suricata/classification.config */
 #ifdef UNITTESTS
         if (RunmodeIsUnittests() && fd == NULL) {
             return;
@@ -537,7 +537,7 @@ void SCClassConfLoadClassficationConfigFile(DetectEngineCtx *de_ctx, FILE *fd)
                 "option in your suricata.yaml file");
         return;
     }
-
+                         /* 解析配置文件, 存入哈希表 DetectEngineCtx->class_conf_ht */
     SCClassConfParseFile(de_ctx, fd);
     SCClassConfDeInitLocalResources(de_ctx, fd);
 
@@ -560,14 +560,14 @@ SCClassConfClasstype *SCClassConfGetClasstype(const char *ct_name,
 {
     char name[strlen(ct_name) + 1];
     size_t s;
-    for (s = 0; s < strlen(ct_name); s++)
+    for (s = 0; s < strlen(ct_name); s++)   /* 转换为小写 */
         name[s] = tolower((unsigned char)ct_name[s]);
     name[s] = '\0';
 
     SCClassConfClasstype ct_lookup = {0, 0, name, NULL };
     SCClassConfClasstype *lookup_ct_info = HashTableLookup(de_ctx->class_conf_ht,
                                                            &ct_lookup, 0);
-    return lookup_ct_info;
+    return lookup_ct_info;                  /* 搜索hash表 */
 }
 
 /*----------------------------------Unittests---------------------------------*/

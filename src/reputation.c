@@ -572,7 +572,7 @@ static char *SRepCompleteFilePath(char *file)
  *
  *  If this function is called more than once, the category file
  *  is not reloaded.
- */
+ *//* 初始化IP信誉库 */
 int SRepInit(DetectEngineCtx *de_ctx)
 {
     ConfNode *files;
@@ -583,7 +583,7 @@ int SRepInit(DetectEngineCtx *de_ctx)
 
     de_ctx->srepCIDR_ctx = (SRepCIDRTree *)SCMalloc(sizeof(SRepCIDRTree));
     if (de_ctx->srepCIDR_ctx == NULL)
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);       /* 初始化IP信誉库树 */
     memset(de_ctx->srepCIDR_ctx, 0, sizeof(SRepCIDRTree));
     SRepCIDRTree *cidr_ctx = de_ctx->srepCIDR_ctx;
 
@@ -592,7 +592,7 @@ int SRepInit(DetectEngineCtx *de_ctx)
         cidr_ctx->srepIPV6_tree[i] = NULL;
     }
 
-    if (SRepGetVersion() == 0) {
+    if (SRepGetVersion() == 0) {  /* 初始化版本号 */
         SC_ATOMIC_INIT(srep_eversion);
         init = 1;
     }

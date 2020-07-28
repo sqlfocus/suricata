@@ -113,7 +113,7 @@ char *DetectLoadCompleteSigPath(const DetectEngineCtx *de_ctx, const char *sig_f
  *  \param goodsigs_tot Will store number of valid signatures in the file
  *  \param badsigs_tot Will store number of invalid signatures in the file
  *  \retval 0 on success, -1 on error
- *//* 加载规则文件 */
+ *//* 加载规则文件, 如suricata.rules */
 static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
         int *goodsigs, int *badsigs)
 {
@@ -163,7 +163,7 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
         /* Reset offset. */
         offset = 0;
 
-        de_ctx->rule_file = sig_file;
+        de_ctx->rule_file = sig_file;               /* 解析过程记录文件名、行号，日志输出？？？ */
         de_ctx->rule_line = lineno - multiline;
 
         sig = DetectEngineAppendSig(de_ctx, line);  /* 解析为规则结构 */
@@ -272,7 +272,7 @@ static int ProcessSigFiles(DetectEngineCtx *de_ctx, char *pattern,
  *  \param sig_file Filename (or pattern) holding signatures
  *  \param sig_file_exclusive File passed in 'sig_file' should be loaded exclusively.
  *  \retval -1 on error
- *//* 加载规则 */
+ *//* 加载规则, /var/lib/suricata/rules/suricata.rules */
 int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_exclusive)
 {
     SCEnter();
@@ -286,7 +286,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     int good_sigs = 0;
     int bad_sigs = 0;
 
-    if (strlen(de_ctx->config_prefix) > 0) {  /* 提取规则文件名 */
+    if (strlen(de_ctx->config_prefix) > 0) {/* 提取规则文件名 */
         snprintf(varname, sizeof(varname), "%s.rule-files",
                 de_ctx->config_prefix);
     }
@@ -298,14 +298,14 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
 
     /* ok, let's load signature files from the general config */
     if (!(sig_file != NULL && sig_file_exclusive == TRUE)) {
-        rule_files = ConfGetNode(varname);
+        rule_files = ConfGetNode(varname);  /* CASE: 命令行未指定规则文件，搜索默认路径 */
         if (rule_files != NULL) {
             if (!ConfNodeIsSequence(rule_files)) {
                 SCLogWarning(SC_ERR_INVALID_ARGUMENT,
                     "Invalid rule-files configuration section: "
                     "expected a list of filenames.");
             }
-            else {                            /* 加载规则文件 */
+            else {                          /* 加载规则文件 */
                 TAILQ_FOREACH(file, &rule_files->head, next) {
                     sfile = DetectLoadCompleteSigPath(de_ctx, file->val);
                     good_sigs = bad_sigs = 0;
@@ -327,7 +327,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     }
 
     /* If a Signature file is specified from commandline, parse it too */
-    if (sig_file != NULL) {                   /* 加载命令行指定的规则文件 */
+    if (sig_file != NULL) {                 /* CASE: 加载命令行指定的规则文件 */
         ret = ProcessSigFiles(de_ctx, sig_file, sig_stat, &good_sigs, &bad_sigs);
 
         if (ret != 0) {
@@ -364,7 +364,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     SCSigOrderSignatures(de_ctx);                 /* 按优先级排序规则列表 */
     SCSigSignatureOrderingModuleCleanup(de_ctx);
 
-    SCThresholdConfInitContext(de_ctx);           /* */
+    SCThresholdConfInitContext(de_ctx);           /* 解析 /etc/suricata/threshold.config */
 
     /* Setup the signature group lookup structure and pattern matchers */
     if (SigGroupBuild(de_ctx) < 0)      /* 构建匹配正则引擎 */
@@ -383,7 +383,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
         }
     }
 
-    DetectParseDupSigHashFree(de_ctx);
+    DetectParseDupSigHashFree(de_ctx);  /* 抛弃去重检测hash表 */
     SCReturnInt(ret);
 }
 

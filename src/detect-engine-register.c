@@ -408,23 +408,23 @@ void SigTableSetup(void)
     DetectSidRegister();         /* 关键字sid注册到 sigmatch_table[] */
     DetectPriorityRegister();
     DetectPrefilterRegister();
-    DetectRevRegister();
-    DetectClasstypeRegister();
-    DetectReferenceRegister();
+    DetectRevRegister();         /* 关键字rev, signature版本号 */
+    DetectClasstypeRegister();   /* 关键字classtype */
+    DetectReferenceRegister();   /* 关键字reference */
     DetectTagRegister();
-    DetectThresholdRegister();
+    DetectThresholdRegister();   /* 关键字threshold */
     DetectMetadataRegister();
-    DetectMsgRegister();
+    DetectMsgRegister();         /* 关键字msg */
     DetectAckRegister();
     DetectSeqRegister();
-    DetectContentRegister();
+    DetectContentRegister();     /* 关键字content */
     DetectUricontentRegister();
 
     /* NOTE: the order of these currently affects inspect
      * engine registration order and ultimately the order
      * of inspect engines in the rule. Which in turn affects
      * state keeping */
-    DetectHttpUriRegister();
+    DetectHttpUriRegister();     /* 关键字http_uri */
     DetectHttpRequestLineRegister();
     DetectHttpClientBodyRegister();
     DetectHttpResponseLineRegister();
@@ -472,7 +472,7 @@ void SigTableSetup(void)
     DetectTlsJa3SHashRegister();
     DetectTlsJa3SStringRegister();
 
-    DetectAppLayerEventRegister();
+    DetectAppLayerEventRegister();    /* 注册应用协议检测事件处理句柄 */
     /* end of order dependent regs */
 
     DetectPcreRegister();

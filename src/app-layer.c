@@ -330,7 +330,7 @@ static int TCPProtoDetect(ThreadVars *tv,
         printf("=> Init Stream Data -- end\n");
     }
 #endif
-
+    /* 基于规则、端口的协议识别 */
     bool reverse_flow = false;
     PACKET_PROFILING_APP_PD_START(app_tctx);
     *alproto = AppLayerProtoDetectGetProto(app_tctx->alpd_tctx,
@@ -360,9 +360,9 @@ static int TCPProtoDetect(ThreadVars *tv,
         }
 
         StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);
-        TcpSessionSetReassemblyDepth(ssn,
+        TcpSessionSetReassemblyDepth(ssn, /* 更新会话识别深度 */
                 AppLayerParserGetStreamDepth(f));
-        FlagPacketFlow(p, f, flags);
+        FlagPacketFlow(p, f, flags);      /* 更新流标识 */
         /* if protocol detection indicated that we need to reverse
          * the direction of the flow, do it now. We flip the flow,
          * packet and the direction flags */
@@ -596,7 +596,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         alproto = f->alproto_tc;
     }
 
-    /* If a gap notification, relay the notification on to the
+    /* 处理空洞数据，If a gap notification, relay the notification on to the
      * app-layer if known. */
     if (flags & STREAM_GAP) {
         if (alproto == ALPROTO_UNKNOWN) {
@@ -616,7 +616,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         goto end;
     }
 
-    /* if we don't know the proto yet and we have received a stream
+    /* 应用识别，if we don't know the proto yet and we have received a stream
      * initializer message, we run proto detection.
      * We receive 2 stream init msgs (one for each direction) but we
      * only run the proto detection once. */
@@ -632,7 +632,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         AppLayerProtoDetectReset(f);
         /* rerun protocol detection */
         if (TCPProtoDetect(tv, ra_ctx, app_tctx, p, f, ssn, stream,
-                           data, data_len, flags) != 0) {
+                           data, data_len, flags) != 0) {    /* 基于规则、端口的协议识别 */
             SCLogDebug("proto detect failure");
             goto failure;
         }
@@ -668,7 +668,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         if (f->alproto != ALPROTO_UNKNOWN) {
             PACKET_PROFILING_APP_START(app_tctx, f->alproto);
             r = AppLayerParserParse(tv, app_tctx->alp_tctx, f, f->alproto,
-                                    flags, data, data_len);
+                                    flags, data, data_len);  /* 应用协议解析 */
             PACKET_PROFILING_APP_END(app_tctx, f->alproto);
             if (r == 0) {
                 StreamTcpUpdateAppLayerProgress(ssn, direction, data_len);
@@ -768,7 +768,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
 
 AppProto AppLayerGetProtoByName(char *alproto_name)
 {
-    SCEnter();
+    SCEnter();   /* 根据协议名查找应用协议的索引, alpd_ctx.alproto_names[] */
     AppProto r = AppLayerProtoDetectGetProtoByName(alproto_name);
     SCReturnCT(r, "AppProto");
 }

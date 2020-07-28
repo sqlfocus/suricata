@@ -116,7 +116,7 @@ static SCMutex ssn_pool_mutex = SCMUTEX_INITIALIZER; /**< init only, protect ini
 static uint64_t ssn_pool_cnt = 0; /** counts ssns, protected by ssn_pool_mutex */
 #endif
 
-TcpStreamCnf stream_config;
+TcpStreamCnf stream_config;       /* tcp流汇聚相关配置 */
 uint64_t StreamTcpReassembleMemuseGlobalCounter(void);
 SC_ATOMIC_DECLARE(uint64_t, st_memuse);
 
@@ -361,7 +361,7 @@ static int RandomGetWrap(void)
  *  \param  quiet   It tells the mode of operation, if it is TRUE nothing will
  *                  be get printed.
  */
-
+/* TCP流重组环境的初始化 */
 void StreamTcpInitConfig(char quiet)
 {
     intmax_t value = 0;
@@ -370,7 +370,7 @@ void StreamTcpInitConfig(char quiet)
     SCLogDebug("Initializing Stream");
 
     memset(&stream_config,  0, sizeof(stream_config));
-
+    /* 利用suricata.yaml初始化流汇聚的配置 */
     SC_ATOMIC_INIT(stream_config.memcap);
     SC_ATOMIC_INIT(stream_config.reassembly_memcap);
 
@@ -643,10 +643,10 @@ void StreamTcpInitConfig(char quiet)
     StreamTcpInitMemuse();
     StatsRegisterGlobalCounter("tcp.memuse", StreamTcpMemuseCounter);
 
-    StreamTcpReassembleInit(quiet);
+    StreamTcpReassembleInit(quiet);  /* 流汇聚初始化 */
 
     /* set the default free function and flow state function
-     * values. */
+     * values. */                    /* 设置流状态清理默认函数 */
     FlowSetProtoFreeFunc(IPPROTO_TCP, StreamTcpSessionClear);
 
 #ifdef UNITTESTS
@@ -694,7 +694,7 @@ static TcpSession *StreamTcpNewSession (Packet *p, int id)
 {
     TcpSession *ssn = (TcpSession *)p->flow->protoctx;
 
-    if (ssn == NULL) {
+    if (ssn == NULL) {   /* 初始化 Packet->flow->protoctx */
         p->flow->protoctx = PoolThreadGetById(ssn_pool, id);
 #ifdef DEBUG
         SCMutexLock(&ssn_pool_mutex);
@@ -716,8 +716,8 @@ static TcpSession *StreamTcpNewSession (Packet *p, int id)
         ssn->client.flags = stream_config.stream_init_flags;
 
         StreamingBuffer x = STREAMING_BUFFER_INITIALIZER(&stream_config.sbcnf);
-        ssn->client.sb = x;
-        ssn->server.sb = x;
+        ssn->client.sb = x;  /* <TK!!!>此处是结构赋值，因此ssn->client/server */
+        ssn->server.sb = x;  /*        对应的对象并不相同，只是初始值相同 */
 
         if (PKT_IS_TOSERVER(p)) {
             ssn->client.tcp_flags = p->tcph ? p->tcph->th_flags : 0;
@@ -730,18 +730,18 @@ static TcpSession *StreamTcpNewSession (Packet *p, int id)
 
     return ssn;
 }
-
+/* */
 static void StreamTcpPacketSetState(Packet *p, TcpSession *ssn,
                                            uint8_t state)
 {
     if (state == ssn->state || PKT_IS_PSEUDOPKT(p))
         return;
 
-    ssn->pstate = ssn->state;
+    ssn->pstate = ssn->state;   /* 记录状态值 */
     ssn->state = state;
 
     /* update the flow state */
-    switch(ssn->state) {
+    switch(ssn->state) {        /* 更新流状态；流仅有“建立”/“关闭”两个状态 */
         case TCP_ESTABLISHED:
         case TCP_FIN_WAIT1:
         case TCP_FIN_WAIT2:
@@ -895,7 +895,7 @@ static int StreamTcpPacketIsRetransmission(TcpStream *stream, Packet *p)
  *
  *  \retval 0 ok
  *  \retval -1 error
- */
+ *//* 处理session state尚未建立的情形 */
 static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
         StreamTcpThread *stt, TcpSession *ssn,
         PacketQueueNoLock *pq)
@@ -903,20 +903,20 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
     if (p->tcph->th_flags & TH_RST) {
         StreamTcpSetEvent(p, STREAM_RST_BUT_NO_SESSION);
         SCLogDebug("RST packet received, no session setup");
-        return -1;
+        return -1;         /* CASE: 收到RST报文，报错 */
 
     } else if (p->tcph->th_flags & TH_FIN) {
         StreamTcpSetEvent(p, STREAM_FIN_BUT_NO_SESSION);
         SCLogDebug("FIN packet received, no session setup");
-        return -1;
+        return -1;         /* CASE: 收到FIN报文，报错 */
 
-    /* SYN/ACK */
+    /* SYN/ACK */          /* CASE: 收到SYN+ACK报文 */
     } else if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         if (stream_config.midstream == FALSE &&
                 stream_config.async_oneside == FALSE)
             return 0;
 
-        if (ssn == NULL) {
+        if (ssn == NULL) {     /* 新建会话 */
             ssn = StreamTcpNewSession(p, stt->ssn_pool_id);
             if (ssn == NULL) {
                 StatsIncr(tv, stt->counter_tcp_ssn_memcap);
@@ -928,10 +928,10 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
 
         /* reverse packet and flow */
         SCLogDebug("reversing flow and packet");
-        PacketSwap(p);
+        PacketSwap(p);         /* 由于syn+ack触发的建会话，倒换流、报文的信息 */
         FlowSwap(p->flow);
 
-        /* set the state */
+        /* set the state */    /* 更新会话状态，流状态 */
         StreamTcpPacketSetState(p, ssn, TCP_SYN_RECV);
         SCLogDebug("ssn %p: =~ midstream picked ssn state is now "
                 "TCP_SYN_RECV", ssn);
@@ -943,20 +943,20 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
             ssn->flags |= STREAMTCP_FLAG_ASYNC;
         }
 
-        /* sequence number & window */
+        /* sequence number & window */          /* 初始化server端序号 */
         ssn->server.isn = TCP_GET_SEQ(p);
         STREAMTCP_SET_RA_BASE_SEQ(&ssn->server, ssn->server.isn);
         ssn->server.next_seq = ssn->server.isn + 1;
         ssn->server.window = TCP_GET_WINDOW(p);
         SCLogDebug("ssn %p: server window %u", ssn, ssn->server.window);
 
-        ssn->client.isn = TCP_GET_ACK(p) - 1;
+        ssn->client.isn = TCP_GET_ACK(p) - 1;   /* 初始化client端序号 */
         STREAMTCP_SET_RA_BASE_SEQ(&ssn->client, ssn->client.isn);
         ssn->client.next_seq = ssn->client.isn + 1;
 
-        ssn->client.last_ack = TCP_GET_ACK(p);
+        ssn->client.last_ack = TCP_GET_ACK(p);  /* 初始化ack序号 */
         ssn->server.last_ack = TCP_GET_SEQ(p);
-
+                                                /* 初始化窗口 */
         ssn->server.next_win = ssn->server.last_ack + ssn->server.window;
 
         /** If the client has a wscale option the server had it too,
@@ -980,7 +980,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
 
         /* Set the timestamp value for both streams, if packet has timestamp
          * option enabled.*/
-        if (TCP_HAS_TS(p)) {
+        if (TCP_HAS_TS(p)) {                    /* 初始化时间戳选项 */
             ssn->server.last_ts = TCP_GET_TSVAL(p);
             ssn->client.last_ts = TCP_GET_TSECR(p);
             SCLogDebug("ssn %p: ssn->server.last_ts %" PRIu32" "
@@ -1000,7 +1000,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
             ssn->client.last_ts = 0;
         }
 
-        if (TCP_GET_SACKOK(p) == 1) {
+        if (TCP_GET_SACKOK(p) == 1) {           /* SACK选项支持 */
             ssn->flags |= STREAMTCP_FLAG_SACKOK;
             SCLogDebug("ssn %p: SYN/ACK with SACK permitted, assuming "
                     "SACK permitted for both sides", ssn);
@@ -1008,9 +1008,9 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
         return 0;
 
     } else if (p->tcph->th_flags & TH_SYN) {
-        if (ssn == NULL) {
+        if (ssn == NULL) { /* CASE: 收到syn报文 */
             ssn = StreamTcpNewSession(p, stt->ssn_pool_id);
-            if (ssn == NULL) {
+            if (ssn == NULL) {      /* 新建会话 */
                 StatsIncr(tv, stt->counter_tcp_ssn_memcap);
                 return -1;
             }
@@ -1018,23 +1018,23 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
             StatsIncr(tv, stt->counter_tcp_sessions);
         }
 
-        /* set the state */
+        /* set the state */         /* 设置会话、流状态 */
         StreamTcpPacketSetState(p, ssn, TCP_SYN_SENT);
         SCLogDebug("ssn %p: =~ ssn state is now TCP_SYN_SENT", ssn);
-
+                                    /* 设置异步单边标识 */
         if (stream_config.async_oneside) {
             SCLogDebug("ssn %p: =~ ASYNC", ssn);
             ssn->flags |= STREAMTCP_FLAG_ASYNC;
         }
 
         /* set the sequence numbers and window */
-        ssn->client.isn = TCP_GET_SEQ(p);
+        ssn->client.isn = TCP_GET_SEQ(p);   /* 更新客户端序号 */
         STREAMTCP_SET_RA_BASE_SEQ(&ssn->client, ssn->client.isn);
         ssn->client.next_seq = ssn->client.isn + 1;
 
         /* Set the stream timestamp value, if packet has timestamp option
          * enabled. */
-        if (TCP_HAS_TS(p)) {
+        if (TCP_HAS_TS(p)) {                /* 时间戳选项处理 */
             ssn->client.last_ts = TCP_GET_TSVAL(p);
             SCLogDebug("ssn %p: %02x", ssn, ssn->client.last_ts);
 
@@ -1046,17 +1046,17 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
         }
 
         ssn->server.window = TCP_GET_WINDOW(p);
-        if (TCP_HAS_WSCALE(p)) {
-            ssn->flags |= STREAMTCP_FLAG_SERVER_WSCALE;
-            ssn->server.wscale = TCP_GET_WSCALE(p);
+        if (TCP_HAS_WSCALE(p)) {            /* 窗口选项处理，服务器端维护 */
+            ssn->flags |= STREAMTCP_FLAG_SERVER_WSCALE; /* 的发送窗口，其实 */
+            ssn->server.wscale = TCP_GET_WSCALE(p);     /* 对应客户端接收缓存 */
         }
 
-        if (TCP_GET_SACKOK(p) == 1) {
+        if (TCP_GET_SACKOK(p) == 1) {       /* SACK选项处理 */
             ssn->flags |= STREAMTCP_FLAG_CLIENT_SACKOK;
             SCLogDebug("ssn %p: SACK permitted on SYN packet", ssn);
         }
 
-        if (TCP_HAS_TFO(p)) {
+        if (TCP_HAS_TFO(p)) {               /* FAST OPEN选项处理 */
             ssn->flags |= STREAMTCP_FLAG_TCP_FAST_OPEN;
             if (p->payload_len) {
                 StreamTcpUpdateNextSeq(ssn, &ssn->client, (ssn->client.next_seq + p->payload_len));
@@ -1073,9 +1073,9 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
 
     } else if (p->tcph->th_flags & TH_ACK) {
         if (stream_config.midstream == FALSE)
-            return 0;
+            return 0;      /* CASE: 收到纯ack报文 */
 
-        if (ssn == NULL) {
+        if (ssn == NULL) {        /* 新建会话 */
             ssn = StreamTcpNewSession(p, stt->ssn_pool_id);
             if (ssn == NULL) {
                 StatsIncr(tv, stt->counter_tcp_ssn_memcap);
@@ -1084,7 +1084,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
             StatsIncr(tv, stt->counter_tcp_sessions);
             StatsIncr(tv, stt->counter_tcp_midstream_pickups);
         }
-        /* set the state */
+        /* set the state */       /* 更新状态 */
         StreamTcpPacketSetState(p, ssn, TCP_ESTABLISHED);
         SCLogDebug("ssn %p: =~ midstream picked ssn state is now "
                 "TCP_ESTABLISHED", ssn);
@@ -1100,7 +1100,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
          *  than assume that it's set to the max value: 14 */
         ssn->client.wscale = TCP_WSCALE_MAX;
         ssn->server.wscale = TCP_WSCALE_MAX;
-
+                                  /* 序号处理 */
         /* set the sequence numbers and window */
         ssn->client.isn = TCP_GET_SEQ(p) - 1;
         STREAMTCP_SET_RA_BASE_SEQ(&ssn->client, ssn->client.isn);
@@ -1126,7 +1126,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
 
         /* Set the timestamp value for both streams, if packet has timestamp
          * option enabled.*/
-        if (TCP_HAS_TS(p)) {
+        if (TCP_HAS_TS(p)) {      /* 时间戳选项处理 */
             ssn->client.last_ts = TCP_GET_TSVAL(p);
             ssn->server.last_ts = TCP_GET_TSECR(p);
             SCLogDebug("ssn %p: ssn->server.last_ts %" PRIu32" "
@@ -1145,7 +1145,7 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
             ssn->server.last_ts = 0;
             ssn->client.last_ts = 0;
         }
-
+                                  /* 流汇聚 */
         StreamTcpReassembleHandleSegment(tv, stt->ra_ctx, ssn, &ssn->client, p, pq);
 
         ssn->flags |= STREAMTCP_FLAG_SACKOK;
@@ -1278,7 +1278,7 @@ static TcpStateQueue *StreamTcp3whsFindSynAckByAck(TcpSession *ssn, Packet *p)
  *  To make sure all SYN/ACK based state updates are in one place,
  *  this function can updated based on Packet or TcpStateQueue, where
  *  the latter takes precedence.
- */
+ *//* 收到服务端syn+ack后，更新会话状态 */
 static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue *q)
 {
     TcpStateQueue update;
@@ -1287,21 +1287,21 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
         q = &update;
     }
 
-    if (ssn->state != TCP_SYN_RECV) {
+    if (ssn->state != TCP_SYN_RECV) {    /* 更新会话状态 */
         /* update state */
         StreamTcpPacketSetState(p, ssn, TCP_SYN_RECV);
         SCLogDebug("ssn %p: =~ ssn state is now TCP_SYN_RECV", ssn);
     }
     /* sequence number & window */
-    ssn->server.isn = q->seq;
+    ssn->server.isn = q->seq;            /* 更新服务端序号 */
     STREAMTCP_SET_RA_BASE_SEQ(&ssn->server, ssn->server.isn);
     ssn->server.next_seq = ssn->server.isn + 1;
 
-    ssn->client.window = q->win;
+    ssn->client.window = q->win;         /* 更新客户端窗口，对应服务器缓存 */
     SCLogDebug("ssn %p: window %" PRIu32 "", ssn, ssn->server.window);
 
     /* Set the timestamp values used to validate the timestamp of
-     * received packets.*/
+     * received packets.*/               /* 更新时间戳选项 */
     if ((q->flags & STREAMTCP_QUEUE_FLAG_TS) &&
             (ssn->client.flags & STREAMTCP_STREAM_FLAG_TIMESTAMP))
     {
@@ -1319,7 +1319,7 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
         ssn->client.flags &= ~STREAMTCP_STREAM_FLAG_ZERO_TIMESTAMP;
     }
 
-    ssn->client.last_ack = q->ack;
+    ssn->client.last_ack = q->ack;       /* 更新确认序号 */
     ssn->server.last_ack = ssn->server.isn + 1;
 
     /** check for the presense of the ws ptr to determine if we
@@ -1327,7 +1327,7 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
     if ((ssn->flags & STREAMTCP_FLAG_SERVER_WSCALE) &&
             (q->flags & STREAMTCP_QUEUE_FLAG_WS))
     {
-        ssn->client.wscale = q->wscale;
+        ssn->client.wscale = q->wscale;  /* 更新窗口因子 */
     } else {
         ssn->client.wscale = 0;
     }
@@ -1339,7 +1339,7 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
     } else {
         ssn->flags &= ~STREAMTCP_FLAG_SACKOK;
     }
-
+                                         /* 更新窗口范围 */
     ssn->server.next_win = ssn->server.last_ack + ssn->server.window;
     ssn->client.next_win = ssn->client.last_ack + ssn->client.window;
     SCLogDebug("ssn %p: ssn->server.next_win %" PRIu32 "", ssn,
@@ -1359,7 +1359,7 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
         SCLogDebug("ssn %p: STREAMTCP_FLAG_4WHS unset, normal SYN/ACK"
                 " so considering 3WHS", ssn);
 
-    ssn->flags &=~ STREAMTCP_FLAG_4WHS;
+    ssn->flags &=~ STREAMTCP_FLAG_4WHS;  /* 三次握手，去掉四次握手标识 */
 }
 
 /** \internal
@@ -1367,7 +1367,7 @@ static void StreamTcp3whsSynAckUpdate(TcpSession *ssn, Packet *p, TcpStateQueue 
  *         SYN packet.
  *  \retval true packet is ok
  *  \retval false packet is bad
- */
+ *//* 检测“时间戳选项”是否合法 */
 static inline bool StateSynSentValidateTimestamp(TcpSession *ssn, Packet *p)
 {
     /* we only care about evil server here, so skip TS packets */
@@ -1415,11 +1415,11 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
     SCLogDebug("ssn %p: pkt received: %s", ssn, PKT_IS_TOCLIENT(p) ?
                "toclient":"toserver");
 
-    /* check for bad responses */
+    /* 检测时间戳选项是否合法，check for bad responses */
     if (StateSynSentValidateTimestamp(ssn, p) == false)
         return -1;
 
-    /* RST */
+    /* 异常处理：处理RST报文 */
     if (p->tcph->th_flags & TH_RST) {
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
@@ -1444,15 +1444,15 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
                     "TCP_CLOSED", ssn);
         }
 
-    /* FIN */
+    /* 异常处理：处理FIN报文 */
     } else if (p->tcph->th_flags & TH_FIN) {
         /** \todo */
 
-    /* SYN/ACK */
+    /* 正常处理：处理SYN/ACK报文 */
     } else if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         if ((ssn->flags & STREAMTCP_FLAG_4WHS) && PKT_IS_TOSERVER(p)) {
             SCLogDebug("ssn %p: SYN/ACK received on 4WHS session", ssn);
-
+            /* 特殊情形：4次握手建立会话 */
             /* Check if the SYN/ACK packet ack's the earlier
              * received SYN packet. */
             if (!(SEQ_EQ(TCP_GET_ACK(p), ssn->server.isn + 1))) {
@@ -1543,7 +1543,7 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
             /* done here */
             return 0;
         }
-
+        /* 3次握手时，syn+ack应该从服务器发往客户端 */
         if (PKT_IS_TOSERVER(p)) {
             StreamTcpSetEvent(p, STREAM_3WHS_SYNACK_IN_WRONG_DIRECTION);
             SCLogDebug("ssn %p: SYN/ACK received in the wrong direction", ssn);
@@ -1552,7 +1552,7 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
 
         if (!(TCP_HAS_TFO(p) || (ssn->flags & STREAMTCP_FLAG_TCP_FAST_OPEN))) {
             /* Check if the SYN/ACK packet ack's the earlier
-             * received SYN packet. */
+             * received SYN packet. *//* 检测对客户端的ack序号是否正确 */
             if (!(SEQ_EQ(TCP_GET_ACK(p), ssn->client.isn + 1))) {
                 StreamTcpSetEvent(p, STREAM_3WHS_SYNACK_WITH_WRONG_ACK);
                 SCLogDebug("ssn %p: ACK mismatch, packet ACK %" PRIu32 " != "
@@ -1574,9 +1574,9 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
 
             ssn->flags |= STREAMTCP_FLAG_TCP_FAST_OPEN;
             StreamTcpPacketSetState(p, ssn, TCP_ESTABLISHED);
-        }
+        }/* 变更状态 */
         StreamTcp3whsSynAckUpdate(ssn, p, /* no queue override */NULL);
-
+    /* 正常处理：4次握手 */
     } else if (p->tcph->th_flags & TH_SYN) {
         SCLogDebug("ssn %p: SYN packet on state SYN_SENT... resent", ssn);
         if (ssn->flags & STREAMTCP_FLAG_4WHS) {
@@ -1730,14 +1730,14 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
  *  \retval  0 ok
  *  \retval -1 error
  */
-
+/* 收到服务器syn+ack后，处理客户端发送的报文 */
 static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
         StreamTcpThread *stt, TcpSession *ssn,
         PacketQueueNoLock *pq)
 {
     if (ssn == NULL)
         return -1;
-
+    /* 异常处理：rst */
     if (p->tcph->th_flags & TH_RST) {
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
@@ -1780,7 +1780,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                 StreamTcpHandleTimestamp(ssn, p);
             }
         }
-
+    /* 异常处理：fin */
     } else if (p->tcph->th_flags & TH_FIN) {
         /* FIN is handled in the same way as in TCP_ESTABLISHED case */;
         if (ssn->flags & STREAMTCP_FLAG_TIMESTAMP) {
@@ -1791,7 +1791,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
         if ((StreamTcpHandleFin(tv, stt, ssn, p, pq)) == -1)
             return -1;
 
-    /* SYN/ACK */
+    /* 异常处理：SYN/ACK */
     } else if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         SCLogDebug("ssn %p: SYN/ACK packet on state SYN_RECV. resent", ssn);
 
@@ -1824,7 +1824,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                 return -1;
             SCLogDebug("ssn %p: queued different SYN/ACK", ssn);
         }
-
+    /* 异常处理：syn */
     } else if (p->tcph->th_flags & TH_SYN) {
         SCLogDebug("ssn %p: SYN packet on state SYN_RECV... resent", ssn);
 
@@ -1841,7 +1841,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
             StreamTcpSetEvent(p, STREAM_3WHS_SYN_RESEND_DIFF_SEQ_ON_SYN_RECV);
             return -1;
         }
-
+    /* 正常处理：3次握手最后，客户端ack */
     } else if (p->tcph->th_flags & TH_ACK) {
         if (ssn->queue_len) {
             SCLogDebug("ssn %p: checking ACK against queued SYN/ACKs", ssn);
@@ -1854,7 +1854,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
             }
         }
 
-
+        /* 支持时间戳选项，则校验时间是否正确 */
         /* If the timestamp option is enabled for both the streams, then
          * validate the received packet timestamp value against the
          * stream->last_ts. If the timestamp is valid then process the
@@ -1864,7 +1864,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                 return -1;
             }
         }
-
+        /* 特殊场景，通过4次握手建立连接 */
         if ((ssn->flags & STREAMTCP_FLAG_4WHS) && PKT_IS_TOCLIENT(p)) {
             SCLogDebug("ssn %p: ACK received on 4WHS session",ssn);
 
@@ -1905,7 +1905,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                     ssn->client.next_win, ssn->client.last_ack);
             return 0;
         }
-
+        /* 检测报文方向是否正确 */
         bool ack_indicates_missed_3whs_ack_packet = false;
         /* Check if the ACK received is in right direction. But when we have
          * picked up a mid stream session after missing the initial SYN pkt,
@@ -1955,23 +1955,23 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
         SCLogDebug("ssn %p: pkt (%" PRIu32 ") is to server: SEQ %" PRIu32 ""
                 ", ACK %" PRIu32 "", ssn, p->payload_len, TCP_GET_SEQ(p),
                 TCP_GET_ACK(p));
-
+        /* 检测报文序号（此报文从客户端 -> 服务器 的ack） */
         /* Check both seq and ack number before accepting the packet and
            changing to ESTABLISHED state */
         if ((SEQ_EQ(TCP_GET_SEQ(p), ssn->client.next_seq)) &&
                 SEQ_EQ(TCP_GET_ACK(p), ssn->server.next_seq)) {
             SCLogDebug("normal pkt");
-
+            /* CASE 1：正常情形 */
             /* process the packet normal, No Async streams :) */
 
             if (ssn->flags & STREAMTCP_FLAG_TIMESTAMP) {
                 StreamTcpHandleTimestamp(ssn, p);
             }
-
+                                                 /* 更新序号 */
             StreamTcpUpdateLastAck(ssn, &ssn->server, TCP_GET_ACK(p));
             StreamTcpUpdateNextSeq(ssn, &ssn->client, (ssn->client.next_seq + p->payload_len));
             ssn->server.window = TCP_GET_WINDOW(p) << ssn->server.wscale;
-
+                                                 /* 更新窗口 */
             ssn->server.next_win = ssn->server.last_ack + ssn->server.window;
 
             if (ssn->flags & STREAMTCP_FLAG_MIDSTREAM) {
@@ -1987,10 +1987,10 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                     ssn->flags |= STREAMTCP_FLAG_SACKOK;
                 }
             }
-
+                                                 /* 设置状态为会话建立 */
             StreamTcpPacketSetState(p, ssn, TCP_ESTABLISHED);
             SCLogDebug("ssn %p: =~ ssn state is now TCP_ESTABLISHED", ssn);
-
+                                                 /* 流汇聚 */
             StreamTcpReassembleHandleSegment(tv, stt->ra_ctx, ssn,
                     &ssn->client, p, pq);
 
@@ -1998,7 +1998,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                if packet's seq number is equal the expected seq no.*/
         } else if (stream_config.async_oneside == TRUE &&
                 (SEQ_EQ(TCP_GET_SEQ(p), ssn->server.next_seq)))
-        {
+        {   /* CASE 2: 仅单边流量到IDS设备，流动的方向指定为TO SERVER */
             /*set the ASYNC flag used to indicate the session as async stream
               and helps in relaxing the windows checks.*/
             ssn->flags |= STREAMTCP_FLAG_ASYNC;
@@ -2042,7 +2042,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
             ssn->flags |= STREAMTCP_FLAG_DETECTION_EVASION_ATTEMPT;
             SCLogDebug("ssn %p: wrong ack nr on packet, possible evasion!!",
                     ssn);
-
+            /* CASE 3: 正确的发送序号，但错误的ack序号 */
             StreamTcpSetEvent(p, STREAM_3WHS_RIGHT_SEQ_WRONG_ACK_EVASION);
             return -1;
 
@@ -2051,7 +2051,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
         } else if (SEQ_GT(TCP_GET_SEQ(p), ssn->client.next_seq) &&
                    SEQ_LEQ(TCP_GET_SEQ(p),ssn->client.next_win) &&
                    SEQ_EQ(TCP_GET_ACK(p), ssn->server.next_seq))
-        {
+        {   /* CASE 4: 正确的报文，但并不是紧邻的下一个报文 */
             SCLogDebug("ssn %p: ACK for missing data", ssn);
 
             if (ssn->flags & STREAMTCP_FLAG_TIMESTAMP) {
@@ -2088,7 +2088,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
                     (ssn->flags & STREAMTCP_FLAG_TCP_FAST_OPEN)) &&
                 SEQ_EQ(TCP_GET_ACK(p), ssn->client.last_ack) &&
                 SEQ_EQ(TCP_GET_SEQ(p), ssn->server.next_seq))
-        {
+        {   /* CASE 5: */
             if (ack_indicates_missed_3whs_ack_packet) {
                 SCLogDebug("ssn %p: packet fits perfectly after a missed 3whs-ACK", ssn);
             } else {
@@ -2146,15 +2146,15 @@ static int HandleEstablishedPacketToServer(ThreadVars *tv, TcpSession *ssn, Pack
     if (StreamTcpValidateAck(ssn, &(ssn->server), p) == -1) {
         SCLogDebug("ssn %p: rejecting because of invalid ack value", ssn);
         StreamTcpSetEvent(p, STREAM_EST_INVALID_ACK);
-        return -1;
+        return -1;               /* 检测ack序号是否合法 */
     }
 
-    /* check for Keep Alive */
+    /* check for Keep Alive */   /* 保活报文 */
     if ((p->payload_len == 0 || p->payload_len == 1) &&
             (TCP_GET_SEQ(p) == (ssn->client.next_seq - 1))) {
         SCLogDebug("ssn %p: pkt is keep alive", ssn);
 
-    /* normal pkt */
+    /* normal pkt */             /* 正常报文 */
     } else if (!(SEQ_GEQ((TCP_GET_SEQ(p)+p->payload_len), ssn->client.last_ack))) {
         if (ssn->flags & STREAMTCP_FLAG_ASYNC) {
             SCLogDebug("ssn %p: server => Asynchrouns stream, packet SEQ"
@@ -2232,7 +2232,7 @@ static int HandleEstablishedPacketToServer(ThreadVars *tv, TcpSession *ssn, Pack
     }
 
     int zerowindowprobe = 0;
-    /* zero window probe */
+    /* 零窗口探测报文，zero window probe */
     if (p->payload_len == 1 && TCP_GET_SEQ(p) == ssn->client.next_seq && ssn->client.window == 0) {
         SCLogDebug("ssn %p: zero window probe", ssn);
         zerowindowprobe = 1;
@@ -2290,7 +2290,7 @@ static int HandleEstablishedPacketToServer(ThreadVars *tv, TcpSession *ssn, Pack
         /* update next_win */
         StreamTcpUpdateNextWin(ssn, &ssn->server, (ssn->server.last_ack + ssn->server.window));
 
-        /* handle data (if any) */
+        /* 流汇聚，handle data (if any) */
         StreamTcpReassembleHandleSegment(tv, stt->ra_ctx, ssn, &ssn->client, p, pq);
 
     } else {
@@ -2493,13 +2493,13 @@ static inline uint32_t StreamTcpResetGetMaxAck(TcpStream *stream, uint32_t seq)
  *  \param  p       Packet which has to be handled in this TCP state.
  *  \param  stt     Strean Thread module registered to handle the stream handling
  */
-
+/* 在TCP建立状态下的报文处理 */
 static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
         StreamTcpThread *stt, TcpSession *ssn, PacketQueueNoLock *pq)
 {
     if (ssn == NULL)
         return -1;
-
+    /* CASE 1: 收到RST报文 */
     if (p->tcph->th_flags & TH_RST) {
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
@@ -2568,7 +2568,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
              * packet will take care, otherwise the normal session
              * cleanup. */
         }
-
+    /* CASE 2: 收到FIN报文 */
     } else if (p->tcph->th_flags & TH_FIN) {
         if (ssn->flags & STREAMTCP_FLAG_TIMESTAMP) {
             if (!StreamTcpValidateTimestamp(ssn, p))
@@ -2584,7 +2584,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
         if ((StreamTcpHandleFin(tv, stt, ssn, p, pq)) == -1)
             return -1;
 
-    /* SYN/ACK */
+    /* CASE 3: 收到SYN/ACK报文 */
     } else if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         SCLogDebug("ssn %p: SYN/ACK packet on state ESTABLISHED... resent",
                 ssn);
@@ -2627,7 +2627,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
         SCLogDebug("ssn %p: SYN/ACK packet on state ESTABLISHED... resent. "
                 "Likely due server not receiving final ACK in 3whs", ssn);
         return 0;
-
+    /* CASE 4: 收到SYN报文 */
     } else if (p->tcph->th_flags & TH_SYN) {
         SCLogDebug("ssn %p: SYN packet on state ESTABLISHED... resent", ssn);
         if (PKT_IS_TOCLIENT(p)) {
@@ -2647,7 +2647,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
         /* a resend of a SYN while we are established already -- fishy */
         StreamTcpSetEvent(p, STREAM_EST_SYN_RESEND);
         return -1;
-
+    /* CASE 5: 正常的ACK报文 */
     } else if (p->tcph->th_flags & TH_ACK) {
         /* Urgent pointer size can be more than the payload size, as it tells
          * the future coming data from the sender will be handled urgently
@@ -2663,7 +2663,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
                 return -1;
         }
 
-        if (PKT_IS_TOSERVER(p)) {
+        if (PKT_IS_TOSERVER(p)) {  /* 发往服务器的报文 */
             /* Process the received packet to server */
             HandleEstablishedPacketToServer(tv, ssn, p, stt, pq);
 
@@ -2672,7 +2672,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
                     ssn->client.next_seq, ssn->server.last_ack
                     ,ssn->client.next_win, ssn->client.window);
 
-        } else { /* implied to client */
+        } else {                   /* 发往客户端的报文 */
             if (!(ssn->flags & STREAMTCP_FLAG_3WHS_CONFIRMED)) {
                 ssn->flags |= STREAMTCP_FLAG_3WHS_CONFIRMED;
                 SCLogDebug("3whs is now confirmed by server");
@@ -4673,19 +4673,19 @@ static inline int StreamTcpStateDispatch(ThreadVars *tv, Packet *p,
 {
     SCLogDebug("ssn: %p", ssn);
     switch (state) {
-        case TCP_SYN_SENT:
+        case TCP_SYN_SENT:  
             if (StreamTcpPacketStateSynSent(tv, p, stt, ssn, pq)) {
-                return -1;
+                return -1;    /* 客户端发送syn报文后，服务器端发送syn+ack */
             }
             break;
         case TCP_SYN_RECV:
             if (StreamTcpPacketStateSynRecv(tv, p, stt, ssn, pq)) {
-                return -1;
+                return -1;    /* 服务端发送syn+ack报文后，客户端发送ack报文 */
             }
             break;
         case TCP_ESTABLISHED:
             if (StreamTcpPacketStateEstablished(tv, p, stt, ssn, pq)) {
-                return -1;
+                return -1;    /* 正常交互 */
             }
             break;
         case TCP_FIN_WAIT1:
@@ -4745,7 +4745,7 @@ static inline void HandleThreadId(ThreadVars *tv, Packet *p, StreamTcpThread *st
     const int idx = (!(PKT_IS_TOSERVER(p)));
 
     /* assign the thread id to the flow */
-    if (unlikely(p->flow->thread_id[idx] == 0)) {
+    if (unlikely(p->flow->thread_id[idx] == 0)) {  /* 赋值处理线程索引 */
         p->flow->thread_id[idx] = (FlowThreadId)tv->id;
     } else if (unlikely((FlowThreadId)tv->id != p->flow->thread_id[idx])) {
         SCLogDebug("wrong thread: flow has %u, we are %d", p->flow->thread_id[idx], tv->id);
@@ -4769,12 +4769,12 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
 
     SCLogDebug("p->pcap_cnt %"PRIu64, p->pcap_cnt);
 
-    HandleThreadId(tv, p, stt);
+    HandleThreadId(tv, p, stt);     /* 赋值线程ID */
 
     TcpSession *ssn = (TcpSession *)p->flow->protoctx;
 
     /* track TCP flags */
-    if (ssn != NULL) {
+    if (ssn != NULL) {              /* 管理TCP标识 */
         ssn->tcp_packet_flags |= p->tcph->th_flags;
         if (PKT_IS_TOSERVER(p))
             ssn->client.tcp_flags |= p->tcph->th_flags;
@@ -4791,7 +4791,7 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
         }
     }
 
-    /* update counters */
+    /* update counters */           /* 关键报文计数 */
     if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         StatsIncr(tv, stt->counter_tcp_synack);
     } else if (p->tcph->th_flags & (TH_SYN)) {
@@ -4804,14 +4804,14 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
     /* broken TCP http://ask.wireshark.org/questions/3183/acknowledgment-number-broken-tcp-the-acknowledge-field-is-nonzero-while-the-ack-flag-is-not-set */
     if (!(p->tcph->th_flags & TH_ACK) && TCP_GET_ACK(p) != 0) {
         StreamTcpSetEvent(p, STREAM_PKT_BROKEN_ACK);
-        goto error;
+        goto error;                 /* 无ACK标识，但有ack序号 */
     }
 
     /* If we are on IPS mode, and got a drop action triggered from
      * the IP only module, or from a reassembled msg and/or from an
      * applayer detection, then drop the rest of the packets of the
      * same stream and avoid inspecting it any further */
-    if (StreamTcpCheckFlowDrops(p) == 1) {
+    if (StreamTcpCheckFlowDrops(p) == 1) {  /* IPS模式，标注了流丢弃，则直接丢包 */
         SCLogDebug("This flow/stream triggered a drop rule");
         FlowSetNoPacketInspectionFlag(p->flow);
         DecodeSetNoPacketInspectionFlag(p);
@@ -4824,12 +4824,12 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
 
     if (ssn == NULL || ssn->state == TCP_NONE) {
         if (StreamTcpPacketStateNone(tv, p, stt, ssn, &stt->pseudo_queue) == -1) {
-            goto error;
+            goto error;     /* CASE: 无会话 */
         }
 
         if (ssn != NULL)
             SCLogDebug("ssn->alproto %"PRIu16"", p->flow->alproto);
-    } else {
+    } else {                /* CASE: 有会话 */
         /* special case for PKT_PSEUDO_STREAM_END packets:
          * bypass the state handling and various packet checks,
          * we care about reassembly here. */
@@ -4857,12 +4857,12 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
         }
 
         if (StreamTcpPacketIsKeepAlive(ssn, p) == 1) {
-            goto skip;
+            goto skip;           /* 跳过保活报文 */
         }
         if (StreamTcpPacketIsKeepAliveACK(ssn, p) == 1) {
             StreamTcpClearKeepAliveFlag(ssn, p);
-            goto skip;
-        }
+            goto skip;           /* 跳过保活报文的应答报文 */
+        }                        /* 清理保活标识 */
         StreamTcpClearKeepAliveFlag(ssn, p);
 
         /* if packet is not a valid window update, check if it is perhaps
@@ -4870,11 +4870,11 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
         if (StreamTcpPacketIsFinShutdownAck(ssn, p) == 0)
             if (StreamTcpPacketIsWindowUpdate(ssn, p) == 0)
                 if (StreamTcpPacketIsBadWindowUpdate(ssn,p))
-                    goto skip;
+                    goto skip;   /* 窗口更新报文 */
 
         /* handle the per 'state' logic */
         if (StreamTcpStateDispatch(tv, p, stt, ssn, &stt->pseudo_queue, ssn->state) < 0)
-            goto error;
+            goto error;          /* tcp状态机处理 */
 
     skip:
         StreamTcpPacketCheckPostRst(ssn, p);
@@ -5177,24 +5177,24 @@ int TcpSessionPacketSsnReuse(const Packet *p, const Flow *f, const void *tcp_ssn
     }
     return 0;              /* 不允许重用 */
 }
-
+/* TCP流汇聚入口 */
 TmEcode StreamTcp (ThreadVars *tv, Packet *p, void *data, PacketQueueNoLock *pq)
 {
     StreamTcpThread *stt = (StreamTcpThread *)data;
 
     SCLogDebug("p->pcap_cnt %"PRIu64, p->pcap_cnt);
 
-    if (!(PKT_IS_TCP(p))) {
+    if (!(PKT_IS_TCP(p))) {    /* 仅处理TCP报文 */
         return TM_ECODE_OK;
     }
 
-    if (p->flow == NULL) {
+    if (p->flow == NULL) {     /* 仅处理建流报文 */
         StatsIncr(tv, stt->counter_tcp_no_flow);
         return TM_ECODE_OK;
     }
 
     /* only TCP packets with a flow from here */
-
+                               /* 校验和 */
     if (!(p->flags & PKT_PSEUDO_STREAM_END)) {
         if (stream_config.flags & STREAMTCP_INIT_FLAG_CHECKSUM_VALIDATION) {
             if (StreamTcpValidateChecksum(p) == 0) {
@@ -5208,7 +5208,7 @@ TmEcode StreamTcp (ThreadVars *tv, Packet *p, void *data, PacketQueueNoLock *pq)
         p->flags |= PKT_IGNORE_CHECKSUM; //TODO check that this is set at creation
     }
     AppLayerProfilingReset(stt->ra_ctx->app_tctx);
-
+                               /* 流汇聚 */
     (void)StreamTcpPacket(tv, p, stt, pq);
 
     return TM_ECODE_OK;
@@ -5218,7 +5218,7 @@ TmEcode StreamTcpThreadInit(ThreadVars *tv, void *initdata, void **data)
 {
     SCEnter();
     StreamTcpThread *stt = SCMalloc(sizeof(StreamTcpThread));
-    if (unlikely(stt == NULL))
+    if (unlikely(stt == NULL))   /* 分配结构并初始化 */
         SCReturnInt(TM_ECODE_FAILED);
     memset(stt, 0, sizeof(StreamTcpThread));
     stt->ssn_pool_id = -1;
@@ -5237,7 +5237,7 @@ TmEcode StreamTcpThreadInit(ThreadVars *tv, void *initdata, void **data)
     stt->counter_tcp_midstream_pickups = StatsRegisterCounter("tcp.midstream_pickups", tv);
     stt->counter_tcp_wrong_thread = StatsRegisterCounter("tcp.pkt_on_wrong_thread", tv);
 
-    /* init reassembly ctx */
+    /* init reassembly ctx */    /* 初始化流汇聚池 */
     stt->ra_ctx = StreamTcpReassembleInitThreadCtx(tv);
     if (stt->ra_ctx == NULL)
         SCReturnInt(TM_ECODE_FAILED);
@@ -5257,7 +5257,7 @@ TmEcode StreamTcpThreadInit(ThreadVars *tv, void *initdata, void **data)
                 stt, stt->ra_ctx);
 
     SCMutexLock(&ssn_pool_mutex);
-    if (ssn_pool == NULL) {
+    if (ssn_pool == NULL) {      /* 初始化 ssn_pool */
         ssn_pool = PoolThreadInit(1, /* thread */
                 0, /* unlimited */
                 stream_config.prealloc_sessions,
@@ -5315,7 +5315,7 @@ TmEcode StreamTcpThreadDeinit(ThreadVars *tv, void *data)
  *  - RST flag, win 0, ack 0, seq = nextseq
  *
  */
-
+/* 根据目的OS检测rst报文合理性 */
 static int StreamTcpValidateRst(TcpSession *ssn, Packet *p)
 {
 

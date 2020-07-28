@@ -423,8 +423,8 @@ typedef struct Flow_
     /* coccinelle: Flow:flow_end_flags:FLOW_END_FLAG_ */
 
     AppProto alproto; /**< \brief application level protocol */
-    AppProto alproto_ts;
-    AppProto alproto_tc;
+    AppProto alproto_ts;   /* 到服务器 */
+    AppProto alproto_tc;   /* 到客户端 */
 
     /** original application level protocol. Used to indicate the previous
        protocol when changing to another protocol , e.g. with STARTTLS. */
@@ -439,7 +439,7 @@ typedef struct Flow_
     uint32_t de_ctx_version;
 
     /** Thread ID for the stream/detect portion of this flow */
-    FlowThreadId thread_id[2];
+    FlowThreadId thread_id[2];  /* 对应流汇聚、检测的本地线程索引, ThreadVars->id */
 
     /** ttl tracking */
     uint8_t min_ttl_toserver;

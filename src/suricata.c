@@ -2307,13 +2307,13 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
 {
     DetectEngineCtx *de_ctx = NULL;
     if (!suri->disabled_detect) {
-        SCClassConfInit();         /* 分类class正则初始化 */
-        SCReferenceConfInit();     /* reference正则初始化 */
+        SCClassConfInit();
+        SCReferenceConfInit();
         SetupDelayedDetect(suri);  /* 确认是否设置延迟检测，以减少IPS模式下机器down time时长 */
         int mt_enabled = 0;
         (void)ConfGetBool("multi-detect.enabled", &mt_enabled);
         int default_tenant = 0;
-        if (mt_enabled)
+        if (mt_enabled)            /* 多租户支持？？？ */
             (void)ConfGetBool("multi-detect.default", &default_tenant);
         if (DetectEngineMultiTenantSetup() == -1) {
             SCLogError(SC_ERR_INITIALIZATION, "initializing multi-detect "
@@ -2335,7 +2335,7 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
 
         if (de_ctx->type == DETECT_ENGINE_TYPE_NORMAL) {
             if (LoadSignatures(de_ctx, suri) != TM_ECODE_OK)
-                exit(EXIT_FAILURE);           /* 加载规则文件 */
+                exit(EXIT_FAILURE);           /* 加载规则文件, /var/lib/suricata/rules/suricata.rules */
         }
 
         gettimeofday(&de_ctx->last_reload, NULL);
@@ -2761,7 +2761,7 @@ int SuricataMain(int argc, char **argv)
     }                                    /*             指定接口，则设置配置文件解析结果，如 pfring..live-interface */
 
     if (PostConfLoadedSetup(&suricata) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);              /* 读取配置文件后，程序运行前必要的初始化流程，如注册模式匹配器、识别模块等 */
+        exit(EXIT_FAILURE);              /* 读取配置文件后，程序运行前必要的初始化流程，如注册模式匹配器、初始化协议识别引擎等 */
     }
 
     SCDropMainThreadCaps(suricata.userid, suricata.groupid);
@@ -2771,7 +2771,7 @@ int SuricataMain(int argc, char **argv)
 
     PreRunPostPrivsDropInit(suricata.run_mode);  /* 初始化输出模块 */
 
-    PostConfLoadedDetectSetup(&suricata);        /* 加载引擎规则等 */
+    PostConfLoadedDetectSetup(&suricata);        /* 加载检测引擎规则等 */
     if (suricata.run_mode == RUNMODE_ENGINE_ANALYSIS) {
         goto out;
     } else if (suricata.run_mode == RUNMODE_CONF_TEST){

@@ -33,9 +33,9 @@
  */
 typedef struct DetectReference_ {
     /* pointer to key */
-    char *key;
+    char *key;        /* 对应 SCRConfReference->url (cve对应的url，http://cve.mitre.org/cgi-bin/cvename.cgi?name=) */
     /* reference data */
-    char *reference;
+    char *reference;  /* 对应 "2014-0160"(示例, "reference:cve,2014-0160;") */
     /* next reference in the signature */
     struct DetectReference_ *next;
 } DetectReference;

@@ -25,13 +25,13 @@
 #define __DETECT_APP_LAYER_EVENT_H__
 
 typedef struct DetectAppLayerEventData_ {
-    AppProto alproto;
-    int event_id;
-
+    AppProto alproto;  /* ALPROTO_DNS, 事件"app-layer-event:dns.malformed_data;"中的dns对应的索引 */
+    int event_id;      /* 事件"app-layer-event:applayer_unexpected_protocol;"中值对应的索引, 参考表 app_layer_event_pkt_table[] */
+                       /* 事件"app-layer-event:dns.malformed_data;"中协议的事件表的索引，参考表 http_decoder_event_table */
     /* it's used to check if there are event set into the detect engine */
-    bool needs_detctx;
+    bool needs_detctx; /* 事件"app-layer-event:file.xxx"中协议为file时 = true */
 
-    char *arg;
+    char *arg;         /* 事件"app-layer-event:dns.malformed_data;"的值复制 */
 } DetectAppLayerEventData;
 
 int DetectAppLayerEventPrepare(DetectEngineCtx *de_ctx, Signature *s);

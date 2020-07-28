@@ -85,7 +85,7 @@ typedef struct ThreadVars_ {
     uint8_t outq_id;
 
     /** local id */
-    int id;
+    int id;            /* 在 thread_store->threads[] 中的索引 */
 
     /** incoming queue and handler */
     Tmq *inq;          /* 输入队列，及处理函数，如 TmqhInputPacketpool() */

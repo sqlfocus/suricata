@@ -45,7 +45,7 @@ void DetectSidRegister (void)
     sigmatch_table[DETECT_SID].Free = NULL;
     sigmatch_table[DETECT_SID].RegisterTests = DetectSidRegisterTests;
 }
-
+/* 解析规则中的sid字段 */
 static int DetectSidSetup (DetectEngineCtx *de_ctx, Signature *s, const char *sidstr)
 {
     unsigned long id = 0;

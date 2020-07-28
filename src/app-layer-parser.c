@@ -1056,7 +1056,7 @@ int AppLayerParserGetEventInfo(uint8_t ipproto, AppProto alproto, const char *ev
                     int *event_id, AppLayerEventType *event_type)
 {
     SCEnter();
-    int ipproto_map = FlowGetProtoMapping(ipproto);
+    int ipproto_map = FlowGetProtoMapping(ipproto);  /* 参考 HTPStateGetEventInfo() */
     int r = (alp_ctx.ctxs[ipproto_map][alproto].StateGetEventInfo == NULL) ?
                 -1 : alp_ctx.ctxs[ipproto_map][alproto].StateGetEventInfo(event_name, event_id, event_type);
     SCReturnInt(r);
@@ -1220,10 +1220,10 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     }
 
     p_tx_cnt = AppLayerParserGetTxCnt(f, f->alstate);
-
+    /* 引入协议解析器，解析输入数据 */
     /* invoke the recursive parser, but only on data. We may get empty msgs on EOF */
     if (input_len > 0 || (flags & STREAM_EOF)) {
-        /* invoke the parser */
+        /* invoke the parser *//* ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
         AppLayerResult res = p->Parser[direction](f, alstate, pstate,
                 input, input_len,
                 alp_tctx->alproto_local_storage[f->protomap][alproto],

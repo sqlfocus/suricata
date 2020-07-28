@@ -38,7 +38,7 @@
 
 #define PARSE_REGEX "^\\s*([a-zA-Z][a-zA-Z0-9-_]*)\\s*$"
 
-static DetectParseRegex parse_regex;
+static DetectParseRegex parse_regex;  /* PARSE_REGEX pcre编译结果 */
 
 static int DetectClasstypeSetup(DetectEngineCtx *, Signature *, const char *);
 static void DetectClasstypeRegisterTests(void);
@@ -54,7 +54,7 @@ void DetectClasstypeRegister(void)
     sigmatch_table[DETECT_CLASSTYPE].Setup = DetectClasstypeSetup;
     sigmatch_table[DETECT_CLASSTYPE].RegisterTests = DetectClasstypeRegisterTests;
 
-    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
+    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex); /* pcre编译 PARSE_REGEX */
 }
 
 /**
@@ -72,13 +72,13 @@ static int DetectClasstypeParseRawString(const char *rawstr, char *out, size_t o
     char e[esize];
 
     int ret = DetectParsePcreExec(&parse_regex, rawstr, 0, 0, ov, MAX_SUBSTRINGS);
-    if (ret < 0) {
+    if (ret < 0) {       /* pcre搜索 */
         SCLogError(SC_ERR_PCRE_MATCH, "Invalid Classtype in Signature");
         return -1;
     }
 
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 1, e, esize);
-    if (ret < 0) {
+    if (ret < 0) {       /* 获取匹配字符串 */
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_copy_substring failed");
         return -1;
     }
@@ -87,7 +87,7 @@ static int DetectClasstypeParseRawString(const char *rawstr, char *out, size_t o
         SCLogError(SC_ERR_INVALID_VALUE, "classtype '%s' is too big: max %d",
                 rawstr, CLASSTYPE_NAME_MAX_LEN - 1);
         return -1;
-    }
+    }                    /* 导出得到的classtype关键字值 */
     (void)strlcpy(out, e, outsize);
 
     return 0;
@@ -112,7 +112,7 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
         if (SigMatchStrictEnabled(DETECT_CLASSTYPE)) {
             SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "duplicated 'classtype' "
                     "keyword detected.");
-            return -1;
+            return -1;             /* 检测是否存在重复赋值 */
         } else {
             SCLogWarning(SC_ERR_CONFLICTING_RULE_KEYWORDS, "duplicated 'classtype' "
                     "keyword detected. Using instance with highest priority");
@@ -122,12 +122,12 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
     if (DetectClasstypeParseRawString(rawstr, parsed_ct_name, sizeof(parsed_ct_name)) < 0) {
         SCLogError(SC_ERR_PCRE_PARSE, "invalid value for classtype keyword: "
                 "\"%s\"", rawstr);
-        return -1;
+        return -1;                 /* 获得classtype关键字对应的值 */
     }
 
     bool real_ct = true;
     SCClassConfClasstype *ct = SCClassConfGetClasstype(parsed_ct_name, de_ctx);
-    if (ct == NULL) {
+    if (ct == NULL) {              /* 搜索 DetectEngineCtx->class_conf_ht 哈希表，以提取对应的配置信息 */
         if (SigMatchStrictEnabled(DETECT_CLASSTYPE)) {
             SCLogError(SC_ERR_UNKNOWN_VALUE, "unknown classtype '%s'",
                     parsed_ct_name);
@@ -158,7 +158,7 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
                 parsed_ct_name, DETECT_DEFAULT_PRIO);
 
         if (SCClassConfAddClasstype(de_ctx, str, 0) < 0)
-            return -1;
+            return -1;             /* 注册未知分类: "config classification: %s,Unknown Classtype,%d" */
         ct = SCClassConfGetClasstype(parsed_ct_name, de_ctx);
         if (ct == NULL)
             return -1;
@@ -175,7 +175,7 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
         /* don't touch Signature::prio */
         update_ct = true;
     } else if (s->prio == -1) {
-        s->prio = ct->priority;
+        s->prio = ct->priority;    /* 更新 Signature->prio */
         update_ct = true;
     } else {
         if (ct->priority < s->prio) {
@@ -184,7 +184,7 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
         }
     }
 
-    if (real_ct && update_ct) {
+    if (real_ct && update_ct) {    /* 更新 Signature->class_id/class_msg */
         s->class_id = ct->classtype_id;
         s->class_msg = ct->classtype_desc;
     }

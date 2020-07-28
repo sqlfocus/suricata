@@ -89,7 +89,7 @@ typedef struct MpmCtx_ {
     void *ctx;              /* SCHSCtx */
     uint8_t mpm_type;       /* MPM_HS */
 
-    uint8_t flags;
+    uint8_t flags;          /* MPMCTX_FLAGS_GLOBAL */
 
     uint16_t maxdepth;
 
@@ -113,10 +113,10 @@ typedef struct MpmCtx_ {
 #define MPM_CTX_FACTORY_UNIQUE_CONTEXT -1
 
 typedef struct MpmCtxFactoryItem_ {
-    const char *name;
-    MpmCtx *mpm_ctx_ts;
-    MpmCtx *mpm_ctx_tc;
-    int32_t id;
+    const char *name;    /* 工厂名, 如"tcp_packet", DetectBufferMpmRegistery->name */
+    MpmCtx *mpm_ctx_ts;  /* to server */
+    MpmCtx *mpm_ctx_tc;  /* to client */
+    int32_t id;          /* MpmCtxFactoryContainer->items[]的索引 */
 } MpmCtxFactoryItem;
 
 typedef struct MpmCtxFactoryContainer_ {

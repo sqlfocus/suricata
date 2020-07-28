@@ -29,12 +29,12 @@
 
 /**
  * \brief Holds a reference from the file - reference.config.
- */
+ *//* 示例: config reference: McAfee    http://vil.nai.com/vil/content/v_ */
 typedef struct SCRConfReference_ {
     /* The system name.  This is the primary key for a reference. */
-    char *system;
+    char *system;   /* 系统名，如McAfee */
     /* The url for the above reference */
-    char *url;
+    char *url;      /* 对应的url, 如http://vil.nai.com/vil/content/v_ */
 } SCRConfReference;
 
 SCRConfReference *SCRConfAllocSCRConfReference(const char *, const char *);

@@ -462,13 +462,13 @@ static int SignatureCreateMask(Signature *s)
 {
     SCEnter();
 
-    if (SignatureNeedsDCERPCMask(s)) {
+    if (SignatureNeedsDCERPCMask(s)) {        /* 打DCE标识 */
         s->mask |= SIG_MASK_REQUIRE_DCERPC;
         SCLogDebug("sig requires DCERPC");
     }
 
     if (s->init_data->smlists[DETECT_SM_LIST_PMATCH] != NULL) {
-        s->mask |= SIG_MASK_REQUIRE_PAYLOAD;
+        s->mask |= SIG_MASK_REQUIRE_PAYLOAD;  /* 内容检测, 需要报文内容 */
         SCLogDebug("sig requires payload");
     }
 
@@ -476,7 +476,7 @@ static int SignatureCreateMask(Signature *s)
     for (sm = s->init_data->smlists[DETECT_SM_LIST_MATCH] ; sm != NULL; sm = sm->next) {
         switch(sm->type) {
             case DETECT_FLOWBITS:
-            {
+            {                                 /* 需要流检测 */
                 /* figure out what flowbit action */
                 DetectFlowbitsData *fb = (DetectFlowbitsData *)sm->ctx;
                 if (fb->cmd == DETECT_FLOWBITS_CMD_ISSET) {
@@ -493,14 +493,14 @@ static int SignatureCreateMask(Signature *s)
                         "flowbit(s)");
                 break;
             }
-            case DETECT_FLOWINT:
+            case DETECT_FLOWINT:            
                 /* flow is required for any flowint manipulation */
                 s->mask |= SIG_MASK_REQUIRE_FLOW;
                 SCLogDebug("sig requires flow to be able to manipulate "
                         "flowint(s)");
                 break;
             case DETECT_FLAGS:
-            {
+            {                                 /* TCP标识检测 */
                 DetectFlagsData *fl = (DetectFlagsData *)sm->ctx;
 
                 if (fl->flags & TH_SYN) {
@@ -530,7 +530,7 @@ static int SignatureCreateMask(Signature *s)
                 break;
             }
             case DETECT_DSIZE:
-            {
+            {                                 /* 长度检测 */
                 DetectDsizeData *ds = (DetectDsizeData *)sm->ctx;
                 switch (ds->mode) {
                     case DETECTDSIZE_LT:
@@ -557,7 +557,7 @@ static int SignatureCreateMask(Signature *s)
             }
             case DETECT_AL_APP_LAYER_EVENT:
                 s->mask |= SIG_MASK_REQUIRE_ENGINE_EVENT;
-                break;
+                break;                        /* 事件检测 */
             case DETECT_ENGINE_EVENT:
                 s->mask |= SIG_MASK_REQUIRE_ENGINE_EVENT;
                 break;
@@ -570,7 +570,7 @@ static int SignatureCreateMask(Signature *s)
     }
 
     if (s->flags & SIG_FLAG_APPLAYER) {
-        s->mask |= SIG_MASK_REQUIRE_FLOW;
+        s->mask |= SIG_MASK_REQUIRE_FLOW;     /* 应用检测，需要流 */
         SCLogDebug("sig requires flow");
     }
 
@@ -1082,7 +1082,7 @@ static int RuleSetWhitelist(Signature *s)
 
     /* for sigs that don't use 'any' as port, see if we want to
      * whitelist poor sigs */
-    int wl = 0;
+    int wl = 0;        /* 仅处理非'any'的端口 */
     if (!(p->port == 0 && p->port2 == 65535)) {
         /* pure pcre, bytetest, etc rules */
         if (RuleInspectsPayloadHasNoMpm(s)) {
@@ -1127,7 +1127,7 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
     DetectPort *list = NULL;
     while (s) {
         /* IP Only rules are handled separately */
-        if (s->flags & SIG_FLAG_IPONLY)
+        if (s->flags & SIG_FLAG_IPONLY)      /* 过滤需要处理的规则 */
             goto next;
         if (!(s->proto.proto[ipproto / 8] & (1<<(ipproto % 8)) || (s->proto.flags & DETECT_PROTO_ANY)))
             goto next;
@@ -1140,7 +1140,7 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
         }
 
         DetectPort *p = NULL;
-        if (direction == SIG_FLAG_TOSERVER)
+        if (direction == SIG_FLAG_TOSERVER)  /* 提取端口列表 */
             p = s->dp;
         else if (direction == SIG_FLAG_TOCLIENT)
             p = s->sp;
@@ -1282,7 +1282,7 @@ void SignatureSetType(DetectEngineCtx *de_ctx, Signature *s)
  *
  * \retval  0 on success
  * \retval -1 on failure
- */
+ *//* 分类规则 */
 int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
 {
     uint32_t cnt_iponly = 0;
@@ -1298,7 +1298,7 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
     de_ctx->sig_array_len = DetectEngineGetMaxSigId(de_ctx);
     de_ctx->sig_array_size = (de_ctx->sig_array_len * sizeof(Signature *));
     de_ctx->sig_array = (Signature **)SCMalloc(de_ctx->sig_array_size);
-    if (de_ctx->sig_array == NULL)
+    if (de_ctx->sig_array == NULL)      /* 分配内存，构造规则数组 */
         goto error;
     memset(de_ctx->sig_array,0,de_ctx->sig_array_size);
 
@@ -1307,11 +1307,11 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
 
     /* now for every rule add the source group */
     for (Signature *s = de_ctx->sig_list; s != NULL; s = s->next) {
-        de_ctx->sig_array[s->num] = s;
+        de_ctx->sig_array[s->num] = s;     /* 插入 ->sig_array[], 索引为规则序号 */
 
         SCLogDebug("Signature %" PRIu32 ", internal id %" PRIu32 ", ptrs %p %p ", s->id, s->num, s, de_ctx->sig_array[s->num]);
 
-        if (s->flags & SIG_FLAG_PDONLY) {
+        if (s->flags & SIG_FLAG_PDONLY) {  /* 分类计数 */
             SCLogDebug("Signature %"PRIu32" is considered \"PD only\"", s->id);
         } else if (s->flags & SIG_FLAG_IPONLY) {
             SCLogDebug("Signature %"PRIu32" is considered \"IP only\"", s->id);
@@ -1353,20 +1353,20 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
         }
 #endif /* DEBUG */
 
-        if (RuleMpmIsNegated(s)) {
+        if (RuleMpmIsNegated(s)) {        /* 匹配带有"!"，具备取反操作 */
             s->flags |= SIG_FLAG_MPM_NEG;
         }
 
-        SignatureCreateMask(s);
-        DetectContentPropagateLimits(s);
-        SigParseApplyDsizeToContent(s);
+        SignatureCreateMask(s);           /* 创建规则标识, Signature->mask */
+        DetectContentPropagateLimits(s);  /* */
+        SigParseApplyDsizeToContent(s);   /* 依据信号设定的检测范围, 调整内容检测深度 */
 
-        RuleSetWhitelist(s);
+        RuleSetWhitelist(s);              /* 设置 Signature->init_data->whitelist */
 
         /* if keyword engines are enabled in the config, handle them here */
         if (de_ctx->prefilter_setting == DETECT_PREFILTER_AUTO &&
                 !(s->flags & SIG_FLAG_PREFILTER))
-        {
+        {                                 /* 处理prefilter的情形 */
             int prefilter_list = DETECT_TBLSIZE;
 
             /* get the keyword supporting prefilter with the lowest type */
@@ -1401,7 +1401,7 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
 
         /* run buffer type callbacks if any */
         for (int x = 0; x < (int)s->init_data->smlists_array_size; x++) {
-            if (s->init_data->smlists[x])
+            if (s->init_data->smlists[x])     /* 处理检测类型, 调用 DetectBufferType->SetupCallback() */
                 DetectBufferRunSetupCallback(de_ctx, x, s);
         }
 
@@ -1419,7 +1419,7 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
                "preprocessing rules... complete");
     }
 
-    if (DetectFlowbitsAnalyze(de_ctx) != 0)
+    if (DetectFlowbitsAnalyze(de_ctx) != 0)   /* 分析flowbits检测 */
         goto error;
 
     return 0;
@@ -1629,8 +1629,8 @@ int SigAddressPrepareStage2(DetectEngineCtx *de_ctx)
     SCLogDebug("building signature grouping structure, stage 2: "
             "building source address lists...");
 
-    IPOnlyInit(de_ctx, &de_ctx->io_ctx);
-
+    IPOnlyInit(de_ctx, &de_ctx->io_ctx);      /* 构建IP only检测环境 */
+                                              /* 基于端口构建规则组 */
     de_ctx->flow_gh[1].tcp = RulesGroupByPorts(de_ctx, IPPROTO_TCP, SIG_FLAG_TOSERVER);
     de_ctx->flow_gh[0].tcp = RulesGroupByPorts(de_ctx, IPPROTO_TCP, SIG_FLAG_TOCLIENT);
     de_ctx->flow_gh[1].udp = RulesGroupByPorts(de_ctx, IPPROTO_UDP, SIG_FLAG_TOSERVER);
@@ -1642,10 +1642,10 @@ int SigAddressPrepareStage2(DetectEngineCtx *de_ctx)
     /* now for every rule add the source group to our temp lists */
     for (Signature *s = de_ctx->sig_list; s != NULL; s = s->next) {
         SCLogDebug("s->id %"PRIu32, s->id);
-        if (s->flags & SIG_FLAG_IPONLY) {
+        if (s->flags & SIG_FLAG_IPONLY) {     /* 将IP only加入到单独组 */
             IPOnlyAddSignature(de_ctx, &de_ctx->io_ctx, s);
         }
-
+                                              /* 将解码事件加入到单独组 */
         if (s->init_data->init_flags & SIG_FLAG_INIT_DEONLY) {
             DetectEngineAddDecoderEventSig(de_ctx, s);
         }
@@ -1663,7 +1663,7 @@ static void DetectEngineBuildDecoderEventSgh(DetectEngineCtx *de_ctx)
 {
     if (de_ctx->decoder_event_sgh == NULL)
         return;
-
+    /* 初始化解析事件规则组 */
     uint32_t max_idx = DetectEngineGetMaxSigId(de_ctx);
     SigGroupHeadSetSigCnt(de_ctx->decoder_event_sgh, max_idx);
     SigGroupHeadBuildMatchArray(de_ctx, de_ctx->decoder_event_sgh, max_idx);
@@ -1885,47 +1885,47 @@ int SigGroupBuild(DetectEngineCtx *de_ctx)
      * have experienced Sig reordering by now, hence the new
      * signums. */
     de_ctx->signum = 0;
-    while (s != NULL) {
+    while (s != NULL) {       /* 因为前置有排序，重新初始化序号 */
         s->num = de_ctx->signum++;
 
         s = s->next;
     }
 
     if (DetectSetFastPatternAndItsId(de_ctx) < 0)
-        return -1;
+        return -1;            /* 计算fast pattern的个数, 赋值 DetectEngineCtx->max_fp_id */
 
     SigInitStandardMpmFactoryContexts(de_ctx);
-
+                              /* 注册多模引擎工厂 */
     if (SigAddressPrepareStage1(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);   /* 准备阶段1: 创建规则数组，以加速查找, DetectEngineCtx->sig_array[] */
     }
 
     if (SigAddressPrepareStage2(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);   /* */
     }
 
     if (SigAddressPrepareStage3(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);   /* 准备阶段3: 创建基于解码事件的组 */
     }
     if (SigAddressPrepareStage4(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);   /* */
     }
 
     int r = DetectMpmPrepareBuiltinMpms(de_ctx);
     r |= DetectMpmPrepareAppMpms(de_ctx);
     r |= DetectMpmPreparePktMpms(de_ctx);
-    if (r != 0) {
+    if (r != 0) {             /* */
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
         exit(EXIT_FAILURE);
     }
 
     if (SigMatchPrepare(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);   /* */
     }
 
 #ifdef PROFILING

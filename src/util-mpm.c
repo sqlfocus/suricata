@@ -54,7 +54,7 @@ int mpm_default_matcher;                  /* 默认多模算法 */
  * \param name A new profile to be registered to store this MpmCtx.
  *
  * \retval id Return the id created for the new MpmCtx profile.
- */
+ *//* 注册MPM工厂环境 */
 int32_t MpmFactoryRegisterMpmCtxProfile(DetectEngineCtx *de_ctx, const char *name)
 {
     void *ptmp;
@@ -68,7 +68,7 @@ int32_t MpmFactoryRegisterMpmCtxProfile(DetectEngineCtx *de_ctx, const char *nam
         memset(de_ctx->mpm_ctx_factory_container, 0, sizeof(MpmCtxFactoryContainer));
 
         MpmCtxFactoryItem *item = SCMalloc(sizeof(MpmCtxFactoryItem));
-        if (unlikely(item == NULL)) {
+        if (unlikely(item == NULL)) {  /* CASE: 起始状态，分配内存 */
             SCLogError(SC_ERR_MEM_ALLOC, "Error allocating memory");
             exit(EXIT_FAILURE);
         }
@@ -104,7 +104,7 @@ int32_t MpmFactoryRegisterMpmCtxProfile(DetectEngineCtx *de_ctx, const char *nam
         /* the first id is always 0 */
         return item[0].id;
     } else {
-        int i;
+        int i;                  /* CASE: 找到已注册的工厂 */
         MpmCtxFactoryItem *items = de_ctx->mpm_ctx_factory_container->items;
         for (i = 0; i < de_ctx->mpm_ctx_factory_container->no_of_items; i++) {
             if (items[i].name != NULL && strcmp(items[i].name, name) == 0) {
@@ -132,7 +132,7 @@ int32_t MpmFactoryRegisterMpmCtxProfile(DetectEngineCtx *de_ctx, const char *nam
         }
 
         /* let's make the new entry */
-        ptmp = SCRealloc(items,
+        ptmp = SCRealloc(items,       /* CASE: 未找到，则创建 */
                          (de_ctx->mpm_ctx_factory_container->no_of_items + 1) * sizeof(MpmCtxFactoryItem));
         if (unlikely(ptmp == NULL)) {
             SCFree(items);

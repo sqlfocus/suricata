@@ -868,7 +868,7 @@ error:
  *
  * \param de_ctx Pointer to the current detection engine
  * \param io_ctx Pointer to the current ip only detection engine
- */
+ *//* 构建IP Only检测环境 */
 void IPOnlyInit(DetectEngineCtx *de_ctx, DetectEngineIPOnlyCtx *io_ctx)
 {
     io_ctx->sig_init_size = DetectEngineGetMaxSigId(de_ctx) / 8 + 1;

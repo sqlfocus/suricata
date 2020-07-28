@@ -29,20 +29,20 @@
 
 /**
  * \brief Container for a Classtype from the Classification.config file.
- */
+ *//* 示例: config classification: protocol-command-decode,Generic Protocol Command Decode,3 */
 typedef struct SCClassConfClasstype_ {
     /* The index of the classification within classification.confg */
-    uint16_t classtype_id;
+    uint16_t classtype_id;  /* 在配置文件中 /etc/suricata/classification.config 的序号, [1, N] */
 
     /* The priority this classification type carries */
-    int priority;
+    int priority;           /* 优先级，示例中的(3) */
 
     /* The classtype name.  This is the primary key for a Classification. */
-    char *classtype;
+    char *classtype;        /* classtype关键字对应的值，全小写(protocol-command-decode) */
 
     /* Description for a classification.  Would be used while printing out
      * the classification info for a Signature, by the fast-log module. */
-    char *classtype_desc;
+    char *classtype_desc;   /* 描述信息(Generic Protocol Command Decode) */
 } SCClassConfClasstype;
 
 void SCClassConfLoadClassficationConfigFile(DetectEngineCtx *, FILE *fd);

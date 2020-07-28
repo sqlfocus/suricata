@@ -331,7 +331,7 @@ static void SCRConfParseFile(DetectEngineCtx *de_ctx, FILE *fd)
         if (SCRConfIsLineBlankOrComment(line))
             continue;
 
-        SCRConfAddReference(de_ctx, line);
+        SCRConfAddReference(de_ctx, line);  /* 逐行解析 */
         i++;
     }
 
@@ -504,8 +504,8 @@ int SCRConfLoadReferenceConfigFile(DetectEngineCtx *de_ctx, FILE *fd)
         return -1;
     }
 
-    SCRConfParseFile(de_ctx, fd);
-    SCRConfDeInitLocalResources(de_ctx, fd);
+    SCRConfParseFile(de_ctx, fd);    /* 解析配置文件, /etc/suricata/reference.config */
+    SCRConfDeInitLocalResources(de_ctx, fd); /* 初始化 DetectEngineCtx->reference_conf_ht */
 
     return 0;
 }

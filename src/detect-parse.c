@@ -169,7 +169,7 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
         goto end;
     }
 
-    sm = DetectGetLastSMByListId(s,
+    sm = DetectGetLastSMByListId(s,   /* 查找对应类型的 SigMatch */
             DETECT_SM_LIST_PMATCH, DETECT_CONTENT, -1);
     if (sm == NULL) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "\"%s\" keyword "
@@ -349,7 +349,7 @@ void SigTableApplyStrictCommandlineOption(const char *str)
 void SigMatchAppendSMToList(Signature *s, SigMatch *new, int list)
 {
     if (list > 0 && (uint32_t)list >= s->init_data->smlists_array_size)
-    {
+    {              /* 为新类型重新分配空间 */
         uint32_t old_size = s->init_data->smlists_array_size;
         uint32_t new_size = (uint32_t)list + 1;
         void *ptr = SCRealloc(s->init_data->smlists, (new_size * sizeof(SigMatch *)));
@@ -372,14 +372,14 @@ void SigMatchAppendSMToList(Signature *s, SigMatch *new, int list)
         s->init_data->smlists_tail[list] = new;
         new->next = NULL;
         new->prev = NULL;
-    } else {
+    } else {       /* 加入信号的匹配链表 */
         SigMatch *cur = s->init_data->smlists_tail[list];
         cur->next = new;
         new->prev = cur;
         new->next = NULL;
         s->init_data->smlists_tail[list] = new;
     }
-
+                   /* 更新链表长度 */
     new->idx = s->init_data->sm_cnt;
     s->init_data->sm_cnt++;
 }
@@ -651,7 +651,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
 
     /* Look for the end of this option, handling escaped semicolons. */
     char *optend = optstr;
-    for (;;) {
+    for (;;) {           /* 选项部分以";"分割 */
         optend = strchr(optend, ';');
         if (optend == NULL) {
             SCLogError(SC_ERR_INVALID_SIGNATURE, "no terminating \";\" found");
@@ -667,7 +667,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
 
     /* Find the start of the option value. */
     char *optvalptr = strchr(optstr, ':');
-    if (optvalptr) {
+    if (optvalptr) {     /* 每个选项由key:value组成 */
         *(optvalptr++) = '\0';
 
         /* Trim trailing space from name. */
@@ -693,7 +693,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
     optname = optstr;
 
     /* Call option parsing */
-    st = SigTableGet(optname);
+    st = SigTableGet(optname);   /* 遍历 sigmatch_table[], 查找关键字 */
     if (st == NULL || st->Setup == NULL) {
         SCLogError(SC_ERR_RULE_KEYWORD_UNKNOWN, "unknown rule keyword '%s'.", optname);
         goto error;
@@ -721,7 +721,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
     }
 
     int setup_ret = 0;
-
+                                 /* 解析配置value部分 */
     /* Validate double quoting, trimming trailing white space along the way. */
     if (optvalue != NULL && strlen(optvalue) > 0) {
         size_t ovlen = strlen(optvalue);
@@ -740,7 +740,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
             goto error;
         }
 
-        /* see if value is negated */
+        /* see if value is negated */ /* 值前携带了"!", 设置标志 */
         if ((st->flags & SIGMATCH_HANDLE_NEGATION) && *ptr == '!') {
             s->init_data->negated = true;
             ptr++;
@@ -800,7 +800,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
                         optname, optstr);
                 goto error;
             }
-        }
+        }                   /* 调用 sigmatch_table[]->Setup() 初始化规则的选项部分 */
         /* setup may or may not add a new SigMatch to the list */
         setup_ret = st->Setup(de_ctx, s, ptr);
     } else {
@@ -823,7 +823,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
     }
     s->init_data->negated = false;
 
-    if (strlen(optend) > 0) {
+    if (strlen(optend) > 0) {   /* 去除已解析的部分，等待下一次解析 */
         strlcpy(output, optend, output_size);
         return 1;
     }
@@ -885,12 +885,12 @@ static int SigParseProto(Signature *s, const char *protostr)
     SCEnter();
 
     int r = DetectProtoParse(&s->proto, (char *)protostr);
-    if (r < 0) {
+    if (r < 0) {                             /* 解析L3-L4协议 */
         s->alproto = AppLayerGetProtoByName((char *)protostr);
         /* indicate that the signature is app-layer */
-        if (s->alproto != ALPROTO_UNKNOWN) {
+        if (s->alproto != ALPROTO_UNKNOWN) { /* 如果无法匹配L3-L4，解析L7协议 */
             s->flags |= SIG_FLAG_APPLAYER;
-
+                                             /* 更新对应的L3-L4, Signature->proto.proto */
             AppLayerProtoDetectSupportedIpprotos(s->alproto, s->proto.proto);
         }
         else {
@@ -905,7 +905,7 @@ static int SigParseProto(Signature *s, const char *protostr)
     }
 
     /* if any of these flags are set they are set in a mutually exclusive
-     * manner */
+     * manner */  /* 更具协议设置检测标志 */
     if (s->proto.flags & DETECT_PROTO_ONLY_PKT) {
         s->flags |= SIG_FLAG_REQUIRE_PACKET;
     } else if (s->proto.flags & DETECT_PROTO_ONLY_STREAM) {
@@ -1043,7 +1043,7 @@ static inline int SigParseToken(char **input, char *output,
     }
 
     char *endptr = strpbrk(*input, " \t\n\r");
-    if (endptr != NULL) {
+    if (endptr != NULL) {     /* 利用分隔符集切割字符串 */
         *(endptr++) = '\0';
     }
     strlcpy(output, *input, output_size);
@@ -1105,7 +1105,7 @@ static inline int SigParseList(char **input, char *output,
 /**
  *  \internal
  *  \brief split a signature string into a few blocks for further parsing
- */
+ *//* 示例 --- alert ip any any -> any any (msg:"SURICATA Applayer Mismatch protocol both directions"; flow:established; app-layer-event:applayer_mismatch_protocol_both_directions; flowint:applayer.anomaly.count,+,1; classtype:protocol-command-decode; sid:2260000; rev:1;) */
 static int SigParseBasics(DetectEngineCtx *de_ctx,
         Signature *s, const char *sigstr, SignatureParser *parser, uint8_t addrs_direction)
 {
@@ -1114,28 +1114,28 @@ static int SigParseBasics(DetectEngineCtx *de_ctx,
     strlcpy(dup, sigstr, DETECT_MAX_RULE_SIZE);
     index = dup;
 
-    /* Action. */
+    /* 获取规则动作, Action. */
     SigParseToken(&index, parser->action, sizeof(parser->action));
 
-    /* Protocol. */
+    /* 获取规则协议列表, Protocol. */
     SigParseList(&index, parser->protocol, sizeof(parser->protocol));
 
-    /* Source. */
+    /* 获取源IP列表, Source. */
     SigParseList(&index, parser->src, sizeof(parser->src));
 
-    /* Source port(s). */
+    /* 获取源端口列表, Source port(s). */
     SigParseList(&index, parser->sp, sizeof(parser->sp));
 
-    /* Direction. */
+    /* 获取方向符号, Direction. */
     SigParseToken(&index, parser->direction, sizeof(parser->direction));
 
-    /* Destination. */
+    /* 获取目的IP列表, Destination. */
     SigParseList(&index, parser->dst, sizeof(parser->dst));
 
-    /* Destination port(s). */
+    /* 获取目的端口列表, Destination port(s). */
     SigParseList(&index, parser->dp, sizeof(parser->dp));
 
-    /* Options. */
+    /* 所谓选项，指代五元组后"()"的部分, Options. */
     if (index == NULL) {
         SCLogError(SC_ERR_INVALID_RULE_ARGUMENT, "no rule options.");
         goto error;
@@ -1152,7 +1152,7 @@ static int SigParseBasics(DetectEngineCtx *de_ctx,
     }
     strlcpy(parser->opts, index, sizeof(parser->opts));
 
-    /* Parse Action */
+    /* 解析动作、协议、方向, Parse Action */
     if (SigParseAction(s, parser->action) < 0)
         goto error;
 
@@ -1168,14 +1168,14 @@ static int SigParseBasics(DetectEngineCtx *de_ctx,
         goto error;
     }
 
-    /* Parse Address & Ports */
+    /* 解析地址, Parse Address & Ports */
     if (SigParseAddress(de_ctx, s, parser->src, SIG_DIREC_SRC ^ addrs_direction) < 0)
        goto error;
 
     if (SigParseAddress(de_ctx, s, parser->dst, SIG_DIREC_DST ^ addrs_direction) < 0)
         goto error;
 
-    /* By AWS - Traditionally we should be doing this only for tcp/udp/sctp,
+    /* 解析端口, By AWS - Traditionally we should be doing this only for tcp/udp/sctp,
      * but we do it for regardless of ip proto, since the dns/dnstcp/dnsudp
      * changes that we made sees to it that at this point of time we don't
      * set the ip proto for the sig.  We do it a bit later. */
@@ -1206,19 +1206,19 @@ static int SigParse(DetectEngineCtx *de_ctx, Signature *s,
 {
     SCEnter();
 
-    s->sig_str = SCStrdup(sigstr);
+    s->sig_str = SCStrdup(sigstr);    /* 存储配置规则字符串 */
     if (unlikely(s->sig_str == NULL)) {
         SCReturnInt(-1);
     }
 
     int ret = SigParseBasics(de_ctx, s, sigstr, parser, addrs_direction);
-    if (ret < 0) {
+    if (ret < 0) {                    /* 除选项外, 基础字段解析 */
         SCLogDebug("SigParseBasics failed");
         SCReturnInt(-1);
     }
 
     /* we can have no options, so make sure we have them */
-    if (strlen(parser->opts) > 0) {
+    if (strlen(parser->opts) > 0) {   /* 解析选项字段, sigmatch_table[]->Setup() */
         size_t buffer_size = strlen(parser->opts) + 1;
         char input[buffer_size];
         char output[buffer_size];
@@ -1237,8 +1237,8 @@ static int SigParse(DetectEngineCtx *de_ctx, Signature *s,
 
         } while (ret == 1);
     }
-
-    DetectIPProtoRemoveAllSMs(de_ctx, s);
+                                      /* 去除 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
+    DetectIPProtoRemoveAllSMs(de_ctx, s);  /*  中 DETECT_IPPROTO 类型的规则 */
 
     SCReturnInt(ret);
 }
@@ -1255,7 +1255,7 @@ Signature *SigAlloc (void)
         SCFree(sig);
         return NULL;
     }
-
+    /* 等于注册的检测类型种类数, g_buffer_type_id */
     sig->init_data->smlists_array_size = DetectBufferTypeMaxId();
     SCLogDebug("smlists size %u", sig->init_data->smlists_array_size);
     sig->init_data->smlists = SCCalloc(sig->init_data->smlists_array_size, sizeof(SigMatch *));
@@ -1865,15 +1865,15 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     SignatureParser parser;
     memset(&parser, 0x00, sizeof(parser));
 
-    Signature *sig = SigAlloc();
+    Signature *sig = SigAlloc();  /* 创建检测规则，并初始化 */
     if (sig == NULL)
         goto error;
 
     /* default gid to 1 */
-    sig->gid = 1;
+    sig->gid = 1;                 /* generator id */
 
     int ret = SigParse(de_ctx, sig, sigstr, dir, &parser);
-    if (ret == -3) {
+    if (ret == -3) {              /* 解析规则字符串 */
         de_ctx->sigerror_silent = true;
         de_ctx->sigerror_ok = true;
         goto error;
@@ -1886,15 +1886,15 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     }
 
     /* signature priority hasn't been overwritten.  Using default priority */
-    if (sig->prio == -1)
+    if (sig->prio == -1)          /* 默认值 */
         sig->prio = DETECT_DEFAULT_PRIO;
 
-    sig->num = de_ctx->signum;
+    sig->num = de_ctx->signum;    /* 初始化内部ID */
     de_ctx->signum++;
 
     if (sig->alproto != ALPROTO_UNKNOWN) {
-        int override_needed = 0;
-        if (sig->proto.flags & DETECT_PROTO_ANY) {
+        int override_needed = 0;  /* 解析规则时，以赋值应用层协议 */
+        if (sig->proto.flags & DETECT_PROTO_ANY) { /* 例如option中包含 http.protocol */
             sig->proto.flags &= ~DETECT_PROTO_ANY;
             memset(sig->proto.proto, 0x00, sizeof(sig->proto.proto));
             override_needed = 1;
@@ -1912,10 +1912,10 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
         /* at this point if we had alert ip and the ip proto was not
          * overridden, we use the ip proto that has been configured
          * against the app proto in use. */
-        if (override_needed)
+        if (override_needed)      /* 根据应用层协议，选择L3-L4协议 */
             AppLayerProtoDetectSupportedIpprotos(sig->alproto, sig->proto.proto);
     }
-
+                                  /* "app-layer-events"事件匹配列表阶段2处理，初始化 DetectAppLayerEventData->event_id */
     ret = DetectAppLayerEventPrepare(de_ctx, sig);
     if (ret == -3) {
         de_ctx->sigerror_silent = true;
@@ -1955,13 +1955,13 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
         sig->id, sig->flags & SIG_FLAG_APPLAYER ? "set" : "not set",
         sig->init_data->init_flags & SIG_FLAG_INIT_PACKET ? "set" : "not set");
 
-    SigBuildAddressMatchArray(sig);
+    SigBuildAddressMatchArray(sig);/* 为加速五元组IP匹配，将链表变更为数组 */
 
     /* run buffer type callbacks if any */
     for (uint32_t x = 0; x < sig->init_data->smlists_array_size; x++) {
         if (sig->init_data->smlists[x])
             DetectBufferRunSetupCallback(de_ctx, x, sig);
-    }
+    }                              /* 根据检测类型，完善规则字段 */
 
     /* validate signature, SigValidate will report the error reason */
     if (SigValidate(de_ctx, sig) == 0) {
@@ -1969,10 +1969,10 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     }
 
     /* check what the type of this sig is */
-    SignatureSetType(de_ctx, sig);
+    SignatureSetType(de_ctx, sig); /* 初始化检测类型，估计是为匹配加速 */
 
     if (sig->flags & SIG_FLAG_IPONLY) {
-        /* For IPOnly */
+        /* For IPOnly */           /* IPONLY查找加速 */
         if (IPOnlySigParseAddress(de_ctx, sig, parser.src, SIG_DIREC_SRC ^ dir) < 0)
             goto error;
 
@@ -2040,7 +2040,7 @@ Signature *SigInit(DetectEngineCtx *de_ctx, const char *sigstr)
     Signature *sig;
 
     if ((sig = SigInitHelper(de_ctx, sigstr, SIG_DIREC_NORMAL)) == NULL) {
-        goto error;
+        goto error;   /* 解析检测规则 */
     }
 
     if (sig->init_data->init_flags & SIG_FLAG_INIT_BIDIREC) {
@@ -2049,7 +2049,7 @@ Signature *SigInit(DetectEngineCtx *de_ctx, const char *sigstr)
                 "treating the rule as unidirectional", sig->id);
 
             sig->init_data->init_flags &= ~SIG_FLAG_INIT_BIDIREC;
-        } else {
+        } else {      /* 双向，则解析反向规则 */
             sig->next = SigInitHelper(de_ctx, sigstr, SIG_DIREC_SWITCHED);
             if (sig->next == NULL) {
                 goto error;
@@ -2206,7 +2206,7 @@ static inline int DetectEngineSignatureIsDuplicate(DetectEngineCtx *de_ctx,
     /* check if we have a duplicate entry for this signature */
     sw_dup = HashListTableLookup(de_ctx->dup_sig_hash_table, (void *)sw, 0);
     /* we don't have a duplicate entry for this sig */
-    if (sw_dup == NULL) {
+    if (sw_dup == NULL) {    /* CASE: 无重叠; 仅比较 Signature->id/Signature->gid */
         /* add it to the hash table */
         HashListTableAdd(de_ctx->dup_sig_hash_table, (void *)sw, 0);
 
@@ -2232,7 +2232,7 @@ static inline int DetectEngineSignatureIsDuplicate(DetectEngineCtx *de_ctx,
      * Check the signature revision.  Store the signature with the latest rev
      * and discard the other one */
     if (sw->s->rev <= sw_dup->s->rev) {
-        ret = 1;
+        ret = 1;                   /* CASE: 有重叠，但新规则版本较旧，返回后将被释放掉 */
         SCFree(sw);
         sw = NULL;
         goto end;
@@ -2240,7 +2240,7 @@ static inline int DetectEngineSignatureIsDuplicate(DetectEngineCtx *de_ctx,
 
     /* the new sig is of a newer revision than the one that is already in the
      * list.  Remove the old sig from the list */
-    if (sw_dup->s_prev == NULL) {
+    if (sw_dup->s_prev == NULL) {  /* CASE: 新规则版本较新，去掉重复的旧版本 */
         SigDuplWrapper sw_temp;
         memset(&sw_temp, 0, sizeof(SigDuplWrapper));
         if (sw_dup->s->init_data->init_flags & SIG_FLAG_INIT_BIDIREC) {
@@ -2334,14 +2334,14 @@ end:
  *
  * \retval Pointer to the head Signature in the detection engine ctx sig_list
  *         on success; NULL on failure.
- */
+ *//* 解析规则文件（如suricata）的行，得到单独的检测规则 Signature */
 Signature *DetectEngineAppendSig(DetectEngineCtx *de_ctx, const char *sigstr)
 {
     Signature *sig = SigInit(de_ctx, sigstr);
     if (sig == NULL) {   /* 解析字符串为规则结构体 */
         return NULL;
     }
-
+                         /* 检测规则去重 */
     /* checking for the status of duplicate signature */
     int dup_sig = DetectEngineSignatureIsDuplicate(de_ctx, sig);
     /* a duplicate signature that should be chucked out.  Check the previously
@@ -2387,7 +2387,7 @@ error:
     return NULL;
 }
 
-static DetectParseRegex *g_detect_parse_regex_list = NULL;
+static DetectParseRegex *g_detect_parse_regex_list = NULL; /* */
 int DetectParsePcreExecLen(DetectParseRegex *parse_regex, const char *str,
                    int str_len,
                    int start_offset, int options,
@@ -2449,7 +2449,7 @@ bool DetectSetupParseRegexesOpts(const char *parse_str, DetectParseRegex *detect
     int eo;
 
     detect_parse->regex = pcre_compile(parse_str, opts, &eb, &eo, NULL);
-    if (detect_parse->regex == NULL) {
+    if (detect_parse->regex == NULL) {            /* PCRE编译 */
         SCLogError(SC_ERR_PCRE_COMPILE, "pcre compile of \"%s\" failed at "
                 "offset %" PRId32 ": %s", parse_str, eo, eb);
         return false;
@@ -2462,7 +2462,7 @@ bool DetectSetupParseRegexesOpts(const char *parse_str, DetectParseRegex *detect
     }
 
 
-    DetectParseRegexAddToFreeList(detect_parse);
+    DetectParseRegexAddToFreeList(detect_parse);  /* 添加到 g_detect_parse_regex_list 链表 */
 
     return true;
 }

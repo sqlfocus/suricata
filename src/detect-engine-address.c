@@ -1445,7 +1445,7 @@ const DetectAddressHead *DetectParseAddress(DetectEngineCtx *de_ctx,
         const char *string, bool *contains_negation)
 {
     const DetectAddressMap *res = DetectAddressMapLookup(de_ctx, string);
-    if (res != NULL) {
+    if (res != NULL) { /* 查找hash表，以节省解析时间、空间 */
         SCLogDebug("found: %s :: %p", string, res);
         *contains_negation = res->contains_negation;
         return res->address;
@@ -1454,7 +1454,7 @@ const DetectAddressHead *DetectParseAddress(DetectEngineCtx *de_ctx,
     SCLogDebug("%s not found", string);
 
     DetectAddressHead *head = DetectAddressHeadInit();
-    if (head == NULL)
+    if (head == NULL)  /* 解析 */
         return NULL;
 
     const int r = DetectAddressParse(de_ctx, head, string);
@@ -1462,11 +1462,11 @@ const DetectAddressHead *DetectParseAddress(DetectEngineCtx *de_ctx,
         DetectAddressHeadFree(head);
         return NULL;
     } else if (r == 1) {
-        *contains_negation = true;
+        *contains_negation = true;   /* 带有"!"等取反标志 */
     } else {
         *contains_negation = false;
     }
-
+                       /* 加入hash表 */
     DetectAddressMapAdd((DetectEngineCtx *)de_ctx, string, head,
             *contains_negation);
     return head;

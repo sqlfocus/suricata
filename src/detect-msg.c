@@ -48,7 +48,7 @@ void DetectMsgRegister (void)
     sigmatch_table[DETECT_MSG].RegisterTests = DetectMsgRegisterTests;
     sigmatch_table[DETECT_MSG].flags = SIGMATCH_QUOTES_MANDATORY;
 }
-
+/* 示例 --- msg:"SURICATA IPv4 packet too small"; */
 static int DetectMsgSetup (DetectEngineCtx *de_ctx, Signature *s, const char *msgstr)
 {
     size_t slen = strlen(msgstr);
@@ -56,11 +56,11 @@ static int DetectMsgSetup (DetectEngineCtx *de_ctx, Signature *s, const char *ms
         return -1;
 
     char input[slen + 1];
-    strlcpy(input, msgstr, slen + 1);
+    strlcpy(input, msgstr, slen + 1);  /* 获取原始消息值 */
     char *str = input;
     char converted = 0;
 
-    {
+    {                                  /* 转义 */
         uint16_t i, x;
         uint8_t escape = 0;
 
@@ -107,7 +107,7 @@ static int DetectMsgSetup (DetectEngineCtx *de_ctx, Signature *s, const char *ms
         SCLogError(SC_ERR_INVALID_SIGNATURE, "duplicated 'msg' keyword detected");
         goto error;
     }
-    s->msg = SCStrdup(str);
+    s->msg = SCStrdup(str);         /* 赋值 Signature->msg */
     if (s->msg == NULL)
         goto error;
     return 0;

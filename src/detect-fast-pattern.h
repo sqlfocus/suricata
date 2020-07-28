@@ -26,8 +26,8 @@
 
 typedef struct SCFPSupportSMList_ {
     /* the list id.  Have a look at Signature->sm_lists[] */
-    int list_id;
-    int priority;
+    int list_id;   /* 识别类型索引, DetectBufferType->id */
+    int priority;  /* 优先级 */
 
     struct SCFPSupportSMList_ *next;
 } SCFPSupportSMList;

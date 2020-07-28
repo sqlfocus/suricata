@@ -434,9 +434,9 @@ TcpReassemblyThreadCtx *StreamTcpReassembleInitThreadCtx(ThreadVars *tv)
         return NULL;
 
     memset(ra_ctx, 0x00, sizeof(TcpReassemblyThreadCtx));
-
+    /* 配置应用识别环境 */
     ra_ctx->app_tctx = AppLayerGetCtxThread(tv);
-
+    /* 流汇聚需要的池 */
     SCMutexLock(&segment_thread_pool_mutex);
     if (segment_thread_pool == NULL) {
         segment_thread_pool = PoolThreadInit(1, /* thread */
@@ -510,7 +510,7 @@ int StreamTcpReassembleDepthReached(Packet *p)
  *  \param size size of the segment that is added
  *
  *  \retval size Part of the size that fits in the depth, 0 if none
- */
+ *//* 计算可缓存的字节数 */
 static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream,
         uint32_t seq, uint32_t size)
 {
@@ -518,13 +518,13 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
 
     /* if the configured depth value is 0, it means there is no limit on
        reassembly depth. Otherwise carry on my boy ;) */
-    if (ssn->reassembly_depth == 0) {
+    if (ssn->reassembly_depth == 0) {   /* 不限制缓存总量 */
         SCReturnUInt(size);
     }
 
     /* if the final flag is set, we're not accepting anymore */
     if (stream->flags & STREAMTCP_STREAM_FLAG_DEPTH_REACHED) {
-        SCReturnUInt(0);
+        SCReturnUInt(0);                /* 缓存总量已到，不再继续缓存 */
     }
 
     uint64_t seg_depth;
@@ -551,7 +551,7 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
     if (seg_depth > (uint64_t)ssn->reassembly_depth) {
         SCLogDebug("STREAMTCP_STREAM_FLAG_DEPTH_REACHED");
         stream->flags |= STREAMTCP_STREAM_FLAG_DEPTH_REACHED;
-        SCReturnUInt(0);
+        SCReturnUInt(0);                /* 缓存量已到，不缓存 */
     }
     SCLogDebug("NOT STREAMTCP_STREAM_FLAG_DEPTH_REACHED");
     SCLogDebug("%"PRIu64" <= %u", seg_depth, ssn->reassembly_depth);
@@ -562,7 +562,7 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
 #endif
     if (SEQ_GEQ(seq, stream->isn) && SEQ_LT(seq, (stream->isn + ssn->reassembly_depth))) {
         /* packet (partly?) fits the depth window */
-
+                                        /* 计算可缓存字节数 */
         if (SEQ_LEQ((seq + size),(stream->isn + 1 + ssn->reassembly_depth))) {
             /* complete fit */
             SCReturnUInt(size);
@@ -589,12 +589,12 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
  *  If the retval is 0 the segment is inserted correctly, or overlap is handled,
  *  or it wasn't added because of reassembly depth.
  *
- */
+ *//* 插入报文数据到缓存引擎 */
 int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                 TcpSession *ssn, TcpStream *stream, Packet *p)
 {
     SCEnter();
-
+    /* 更新首包方向 */
     if (ssn->data_first_seen_dir == 0) {
         if (PKT_IS_TOSERVER(p)) {
             ssn->data_first_seen_dir = STREAM_TOSERVER;
@@ -602,18 +602,18 @@ int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThre
             ssn->data_first_seen_dir = STREAM_TOCLIENT;
         }
     }
-
+    /* 获取目的IP的OS类型 */
     /* If the OS policy is not set then set the OS policy for this stream */
     if (stream->os_policy == 0) {
         StreamTcpSetOSPolicy(stream, p);
     }
-
+    /* 检测是否需要流汇聚 */
     if ((ssn->flags & STREAMTCP_FLAG_APP_LAYER_DISABLED) &&
         (stream->flags & STREAMTCP_STREAM_FLAG_NEW_RAW_DISABLED)) {
         SCLogDebug("ssn %p: both app and raw reassembly disabled, not reassembling", ssn);
         SCReturnInt(0);
     }
-
+    /* 计算可以缓存的数据量 */
     /* If we have reached the defined depth for either of the stream, then stop
        reassembling the TCP session */
     uint32_t size = StreamTcpReassembleCheckDepth(ssn, stream, TCP_GET_SEQ(p), p->payload_len);
@@ -623,23 +623,23 @@ int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThre
         /* increment stream depth counter */
         StatsIncr(tv, ra_ctx->counter_tcp_stream_depth);
     }
-    if (size == 0) {
+    if (size == 0) {            /* 不需要缓存，直接返回 */
         SCLogDebug("ssn %p: depth reached, not reassembling", ssn);
         SCReturnInt(0);
     }
 
     DEBUG_VALIDATE_BUG_ON(size > p->payload_len);
-    if (size > p->payload_len)
+    if (size > p->payload_len)  /* 双保险，不应该出现此情形 */
         size = p->payload_len;
-
+    /* 缓存数据 */
     TcpSegment *seg = StreamTcpGetSegment(tv, ra_ctx);
-    if (seg == NULL) {
+    if (seg == NULL) {          /* 获取记录缓存信息的段 */
         SCLogDebug("segment_pool is empty");
         StreamTcpSetEvent(p, STREAM_REASSEMBLY_NO_SEGMENT);
         SCReturnInt(-1);
     }
 
-    TCP_SEG_LEN(seg) = size;
+    TCP_SEG_LEN(seg) = size;    /* 初始化其缓存信息 */
     seg->seq = TCP_GET_SEQ(p);
 
     /* HACK: for TFO SYN packets the seq for data starts at + 1 */
@@ -653,7 +653,7 @@ int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThre
         AppLayerDecoderEventsSetEventRaw(&p->app_layer_events,
                 APPLAYER_PROTO_DETECTION_SKIPPED);
     }
-
+                                /* 插入数据 */
     if (StreamTcpReassembleInsertSegment(tv, ra_ctx, stream, seg, p, TCP_GET_SEQ(p), p->payload, p->payload_len) != 0) {
         SCLogDebug("StreamTcpReassembleInsertSegment failed");
         SCReturnInt(-1);
@@ -896,14 +896,14 @@ static void GetAppBuffer(TcpStream *stream, const uint8_t **data, uint32_t *data
     const uint8_t *mydata;
     uint32_t mydata_len;
 
-    if (RB_EMPTY(&stream->sb.sbb_tree)) {
+    if (RB_EMPTY(&stream->sb.sbb_tree)) { /* 无空洞，返回已缓存未处理部分 */
         SCLogDebug("getting one blob");
 
         StreamingBufferGetDataAtOffset(&stream->sb, &mydata, &mydata_len, offset);
 
         *data = mydata;
         *data_len = mydata_len;
-    } else {
+    } else {                              /* 有空洞，返回其中的块 */
         StreamingBufferBlock *blk = GetBlock(&stream->sb, offset);
         if (blk == NULL) {
             *data = NULL;
@@ -1017,7 +1017,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
     uint32_t mydata_len;
 
     while (1) {
-        GetAppBuffer(*stream, &mydata, &mydata_len, app_progress);
+        GetAppBuffer(*stream, &mydata, &mydata_len, app_progress);  /* 获取数据 */
         DEBUG_VALIDATE_BUG_ON(mydata_len > (uint32_t)INT_MAX);
         if (mydata == NULL && mydata_len > 0 && CheckGap(ssn, *stream, p)) {
             SCLogDebug("sending GAP to app-layer (size: %u)", mydata_len);
@@ -1046,7 +1046,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
 
             continue;
         } else if (mydata == NULL || mydata_len == 0) {
-            /* Possibly a gap, but no new data. */
+            /* 无新数据，Possibly a gap, but no new data. */
             if ((p->flags & PKT_PSEUDO_STREAM_END) == 0 || ssn->state < TCP_CLOSED)
                 SCReturnInt(0);
 
@@ -1094,7 +1094,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
     }
     (*stream)->data_required = 0;
 
-    /* update the app-layer */
+    /* 实质性的应用层处理，update the app-layer */
     (void)AppLayerHandleTCPData(tv, ra_ctx, p, p->flow, ssn, stream,
             (uint8_t *)mydata, mydata_len,
             StreamGetAppLayerFlags(ssn, *stream, p));
@@ -1120,7 +1120,7 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                  Packet *p, enum StreamUpdateDir dir)
 {
     SCEnter();
-
+    /* 配置不允许流汇聚或应用识别，则直接返回 */
     /* this function can be directly called by app layer protocol
      * detection. */
     if ((ssn->flags & STREAMTCP_FLAG_APP_LAYER_DISABLED) ||
@@ -1136,7 +1136,7 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
     /* if no segments are in the list or all are already processed,
      * and state is beyond established, we send an empty msg */
     if (STREAM_HAS_SEEN_DATA(stream) && STREAM_RIGHT_EDGE(stream) <= STREAM_APP_PROGRESS(stream))
-    {
+    {   /* 所有数据都已处理完毕 */
         /* send an empty EOF msg if we have no segments but TCP state
          * is beyond ESTABLISHED */
         if (ssn->state >= TCP_CLOSING || (p->flags & PKT_PSEUDO_STREAM_END)) {
@@ -1151,7 +1151,7 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         }
     }
 
-    /* with all that out of the way, lets update the app-layer */
+    /* 更新应用层，with all that out of the way, lets update the app-layer */
     return ReassembleUpdateAppLayer(tv, ra_ctx, ssn, &stream, p, dir);
 }
 
@@ -1720,7 +1720,7 @@ int StreamReassembleLog(TcpSession *ssn, TcpStream *stream,
  *  \brief update app layer based on received ACK
  *
  *  \retval r 0 on success, -1 on error
- */
+ *//* 应用协议识别 */
 static int StreamTcpReassembleHandleSegmentUpdateACK (ThreadVars *tv,
         TcpReassemblyThreadCtx *ra_ctx, TcpSession *ssn, TcpStream *stream, Packet *p)
 {
@@ -1731,7 +1731,7 @@ static int StreamTcpReassembleHandleSegmentUpdateACK (ThreadVars *tv,
 
     SCReturnInt(0);
 }
-
+/* 流汇聚处理入口 */
 int StreamTcpReassembleHandleSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                      TcpSession *ssn, TcpStream *stream,
                                      Packet *p, PacketQueueNoLock *pq)
@@ -1751,12 +1751,12 @@ int StreamTcpReassembleHandleSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
     } else {
         opposing_stream = &ssn->client;
     }
-
+    /* IDS模式下，先处理对端已缓存数据，如应用层协议识别等；然后再处理当前报文 */
     /* default IDS: update opposing side (triggered by ACK) */
     enum StreamUpdateDir dir = UPDATE_DIR_OPPOSING;
     /* inline and stream end and flow timeout packets trigger same dir handling */
-    if (StreamTcpInlineMode()) {
-        dir = UPDATE_DIR_PACKET;
+    if (StreamTcpInlineMode()) {     /* 其他特殊场景，则处理当前报文，并处理 */
+        dir = UPDATE_DIR_PACKET;     /* 本端已缓存的数据包 */
     } else if (p->flags & PKT_PSEUDO_STREAM_END) {
         dir = UPDATE_DIR_PACKET;
     } else if (p->tcph->th_flags & TH_RST) { // accepted rst
@@ -1767,7 +1767,7 @@ int StreamTcpReassembleHandleSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
         dir = UPDATE_DIR_BOTH;
     }
 
-    /* handle ack received */
+    /* 处理对端已缓存数据，如应用协议识别等，handle ack received */
     if ((dir == UPDATE_DIR_OPPOSING || dir == UPDATE_DIR_BOTH) &&
         StreamTcpReassembleHandleSegmentUpdateACK(tv, ra_ctx, ssn, opposing_stream, p) != 0)
     {
@@ -1775,7 +1775,7 @@ int StreamTcpReassembleHandleSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
         SCReturnInt(-1);
     }
 
-    /* if this segment contains data, insert it */
+    /* 处理本报文，缓存之，if this segment contains data, insert it */
     if (p->payload_len > 0 && !(stream->flags & STREAMTCP_STREAM_FLAG_NOREASSEMBLY)) {
         SCLogDebug("calling StreamTcpReassembleHandleSegmentHandleData");
 
@@ -1811,7 +1811,7 @@ int StreamTcpReassembleHandleSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
         }
     }
 
-    /* in stream inline mode even if we have no data we call the reassembly
+    /* 已经达到检测深度，后续不会继续缓存数据；in stream inline mode even if we have no data we call the reassembly
      * functions to handle EOF */
     if (dir == UPDATE_DIR_PACKET || dir == UPDATE_DIR_BOTH) {
         SCLogDebug("inline (%s) or PKT_PSEUDO_STREAM_END (%s)",

@@ -511,7 +511,7 @@ int SigGroupHeadBuildMatchArray(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
             continue;
 
         sgh->match_array[idx] = s;
-        idx++;
+        idx++;      /* 初始化本组包含的规则 */
     }
 
     return 0;

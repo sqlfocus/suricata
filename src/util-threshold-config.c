@@ -250,10 +250,10 @@ int SCThresholdConfInitContext(DetectEngineCtx *de_ctx)
             goto error;
         }
 #ifdef UNITTESTS
-    }
+    }                                     /* 获取配置文件名, /etc/suricata/threshold.config */
 #endif
 
-    SCThresholdConfParseFile(de_ctx, fd);
+    SCThresholdConfParseFile(de_ctx, fd); /* 解析配置文件 */
     SCThresholdConfDeInitContext(de_ctx, fd);
 
 #ifdef UNITTESTS
@@ -297,7 +297,7 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
     BUG_ON(parsed_type != TYPE_SUPPRESS);
 
     /* Install it */
-    if (id == 0 && gid == 0) {
+    if (id == 0 && gid == 0) { /* CASE: 未明确指定规则，则将匹配添加到所有规则 */
         if (parsed_track == TRACK_RULE) {
             SCLogWarning(SC_ERR_EVENT_ENGINE, "suppressing all rules");
         }
@@ -339,7 +339,7 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
             sm->ctx = (void *)de;
             SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_SUPPRESS);
         }
-    } else if (id == 0 && gid > 0)    {
+    } else if (id == 0 && gid > 0)    { /* CASE: 添加匹配到指定的gid规则 */
         if (parsed_track == TRACK_RULE) {
             SCLogWarning(SC_ERR_EVENT_ENGINE, "suppressing all rules with gid %"PRIu32, gid);
         }
@@ -390,9 +390,9 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
                    "sid > 0 and gid == 0. Please fix this "
                    "in your threshold.conf file");
         goto error;
-    } else {
+    } else {    /* CASE: 添加匹配到特定的规则 */
         s = SigFindSignatureBySidGid(de_ctx, id, gid);
-        if (s == NULL) {
+        if (s == NULL) {      /* 查找对应的检测规则 */
             SCLogWarning(SC_ERR_EVENT_ENGINE, "can't suppress sid "
                     "%"PRIu32", gid %"PRIu32": unknown rule", id, gid);
         } else {
@@ -403,7 +403,7 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
 
             de = SCMalloc(sizeof(DetectThresholdData));
             if (unlikely(de == NULL))
-                goto error;
+                goto error;   /* 初始化结构 */
             memset(de,0,sizeof(DetectThresholdData));
 
             de->type = TYPE_SUPPRESS;
@@ -415,7 +415,7 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
 
             if (DetectAddressParse((const DetectEngineCtx *)de_ctx, &de->addrs, (char *)th_ip) < 0) {
                 SCLogError(SC_ERR_INVALID_IP_NETBLOCK, "failed to parse %s", th_ip);
-                goto error;
+                goto error;   /* 解析IP地址 */
             }
 
             sm = SigMatchAlloc();
@@ -426,7 +426,7 @@ static int SetupSuppressRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid,
 
             sm->type = DETECT_THRESHOLD;
             sm->ctx = (void *)de;
-
+                              /* 添加到规则对应的匹配列表 */
             SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_SUPPRESS);
         }
     }
@@ -672,40 +672,40 @@ static int ParseThresholdRule(DetectEngineCtx *de_ctx, char *rawstr,
 
     if (de_ctx == NULL)
         return -1;
-
+    /* 示例, "suppress gen_id 1, sig_id 2009557, track by_src, ip 217.110.97.128/25" */
     ret = pcre_exec(regex_base, regex_base_study, rawstr, strlen(rawstr), 0, 0, ov, MAX_SUBSTRINGS);
     if (ret < 4) {
         SCLogError(SC_ERR_PCRE_MATCH, "pcre_exec parse error, ret %" PRId32 ", string %s", ret, rawstr);
         goto error;
     }
 
-    /* retrieve the classtype name */
+    /* 获取类别, "suppress"; retrieve the classtype name */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 1, th_rule_type, sizeof(th_rule_type));
     if (ret < 0) {
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_copy_substring failed");
         goto error;
     }
 
-    /* retrieve the classtype name */
+    /* 获取gen_id值, "1"；retrieve the classtype name */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 2, th_gid, sizeof(th_gid));
     if (ret < 0) {
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_copy_substring failed");
         goto error;
     }
-
+    /* 获取sig_id值, "2009557" */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 3, th_sid, sizeof(th_sid));
     if (ret < 0) {
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_copy_substring failed");
         goto error;
     }
-
+    /* 获取剩余部分, ", track by_src, ip 217.110.97.128/25" */
     ret = pcre_copy_substring((char *)rawstr, ov, 30, 4, rule_extend, sizeof(rule_extend));
     if (ret < 0) {
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_copy_substring failed");
         goto error;
     }
 
-    /* get type of rule */
+    /* 得到规则类型的Enum索引; get type of rule */
     if (strcasecmp(th_rule_type,"event_filter") == 0) {
         rule_type = THRESHOLD_TYPE_EVENT_FILTER;
     } else if (strcasecmp(th_rule_type,"threshold") == 0) {
@@ -719,8 +719,8 @@ static int ParseThresholdRule(DetectEngineCtx *de_ctx, char *rawstr,
         goto error;
     }
 
-    /* get end of rule */
-    switch(rule_type) {
+    /* 依据具体类型，解析剩余部分, get end of rule */
+    switch(rule_type) {  /* type <limit|threshold|both>, track <by_src|by_dst>, count <n>, seconds <t> */
         case THRESHOLD_TYPE_EVENT_FILTER:
         case THRESHOLD_TYPE_THRESHOLD:
             if (strlen(rule_extend) > 0) {
@@ -772,7 +772,7 @@ static int ParseThresholdRule(DetectEngineCtx *de_ctx, char *rawstr,
                 SCLogError(SC_ERR_INVALID_ARGUMENTS, "rule invalid: %s", rawstr);
                 goto error;
             }
-            break;
+            break;   /* track <by_src|by_dst>, ip <ip|subnet> */
         case THRESHOLD_TYPE_SUPPRESS:
             if (strlen(rule_extend) > 0) {
                 ret = pcre_exec(regex_suppress, regex_suppress_study,
@@ -784,13 +784,13 @@ static int ParseThresholdRule(DetectEngineCtx *de_ctx, char *rawstr,
                             ret, rule_extend);
                     goto error;
                 }
-                /* retrieve the track mode */
+                /* "<by_src|by_dst>", retrieve the track mode */
                 ret = pcre_get_substring((char *)rule_extend, ov, 30, 1, &th_track);
                 if (ret < 0) {
                     SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_get_substring failed");
                     goto error;
                 }
-                /* retrieve the IP */
+                /* "<ip|subnet>", retrieve the IP */
                 ret = pcre_get_substring((char *)rule_extend, ov, 30, 2, &th_ip);
                 if (ret < 0) {
                     SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_get_substring failed");
@@ -931,16 +931,16 @@ static int ParseThresholdRule(DetectEngineCtx *de_ctx, char *rawstr,
     if (StringParseUint32(&gid, 10, strlen(th_gid), th_gid) <= 0) {
         goto error;
     }
-
-    *ret_id = id;
-    *ret_gid = gid;
-    *ret_parsed_type = parsed_type;
-    *ret_parsed_track = parsed_track;
-    *ret_parsed_new_action = parsed_new_action;
-    *ret_parsed_count = parsed_count;
-    *ret_parsed_seconds = parsed_seconds;
-    *ret_parsed_timeout = parsed_timeout;
-    *ret_th_ip = th_ip;
+    /* 示例: "suppress gen_id 1, sig_id 2009557, track by_src, ip 217.110.97.128/25" */
+    *ret_id = id;   /* 1 */
+    *ret_gid = gid; /* 2009557 */
+    *ret_parsed_type = parsed_type;    /* TYPE_SUPPRESS */
+    *ret_parsed_track = parsed_track;  /* TRACK_SRC */
+    *ret_parsed_new_action = parsed_new_action; /* */
+    *ret_parsed_count = parsed_count;     /* */
+    *ret_parsed_seconds = parsed_seconds; /* */
+    *ret_parsed_timeout = parsed_timeout; /* */
+    *ret_th_ip = th_ip;                   /* 217.110.97.128/25 */
     return 0;
 error:
     if (th_track != NULL)
@@ -965,7 +965,7 @@ error:
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- */
+ *//* 示例: "suppress gen_id 1, sig_id 2009557, track by_src, ip 217.110.97.128/25" */
 static int SCThresholdConfAddThresholdtype(char *rawstr, DetectEngineCtx *de_ctx)
 {
     uint8_t parsed_type = 0;
@@ -981,10 +981,10 @@ static int SCThresholdConfAddThresholdtype(char *rawstr, DetectEngineCtx *de_ctx
     r = ParseThresholdRule(de_ctx, rawstr, &id, &gid, &parsed_type, &parsed_track,
                     &parsed_count, &parsed_seconds, &parsed_timeout, &parsed_new_action,
                     &th_ip);
-    if (r < 0)
+    if (r < 0)                           /* 解析文本行，得到字段值 */
         goto error;
 
-    if (parsed_type == TYPE_SUPPRESS) {
+    if (parsed_type == TYPE_SUPPRESS) {  /* 加入到 Signature->init_data->smlist[] 列表 */
         r = SetupSuppressRule(de_ctx, id, gid, parsed_type, parsed_track,
                     parsed_count, parsed_seconds, parsed_timeout, parsed_new_action,
                     th_ip);
@@ -1087,7 +1087,7 @@ void SCThresholdConfParseFile(DetectEngineCtx *de_ctx, FILE *fp)
 
         esc_pos = SCThresholdConfLineIsMultiline(line);
         if (esc_pos == 0) {
-            rule_num++;
+            rule_num++;  /* 解析规则 */
             SCLogDebug("Adding threshold.config rule num %"PRIu32"( %s )", rule_num, line);
             SCThresholdConfAddThresholdtype(line, de_ctx);
         }

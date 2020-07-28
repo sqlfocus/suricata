@@ -56,18 +56,18 @@ SCFPSupportSMList *sm_fp_support_smlist_list = NULL;
  *
  * \retval 1 If supported.
  * \retval 0 If not.
- */
+ *//* 判断是否支持fast pattern */
 int FastPatternSupportEnabledForSigMatchList(const DetectEngineCtx *de_ctx,
         const int list_id)
 {
     if (sm_fp_support_smlist_list == NULL)
-        return 0;
+        return 0;    /* 快速检测：没有此链表也就没有快速检测规则 */
 
     if (list_id == DETECT_SM_LIST_PMATCH)
-        return 1;
+        return 1;    /* 此类型匹配，符合快速匹配 */
 
     return DetectBufferTypeSupportsMpmGetById(de_ctx, list_id);
-
+                     /* 检测类型是否支持多模匹配 */
 #if 0
     SCFPSupportSMList *tmp_smlist_fp = sm_fp_support_smlist_list;
     while (tmp_smlist_fp != NULL) {
@@ -86,13 +86,13 @@ int FastPatternSupportEnabledForSigMatchList(const DetectEngineCtx *de_ctx,
  *
  * \param list_id SM list id.
  * \param priority Priority for this list.
- */
+ *//* 某引用检测规则，加入 sm_fp_support_smlist_list 快速匹配链表 */
 void SupportFastPatternForSigMatchList(int list_id, int priority)
 {
     SCFPSupportSMList *ip = NULL;
     /* insertion point - ip */
     for (SCFPSupportSMList *tmp = sm_fp_support_smlist_list; tmp != NULL; tmp = tmp->next) {
-        if (list_id == tmp->list_id) {
+        if (list_id == tmp->list_id) { /* 检测是否已经插入链表？重复 */
             SCLogDebug("SM list already registered.");
             return;
         }
@@ -101,7 +101,7 @@ void SupportFastPatternForSigMatchList(int list_id, int priority)
          * was not already registered
          * and other lists with the same priority hide it.
          */
-        if (priority < tmp->priority)  /* 按优先级查找插入点，优先级降序 */
+        if (priority < tmp->priority)  /* 按优先级查找插入点，优先级降序（数字0优先级最高） */
             break;
 
         ip = tmp;

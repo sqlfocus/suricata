@@ -101,7 +101,7 @@ static DetectReference *DetectReferenceParse(const char *rawstr, DetectEngineCtx
     char content[REFERENCE_CONTENT_NAME_MAX] = "";
 
     ret = DetectParsePcreExec(&parse_regex, rawstr, 0, 0, ov, MAX_SUBSTRINGS);
-    if (ret < 2) {
+    if (ret < 2) {                 /* 解析配置 "reference:cve,2014-0160;" */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "Unable to parse \"reference\" "
                    "keyword argument - \"%s\".   Invalid argument.", rawstr);
         return NULL;
@@ -128,9 +128,9 @@ static DetectReference *DetectReferenceParse(const char *rawstr, DetectEngineCtx
         goto error;
 
     SCRConfReference *lookup_ref_conf = SCRConfGetReference(key, de_ctx);
-    if (lookup_ref_conf != NULL) {
+    if (lookup_ref_conf != NULL) { /* 获取解析配置 */
         ref->key = lookup_ref_conf->url;
-    } else {
+    } else {                       /* 临时添加未知参考 */
         if (SigMatchStrictEnabled(DETECT_REFERENCE)) {
             SCLogError(SC_ERR_REFERENCE_UNKNOWN,
                     "unknown reference key \"%s\"", key);
@@ -176,7 +176,7 @@ error:
  *
  * \retval  0 On Success.
  * \retval -1 On Failure.
- */
+ *//* 示例: "reference:cve,2014-0160;" */
 static int DetectReferenceSetup(DetectEngineCtx *de_ctx, Signature *s,
                                 const char *rawstr)
 {
@@ -185,13 +185,13 @@ static int DetectReferenceSetup(DetectEngineCtx *de_ctx, Signature *s,
     DetectReference *sig_refs = NULL;
 
     DetectReference *ref = DetectReferenceParse(rawstr, de_ctx);
-    if (ref == NULL)
+    if (ref == NULL)           /* 解析"reference:cve,2014-0160;" */
         SCReturnInt(-1);
 
     SCLogDebug("ref %s %s", ref->key, ref->reference);
 
     if (s->references == NULL)  {
-        s->references = ref;
+        s->references = ref;   /* 添加到 Signature->references 链表 */
     } else {
         sig_refs = s->references;
         while (sig_refs->next != NULL) {

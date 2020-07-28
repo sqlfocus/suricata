@@ -35,7 +35,7 @@
 #include "tmqh-flow.h"
 
 Tmqh tmqh_table[TMQH_SIZE];      /* 队列处理函数表 */
-/* 注册队列处理函数，共simple、packetpool、flow三种形式 */
+/* 注册典型队列，用于线程之间通信，共simple、packetpool、flow三种形式 */
 void TmqhSetup (void)
 {
     memset(&tmqh_table, 0, sizeof(tmqh_table));

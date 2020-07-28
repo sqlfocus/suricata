@@ -13,17 +13,21 @@
       --MpmHSRegister()
     --SpmTableSetup()              注册单模匹配算法, spm_table[SPM_HS]
       --SpmHSRegister()
-    --AppLayerSetup()              应用层协议解析、检测环境
+    --AppLayerSetup()              应用层协议解析环境
       --AppLayerParserRegisterProtocolParsers()
       --AppLayerProtoDetectPrepareState()
     --SCHInfoLoadFromConfig()      加载主机os信息等，以更好的适配检测策略
-    --SigTableSetup()              注册检测规则关键字及处理函数, sigmatch_table[]
-    --TmqhSetup()
-    --RegisterAllModules()         注册线程模块, tmm_modules[]
+    --SigTableSetup()              注册检测规则关键字, sigmatch_table[]
+    --TmqhSetup()                  注册典型队列，用于线程间通信, tmqh_table[TMQH_SIMPLE]
+    --RegisterAllModules()         注册、初始化线程模块, tmm_modules[]
+    --TmModuleRunInit()
     --PreRunInit()
-      --DefragInit()
+      --DefragInit()               IP重组初始化
       --FlowInitConfig()           流模块初始化
-      --StreamTcpInitConfig()
+      --StreamTcpInitConfig()      TCP流重组初始化
+  --PostConfLoadedDetectSetup()
+    --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
+    --LoadSignatures()             加载检测规则文件
   --RunModeDispatch()
     --RunModeGetCustomMode()       选择运行模型, runmodes[RUNMODE_PCAP_DEV]
     --RunMode->RunModeFunc()       运行模式初始化, RunModeIdsPcapWorkers()
@@ -31,11 +35,11 @@
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
 
 * 重要的全局变量
-SCInstance suricata        全局数据
+SCInstance suricata        全局环境数据
     
 
-* 应用层协议解析、检测环境初始化 AppLayerSetup()
-本函数构建应用层协议解析，及基于规则检测的环境
+* 应用层协议解析环境初始化 AppLayerSetup()
+本函数构建应用层协议解析环境
     
 --AppLayerSetup()
   --AppLayerProtoDetectSetup()     初始化 alpd_ctx/AppLayerProtoDetectCtx
@@ -53,6 +57,47 @@ SCInstance suricata        全局数据
     --AppLayerProtoDetectPMSetContentIDs()
     --AppLayerProtoDetectPMMapSignatures()          将上述注册的单模规则，编译构建为多模引擎
     --AppLayerProtoDetectPMPrepareMpm()             alpd_ctx.ctx_ipp[].ctx_pm[].mpm_ctx
+
+
+* 检测环境初始化
+单独摘录检测环境初始化流程，以更清晰展现
+    
+--SuricataMain()
+  --PostConfLoadedSetup()
+    --SigTableSetup()              注册检测规则关键字及处理函数
+      --DetectSidRegister()                       sigmatch_table[DETECT_SID]
+      --DetectHttpUriRegister()
+        --DetectAppLayerInspectEngineRegister2()  应用检测引擎, 加入 g_app_inspect_engines
+        --DetectAppLayerMpmRegister2()            多模检测引擎, g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP]
+          --SupportFastPatternForSigMatchList()   加入快速匹配链表 sm_fp_support_smlist_list
+        --DetectBufferTypeGetByName()             注册检测类型, 加入 g_buffer_type_hash
+      --DetectAppLayerEventRegister()             注册应用层检测/识别产生的事件的处理句柄
+  --PostConfLoadedDetectSetup()
+    --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
+      --SRepInit()                                加载IP信誉库
+      --SCClassConfLoadClassficationConfigFile()  解析 classification.config
+      --SCRConfLoadReferenceConfigFile()          解析 reference.config
+      --ActionInitConfig()                        初始化动作优先级, action_order_sigs[]
+      --VarNameStoreSetupStaging()
+    --LoadSignatures()             
+      --SigLoadSignatures()
+        --ProcessSigFiles()        加载检测规则文件, suricata.rules等
+          --DetectLoadSigFile()
+            --DetectEngineAppendSig()             解析检测规则, Signature
+              --SigInit()
+                --SigInitHelper()
+                  --SigParse()
+                    --SigParseBasics()
+                    --SigParseOptions()           调用sigmatch_table[].Setup()
+                  --DetectAppLayerEventPrepare()
+                    --DetectAppLayerEventSetupP2()"app-layer-events"阶段2
+                  --SigBuildAddressMatchArray()
+        --SCSigRegisterSignatureOrderingFuncs()   注册规则优先级函数
+        --SCSigOrderSignatures()                  按优先级排序规则列表
+        --SCThresholdConfInitContext()            解析threshold.config文件
+        --SigGroupBuild()          调整规则列表为运行时刻需要的结构
+
+    
     
 * 运行模式初始化，RunMode->RunModeFunc()
 解析 RUNMODE_PCAP_DEV 模式的"workers"/run-to-death运行方式
@@ -87,7 +132,7 @@ SCInstance suricata        全局数据
   --TmSlot->SlotThreadInit()       初始化PIPELINE处理函数环境
     --ReceivePcapThreadInit()
     --DecodePcapThreadInit()
-    --FlowWorkerThreadInit()
+    --FlowWorkerThreadInit()          初始化 TMM_FLOWWORKER 运行环境
   --while(True)
     --ReceivePcapLoop()            主循环, ThreadVars->tm_slots[0]->PktAcqLoop
       --pcap_dispatch()
@@ -158,3 +203,40 @@ SCInstance suricata        全局数据
     --HostTimeoutHash()
     --IPPairTimeoutHash()
 
+
+* TCP流重组
+tcp协议上的应用层协议检测时，需要做数据重组
+    
+--SuricataMain()
+  --PostConfLoadedSetup()
+    --PreRunInit()
+      --StreamTcpInitConfig()      TCP流重组初始化
+        --StreamTcpReassembleInit()
+        --FlowSetProtoFreeFunc()     注册 flow_freefuncs[]
+
+--FlowWorker()
+  --StreamTcp()                    流汇聚入口
+    --StreamTcpPacket()
+      --StreamTcpPacketStateNone()    无会话时进入，如syn报文
+        --StreamTcpNewSession()           新建会话, TcpSession, Packet->flow->protoctx
+      --StreamTcpStateDispatch()      有会话时进入，维护tcp状态机
+        --StreamTcpPacketStateSynSent()      处理syn+ack报文
+        --StreamTcpPacketStateSynRecv()      处理ack报文
+          --StreamTcpReassembleHandleSegment()   基于报文的流汇聚
+        --StreamTcpPacketStateEstablished()  正常交互报文
+
+
+--StreamTcpReassembleHandleSegment()
+  --StreamTcpReassembleHandleSegmentUpdateACK()
+    --StreamTcpReassembleAppLayer()                 应用识别
+      --ReassembleUpdateAppLayer()
+        --AppLayerHandleTCPData()
+          --TCPProtoDetect()
+            --AppLayerProtoDetectGetProto()         基于规则、端口的协议识别
+            --AppLayerParserParse()                 协议解析
+          --AppLayerParserParse()
+  --StreamTcpReassembleHandleSegmentHandleData()    缓存数据, TcpStream
+    --StreamTcpReassembleInsertSegment()
+      --DoInsertSegment()
+      --InsertSegmentDataCustom()
+  --StreamTcpReassembleAppLayer()

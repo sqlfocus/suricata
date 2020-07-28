@@ -546,7 +546,7 @@ typedef struct Packet_
     /* IPS action to take */
     uint8_t action;
 
-    uint8_t pkt_src;
+    uint8_t pkt_src;        /* */
 
     /* storage: set to pointer to heap and extended via allocation if necessary */
     uint32_t pktlen;
@@ -565,12 +565,12 @@ typedef struct Packet_
 
 
     /* engine events */
-    PacketEngineEvents events;
+    PacketEngineEvents events;  /* 事件列表 */
 
     AppLayerDecoderEvents *app_layer_events;
 
     /* double linked list ptrs */
-    struct Packet_ *next;   /* 双向链表指针 */
+    struct Packet_ *next;       /* 双向链表指针 */
     struct Packet_ *prev;
 
     /** data linktype in host order */

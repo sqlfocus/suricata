@@ -94,18 +94,18 @@ StreamingBufferBlock *SBB_RB_FIND_INCLUSIVE(struct SBB *head, StreamingBufferBlo
 
 typedef struct StreamingBuffer_ {
     const StreamingBufferConfig *cfg;
-    uint64_t stream_offset; /**< offset of the start of the memory block */
+    uint64_t stream_offset; /* 维护slide后偏移仍然正确，不slide值为0 */
 
-    uint8_t *buf;           /**< memory block for reassembly */
-    uint32_t buf_size;      /**< size of memory block */
-    uint32_t buf_offset;    /**< how far we are in buf_size */
+    uint8_t *buf;           /* 缓存起始地址 */
+    uint32_t buf_size;      /* 已分配的缓存大小 */
+    uint32_t buf_offset;    /* 实际已缓存数据的右边界 */
 
-    struct SBB sbb_tree;    /**< red black tree of Stream Buffer Blocks */
+    struct SBB sbb_tree;    /* 存储缓存段信息, StreamingBufferBlock, red black tree of Stream Buffer Blocks */
     StreamingBufferBlock *head; /**< head, should always be the same as RB_MIN */
 #ifdef DEBUG
     uint32_t buf_size_max;
 #endif
-} StreamingBuffer;
+} StreamingBuffer;   /* 维护tcp流重组的数据报文 */
 
 #ifndef DEBUG
 #define STREAMING_BUFFER_INITIALIZER(cfg) { (cfg), 0, NULL, 0, 0, { NULL }, NULL, };

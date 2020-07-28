@@ -146,7 +146,7 @@ static DetectAppLayerEventData *DetectAppLayerEventParsePkt(const char *arg,
 {
     int event_id = 0;
     int r = AppLayerGetPktEventInfo(arg, &event_id);
-    if (r < 0) {
+    if (r < 0) {                  /* 获取事件名的索引 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "app-layer-event keyword "
                    "supplied with packet based event - \"%s\" that isn't "
                    "supported yet.", arg);
@@ -156,8 +156,8 @@ static DetectAppLayerEventData *DetectAppLayerEventParsePkt(const char *arg,
     DetectAppLayerEventData *aled = SCCalloc(1, sizeof(DetectAppLayerEventData));
     if (unlikely(aled == NULL))
         return NULL;
-    aled->event_id = event_id;
-    *event_type = APP_LAYER_EVENT_TYPE_PACKET;
+    aled->event_id = event_id;    /* 记录事件ID */
+    *event_type = APP_LAYER_EVENT_TYPE_PACKET; /* 类型为包检测 */
 
     return aled;
 }
@@ -165,10 +165,10 @@ static DetectAppLayerEventData *DetectAppLayerEventParsePkt(const char *arg,
 /** \retval int 0 ok
   * \retval int -1 error
   * \retval int -3 non-fatal error: sig will be rejected w/o raising error
-  */
+  *//* 处理规则选项"app-layer-event:dns.malformed_data;"阶段2，赋值 DetectAppLayerEventData->event_id */
 static int DetectAppLayerEventParseAppP2(DetectAppLayerEventData *data,
                                          uint8_t *ipproto_bitarray,
-                                         AppLayerEventType *event_type)
+                                         AppLayerEventType *event_type) /* 输出参数 */
 {
     int event_id = 0;
     uint8_t ipproto;
@@ -181,7 +181,7 @@ static int DetectAppLayerEventParseAppP2(DetectAppLayerEventData *data,
         return -1;
     }
     strlcpy(alproto_name, data->arg, p_idx - data->arg + 1);
-
+    /* 提取L3-L4协议 */
     if (ipproto_bitarray[IPPROTO_TCP / 8] & 1 << (IPPROTO_TCP % 8)) {
         ipproto = IPPROTO_TCP;
     } else if (ipproto_bitarray[IPPROTO_UDP / 8] & 1 << (IPPROTO_UDP % 8)) {
@@ -190,11 +190,11 @@ static int DetectAppLayerEventParseAppP2(DetectAppLayerEventData *data,
         SCLogError(SC_ERR_INVALID_SIGNATURE, "protocol %s is disabled", alproto_name);
         return -1;
     }
-
-    if (!data->needs_detctx) {
+    /* 查找匹配事件的ID；选项应用协议为"file"时，= true */
+    if (!data->needs_detctx) { /* 非file应用协议 */
         r = AppLayerParserGetEventInfo(ipproto, data->alproto,
                             p_idx + 1, &event_id, event_type);
-    } else {
+    } else {                   /* file应用协议 */
         r = DetectEngineGetEventInfo(p_idx + 1, &event_id, event_type);
     }
     if (r < 0) {
@@ -214,7 +214,7 @@ static int DetectAppLayerEventParseAppP2(DetectAppLayerEventData *data,
 
     return 0;
 }
-
+/* 解析规则选项 "app-layer-event:dns.malformed_data;" */
 static DetectAppLayerEventData *DetectAppLayerEventParseAppP1(const char *arg)
 {
     /* period index */
@@ -230,7 +230,7 @@ static DetectAppLayerEventData *DetectAppLayerEventParseAppP1(const char *arg)
     strlcpy(alproto_name, arg, p_idx - arg + 1);
 
     const AppProto alproto = AppLayerGetProtoByName(alproto_name);
-    if (alproto == ALPROTO_UNKNOWN) {
+    if (alproto == ALPROTO_UNKNOWN) {  /* 获取对应的应用协议索引，如 dns -> ALPROTO_DNS */
         if (!strcmp(alproto_name, "file")) {
             needs_detctx = true;
         } else {
@@ -244,13 +244,13 @@ static DetectAppLayerEventData *DetectAppLayerEventParseAppP1(const char *arg)
     DetectAppLayerEventData *aled = SCCalloc(1, sizeof(*aled));
     if (unlikely(aled == NULL))
         return NULL;
-    aled->alproto = alproto;
-    aled->arg = SCStrdup(arg);
+    aled->alproto = alproto;           /* 指定应用协议 */
+    aled->arg = SCStrdup(arg);         /* 存留原选项字符串值 */
     if (aled->arg == NULL) {
         SCFree(aled);
         return NULL;
     }
-    aled->needs_detctx = needs_detctx;
+    aled->needs_detctx = needs_detctx; /* 应用协议名为"file"时，=true */
 
     return aled;
 }
@@ -269,9 +269,9 @@ static DetectAppLayerEventData *DetectAppLayerEventParse(const char *arg,
     while (*arg != '\0' && isspace((unsigned char)*arg))
         arg++;
 
-    if (strchr(arg, '.') == NULL) {
+    if (strchr(arg, '.') == NULL) {  /* "app-layer-event:applayer_unexpected_protocol;" */
         return DetectAppLayerEventParsePkt(arg, event_type);
-    } else {
+    } else {                         /* "app-layer-event:dns.malformed_data;" */
         return DetectAppLayerEventParseAppP1(arg);
     }
 }
@@ -284,26 +284,26 @@ static int DetectAppLayerEventSetupP2(DetectEngineCtx *de_ctx,
 
     int ret = DetectAppLayerEventParseAppP2((DetectAppLayerEventData *)sm->ctx,
             s->proto.proto, &event_type);
-    if (ret < 0) {
+    if (ret < 0) {    /* 根据更丰富的信息，初始化 DetectAppLayerEventData->event_id */
         /* DetectAppLayerEventParseAppP2 prints errors */
 
         /* sm has been removed from lists by DetectAppLayerEventPrepare */
         SigMatchFree(de_ctx, sm);
         return ret;
-    }
+    }                 /* 重新加入链表 */
     SigMatchAppendSMToList(s, sm, g_applayer_events_list_id);
     /* We should have set this flag already in SetupP1 */
     s->flags |= SIG_FLAG_APPLAYER;
 
     return 0;
 }
-
+/* 解析规则，处理选项: "app-layer-event:applayer_unexpected_protocol;" */
 static int DetectAppLayerEventSetupP1(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
     AppLayerEventType event_type;
 
     DetectAppLayerEventData *data = DetectAppLayerEventParse(arg, &event_type);
-    if (data == NULL)
+    if (data == NULL)         /* 解析选项 */
         SCReturnInt(-1);
 
     SigMatch *sm = SigMatchAlloc();
@@ -315,10 +315,10 @@ static int DetectAppLayerEventSetupP1(DetectEngineCtx *de_ctx, Signature *s, con
 
     if (event_type == APP_LAYER_EVENT_TYPE_PACKET) {
         SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
-    } else {
+    } else {                  /* 逐包检测, 挂接到 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
         if (DetectSignatureSetAppProto(s, data->alproto) != 0)
-            goto error;
-
+            goto error;       /* 根据事件的应用协议更新 Signature->alproto */
+                              /* 协议检测，挂接到 Signature->init_data->smlists["app-layer-events"检测类型] */
         SigMatchAppendSMToList(s, sm, g_applayer_events_list_id);
     }
 
@@ -349,7 +349,7 @@ static void DetectAppLayerEventFree(DetectEngineCtx *de_ctx, void *ptr)
 int DetectAppLayerEventPrepare(DetectEngineCtx *de_ctx, Signature *s)
 {
     SigMatch *sm = s->init_data->smlists[g_applayer_events_list_id];
-    SigMatch *smn;
+    SigMatch *smn;                   /* 清空原链表 */
     s->init_data->smlists[g_applayer_events_list_id] = NULL;
     s->init_data->smlists_tail[g_applayer_events_list_id] = NULL;
 
@@ -359,7 +359,7 @@ int DetectAppLayerEventPrepare(DetectEngineCtx *de_ctx, Signature *s)
         /* these will be overwritten in SigMatchAppendSMToList
          * called by DetectAppLayerEventSetupP2
          */
-        sm->next = sm->prev = NULL;
+        sm->next = sm->prev = NULL;  /* 阶段2: 重新建立链表 */
         int ret = DetectAppLayerEventSetupP2(de_ctx, s, sm);
         if (ret < 0) {
             // current one was freed, let's free the next ones

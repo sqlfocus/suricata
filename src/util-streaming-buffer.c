@@ -667,11 +667,11 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
     if (offset < sb->stream_offset)
         return -1;
 
-    if (sb->buf == NULL) {
+    if (sb->buf == NULL) {   /* 首次初始化缓存 */
         if (InitBuffer(sb) == -1)
             return -1;
     }
-
+    /* 内存不够，slide */
     uint32_t rel_offset = offset - sb->stream_offset;
     if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) {
         if (sb->cfg->flags & STREAMING_BUFFER_AUTOSLIDE) {
@@ -686,14 +686,14 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
     if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) {
         return -1;
     }
-
+    /* 拷贝内存 */
     memcpy(sb->buf + rel_offset, data, data_len);
-    seg->stream_offset = offset;
+    seg->stream_offset = offset;   /* 更新字段，待插入红黑树 */
     seg->segment_len = data_len;
 
     SCLogDebug("rel_offset %u sb->stream_offset %"PRIu64", buf_offset %u",
             rel_offset, sb->stream_offset, sb->buf_offset);
-
+    /* 记录到红黑树，以判断是否有空洞 */
     if (RB_EMPTY(&sb->sbb_tree)) {
         SCLogDebug("empty sbb list");
 
@@ -721,7 +721,7 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
         /* already have blocks, so append new block based on new data */
         SBBUpdate(sb, rel_offset, data_len);
     }
-
+    /* 记录已缓存数据的右边界 */
     if (rel_offset + data_len > sb->buf_offset)
         sb->buf_offset = rel_offset + data_len;
 

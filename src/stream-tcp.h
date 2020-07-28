@@ -43,7 +43,7 @@ typedef struct TcpStreamCnf_ {
     /** stream tracking
      *
      * max stream mem usage
-     */
+     *//* 跟踪内存使用状况 */
     SC_ATOMIC_DECLARE(uint64_t, memcap);
     SC_ATOMIC_DECLARE(uint64_t, reassembly_memcap); /**< max memory usage for stream reassembly */
 
@@ -56,7 +56,7 @@ typedef struct TcpStreamCnf_ {
     uint32_t prealloc_sessions; /**< ssns to prealloc per stream thread */
     uint32_t prealloc_segments; /**< segments to prealloc per stream thread */
     int midstream;
-    int async_oneside;
+    int async_oneside;          /* 异步单边，可以理解为单向数据包捕获，即只有一个方向的数据包经过IDS */
     uint32_t reassembly_depth;  /**< Depth until when we reassemble the stream */
 
     uint16_t reassembly_toserver_chunk_size;
@@ -68,12 +68,12 @@ typedef struct TcpStreamCnf_ {
 } TcpStreamCnf;
 
 typedef struct StreamTcpThread_ {
-    int ssn_pool_id;
+    int ssn_pool_id;                /* 对应 ssn_pool->array[] 的索引 */
 
     /** queue for pseudo packet(s) that were created in the stream
      *  process and need further handling. Currently only used when
      *  receiving (valid) RST packets */
-    PacketQueueNoLock pseudo_queue;
+    PacketQueueNoLock pseudo_queue; /* 特殊队列 */
 
     uint16_t counter_tcp_sessions;
     /** sessions not picked up because memcap was reached */
@@ -100,7 +100,7 @@ typedef struct StreamTcpThread_ {
     uint16_t counter_tcp_wrong_thread;
 
     /** tcp reassembly thread data */
-    TcpReassemblyThreadCtx *ra_ctx;
+    TcpReassemblyThreadCtx *ra_ctx;     /* 流汇聚池 */
 } StreamTcpThread;
 
 extern TcpStreamCnf stream_config;

@@ -30,10 +30,10 @@
 #include "util-enum.h"
 
 /* events raised during protocol detection are stored in the
- * packets storage, not in the flow. */
+ * packets storage, not in the flow. *//* 包检测触发的事件列表 */
 SCEnumCharMap app_layer_event_pkt_table[ ] = {
-    { "APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS",
-      APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS },
+    { "APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS",  /* 事件名 */
+      APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS },  /* 对应的enum ID */
     { "APPLAYER_WRONG_DIRECTION_FIRST_DATA",
       APPLAYER_WRONG_DIRECTION_FIRST_DATA },
     { "APPLAYER_DETECT_PROTOCOL_ONLY_ONE_DIRECTION",
@@ -67,7 +67,7 @@ int AppLayerGetEventInfoById(int event_id, const char **event_name,
 int AppLayerGetPktEventInfo(const char *event_name, int *event_id)
 {
     *event_id = SCMapEnumNameToValue(event_name, app_layer_event_pkt_table);
-    if (*event_id == -1) {
+    if (*event_id == -1) {   /* 获取事件名的索引 */
         SCLogError(SC_ERR_INVALID_ENUM_MAP, "event \"%s\" not present in "
                    "app-layer-event's packet event table.",  event_name);
         /* this should be treated as fatal */

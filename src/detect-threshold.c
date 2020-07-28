@@ -84,7 +84,7 @@ void DetectThresholdRegister(void)
     /* this is compatible to ip-only signatures */
     sigmatch_table[DETECT_THRESHOLD].flags |= SIGMATCH_IPONLY_COMPAT;
 
-    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
+    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);  /* pcre编译 PARSE_REGEX, 添加到 g_detect_parse_regex_list 链表 */
 }
 
 static int DetectThresholdMatch(DetectEngineThreadCtx *det_ctx, Packet *p,

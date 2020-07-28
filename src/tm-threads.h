@@ -60,7 +60,7 @@ typedef struct TmSlot_ {
      *  in a single thread. */
     struct TmSlot_ *slot_next;
 
-    SC_ATOMIC_DECLARE(void *, slot_data);                    /* 存储特定模块环境, PcapThreadVars */
+    SC_ATOMIC_DECLARE(void *, slot_data);                    /* 存储特定模块环境, PcapThreadVars/FlowWorkerThreadData */
 
     TmEcode (*SlotThreadInit)(ThreadVars *, const void *, void **); /* TmModule->ThreadInit() */
     void (*SlotThreadExitPrintStats)(ThreadVars *, void *);  /* TmModule->ThreadExitPrintStats() */

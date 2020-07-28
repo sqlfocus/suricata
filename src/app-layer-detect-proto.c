@@ -1236,7 +1236,7 @@ static void AppLayerProtoDetectPMGetIpprotos(AppProto alproto,
                                              uint8_t *ipprotos)
 {
     SCEnter();
-
+    /* 根据应用协议识别注册的模型，反向推演 */
     for (int i = 0; i < FLOW_PROTO_DEFAULT; i++) {
         uint8_t ipproto = FlowGetReverseProtoMapping(i);
         for (int j = 0; j < 2; j++) {
@@ -2031,14 +2031,14 @@ void AppLayerProtoDetectDestroyCtxThread(AppLayerProtoDetectThreadCtx *alpd_tctx
 }
 
 /***** Utility *****/
-
+/* 如果应用层协议确定了，则据此更新对应的L3-L4, Signature->proto.proto */
 void AppLayerProtoDetectSupportedIpprotos(AppProto alproto, uint8_t *ipprotos)
 {
     SCEnter();
 
-    AppLayerProtoDetectPMGetIpprotos(alproto, ipprotos);
-    AppLayerProtoDetectPPGetIpprotos(alproto, ipprotos);
-    AppLayerProtoDetectPEGetIpprotos(alproto, ipprotos);
+    AppLayerProtoDetectPMGetIpprotos(alproto, ipprotos);  /* 根据应用识别模型反向推衍 */
+    AppLayerProtoDetectPPGetIpprotos(alproto, ipprotos);  /* 根据应用端口反向推衍 */
+    AppLayerProtoDetectPEGetIpprotos(alproto, ipprotos);  /* 根据定制化"应用->协议"特例反向推衍 */
 
     SCReturn;
 }
@@ -2081,7 +2081,7 @@ void AppLayerProtoDetectSupportedAppProtocols(AppProto *alprotos)
     SCReturn;
 }
 
-uint8_t expectation_proto[ALPROTO_MAX];
+uint8_t expectation_proto[ALPROTO_MAX];  /* 定制化 应用协议->L4协议 的对应关系 */
 
 static void AppLayerProtoDetectPEGetIpprotos(AppProto alproto,
                                              uint8_t *ipprotos)
@@ -2101,7 +2101,7 @@ void AppLayerRegisterExpectationProto(uint8_t proto, AppProto alproto)
             SCLogError(SC_ERR_NOT_SUPPORTED,
                        "Expectation on 2 IP protocols are not supported");
         }
-    }
+    }       /* ALPROTO_FTPDATA --> IPPROTO_TCP */
     expectation_proto[alproto] = proto;
 }
 

@@ -60,14 +60,14 @@ typedef struct FlowWorkerThreadData_ {
 
     void *output_thread; /* Output thread data. */
 
-    uint16_t local_bypass_pkts;
+    uint16_t local_bypass_pkts;  /* 计数器 */
     uint16_t local_bypass_bytes;
     uint16_t both_bypass_pkts;
     uint16_t both_bypass_bytes;
 
-    PacketQueueNoLock pq;
+    PacketQueueNoLock pq;        /* 汇聚队列 */
 
-} FlowWorkerThreadData;
+} FlowWorkerThreadData;      /* TMM_FLOWWORKER 环境 */
 
 /** \brief handle flow for packet
  *
@@ -95,7 +95,7 @@ static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packe
 }
 
 static TmEcode FlowWorkerThreadDeinit(ThreadVars *tv, void *data);
-
+/* 初始化 TMM_FLOWWORKER 运行环境 */
 static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void **data)
 {
     FlowWorkerThreadData *fw = SCCalloc(1, sizeof(*fw));
@@ -116,12 +116,12 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
         return TM_ECODE_FAILED;
     }
 
-    /* setup TCP */
+    /* 构建流汇聚结构，setup TCP */
     if (StreamTcpThreadInit(tv, NULL, &fw->stream_thread_ptr) != TM_ECODE_OK) {
         FlowWorkerThreadDeinit(tv, fw);
         return TM_ECODE_FAILED;
     }
-
+    /* 构建检测环境 */
     if (DetectEngineEnabled()) {
         /* setup DETECT */
         void *detect_thread = NULL;
@@ -132,7 +132,7 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
         SC_ATOMIC_SET(fw->detect_thread, detect_thread);
     }
 
-    /* Setup outputs for this thread. */
+    /* 构建输出环境，Setup outputs for this thread. */
     if (OutputLoggerThreadInit(tv, initdata, &fw->output_thread) != TM_ECODE_OK) {
         FlowWorkerThreadDeinit(tv, fw);
         return TM_ECODE_FAILED;
@@ -141,7 +141,7 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
     DecodeRegisterPerfCounters(fw->dtv, tv);
     AppLayerRegisterThreadCounters(tv);
 
-    /* setup pq for stream end pkts */
+    /* 构建流汇聚队列，setup pq for stream end pkts */
     memset(&fw->pq, 0, sizeof(PacketQueueNoLock));
 
     *data = fw;

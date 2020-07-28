@@ -72,7 +72,7 @@ static inline int InsertSegmentDataCustom(TcpStream *stream, TcpSegment *seg, ui
 {
     uint64_t stream_offset;
     uint16_t data_offset;
-
+    /* 计算偏移，包括数据偏移、缓存偏移 */
     if (likely(SEQ_GEQ(seg->seq, stream->base_seq))) {
         stream_offset = STREAM_BASE_OFFSET(stream) + (seg->seq - stream->base_seq);
         data_offset = 0;
@@ -90,7 +90,7 @@ static inline int InsertSegmentDataCustom(TcpStream *stream, TcpSegment *seg, ui
     if (data_len == data_offset) {
         SCReturnInt(0);
     }
-
+    /* 插入数据 */
     if (StreamingBufferInsertAt(&stream->sb, &seg->sbseg,
                 data + data_offset,
                 data_len - data_offset,
@@ -170,7 +170,7 @@ static int DoInsertSegment (TcpStream *stream, TcpSegment *seg, TcpSegment **dup
         return -1;
     }
 
-    /* fast track */
+    /* 首次插入，fast track */
     if (RB_EMPTY(&stream->seg_tree)) {
         SCLogDebug("empty tree, inserting seg %p seq %" PRIu32 ", "
                    "len %" PRIu32 "", seg, seg->seq, TCP_SEG_LEN(seg));
@@ -179,14 +179,14 @@ static int DoInsertSegment (TcpStream *stream, TcpSegment *seg, TcpSegment **dup
         return 0;
     }
 
-    /* insert and then check if there was any overlap with other segments */
+    /* 插入，并检测重叠，insert and then check if there was any overlap with other segments */
     TcpSegment *res = TCPSEG_RB_INSERT(&stream->seg_tree, seg);
     if (res) {
         SCLogDebug("seg has a duplicate in the tree seq %u/%u",
                 res->seq, res->payload_len);
         /* exact duplicate SEQ + payload_len */
         *dup_seg = res;
-        return 2; // duplicate has overlap by definition.
+        return 2;      /* 完全重叠 */// duplicate has overlap by definition.
     } else {
         if (SEQ_GT(SEG_SEQ_RIGHT_EDGE(seg), stream->segs_right_edge))
             stream->segs_right_edge = SEG_SEQ_RIGHT_EDGE(seg);
@@ -194,11 +194,11 @@ static int DoInsertSegment (TcpStream *stream, TcpSegment *seg, TcpSegment **dup
         /* insert succeeded, now check if we overlap with someone */
         if (CheckOverlap(&stream->seg_tree, seg) == true) {
             SCLogDebug("seg %u has overlap in the tree", seg->seq);
-            return 1;
+            return 1;  /* 部分重叠 */
         }
     }
     SCLogDebug("seg %u: no overlap", seg->seq);
-    return 0;
+    return 0;          /* 无重叠 */
 }
 
 /** \internal
@@ -562,7 +562,7 @@ int StreamTcpReassembleInsertSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
 
     TcpSegment *dup_seg = NULL;
 
-    /* insert segment into list. Note: doesn't handle the data */
+    /* 插入并返回是否重叠，insert segment into list. Note: doesn't handle the data */
     int r = DoInsertSegment (stream, seg, &dup_seg, p);
     SCLogDebug("DoInsertSegment returned %d", r);
     if (r < 0) {
@@ -571,7 +571,7 @@ int StreamTcpReassembleInsertSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
         SCReturnInt(-1);
     }
 
-    if (likely(r == 0)) {
+    if (likely(r == 0)) {  /* 无重叠，则缓存全部数据 */
         /* no overlap, straight data insert */
         int res = InsertSegmentDataCustom(stream, seg, pkt_data, pkt_datalen);
         if (res < 0) {
@@ -602,7 +602,7 @@ int StreamTcpReassembleInsertSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
             StreamTcpSegmentReturntoPool(seg);
             SCReturnInt(-1);
         }
-        if (r == 2) {
+        if (r == 2) {      /* 完全重叠，释放分配的段信息结构 */
             SCLogDebug("duplicate segment %u/%u, discard it",
                     seg->seq, seg->payload_len);
 

@@ -58,9 +58,9 @@ enum StreamUpdateDir {
 };
 
 typedef struct TcpReassemblyThreadCtx_ {
-    void *app_tctx;
+    void *app_tctx;       /* 应用识别环境, AppLayerThreadCtx */
 
-    int segment_thread_pool_id;
+    int segment_thread_pool_id;  /* 汇聚缓存池，对应 segment_thread_pool->array[] 的索引 */
 
     /** TCP segments which are not being reassembled due to memcap was reached */
     uint16_t counter_tcp_segment_memcap;

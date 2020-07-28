@@ -60,11 +60,11 @@ RB_PROTOTYPE(TCPSACK, StreamTcpSackRecord, rb, TcpSackCompare);
 
 typedef struct TcpSegment {
     PoolThreadReserved res;
-    uint16_t payload_len;       /**< actual size of the payload */
-    uint32_t seq;
+    uint16_t payload_len;    /* 缓存段长度 */
+    uint32_t seq;            /* 缓存段起始序号 */
     RB_ENTRY(TcpSegment) __attribute__((__packed__)) rb;
     StreamingBufferSegment sbseg;
-} __attribute__((__packed__)) TcpSegment;
+} __attribute__((__packed__)) TcpSegment;  /* 记录TCP流重组的段信息 */
 
 /** \brief compare function for the Segment tree
  *
@@ -94,24 +94,24 @@ RB_PROTOTYPE(TCPSEG, TcpSegment, rb, TcpSegmentCompare);
 typedef struct TcpStream_ {
     uint16_t flags:12;              /**< Flag specific to the stream e.g. Timestamp */
     /* coccinelle: TcpStream:flags:STREAMTCP_STREAM_FLAG_ */
-    uint16_t wscale:4;              /**< wscale setting in this direction, 4 bits as max val is 15 */
-    uint8_t os_policy;              /**< target based OS policy used for reassembly and handling packets*/
+    uint16_t wscale:4;              /* 窗口扩大因子，[0, 15] */
+    uint8_t os_policy;              /* 目的IP对应的主机类型，用于针对性的重组和报文处理 */
     uint8_t tcp_flags;              /**< TCP flags seen */
 
-    uint32_t isn;                   /**< initial sequence number */
-    uint32_t next_seq;              /**< next expected sequence number */
-    uint32_t last_ack;              /**< last ack'd sequence number in this stream */
-    uint32_t next_win;              /**< next max seq within window */
-    uint32_t window;                /**< current window setting, after wscale is applied */
+    uint32_t isn;                   /* tcp起始序号 */
+    uint32_t next_seq;              /* 下一个待发送序号 */
+    uint32_t last_ack;              /* 已看到的ack序号 */
+    uint32_t next_win;              /* 窗口右边缘 */
+    uint32_t window;                /* 窗口值 */
 
-    uint32_t last_ts;               /**< Time stamp (TSVAL) of the last seen packet for this stream*/
-    uint32_t last_pkt_ts;           /**< Time of last seen packet for this stream (needed for PAWS update)
+    uint32_t last_ts;               /* 上一个报文的时间戳选项值 */
+    uint32_t last_pkt_ts;           /* 上一个报文的时间
                                          This will be used to validate the last_ts, when connection has been idle for
                                          longer time.(RFC 1323)*/
     /* reassembly */
-    uint32_t base_seq;              /**< seq where we are left with reassebly. Matches STREAM_BASE_OFFSET below. */
+    uint32_t base_seq;              /* 流缓存的起始序号, 一般为syn序号+1,  seq where we are left with reassebly. Matches STREAM_BASE_OFFSET below. */
 
-    uint32_t app_progress_rel;      /**< app-layer progress relative to STREAM_BASE_OFFSET */
+    uint32_t app_progress_rel;      /* 已处理的缓存计数，相对于 STREAM_BASE_OFFSET */
     uint32_t raw_progress_rel;      /**< raw reassembly progress relative to STREAM_BASE_OFFSET */
     uint32_t log_progress_rel;      /**< streaming logger progress relative to STREAM_BASE_OFFSET */
 
@@ -119,9 +119,9 @@ typedef struct TcpStream_ {
                                      *   remains available for inspection together with app layer buffers */
     uint32_t data_required;         /**< data required from STREAM_APP_PROGRESS before calling app-layer again */
 
-    StreamingBuffer sb;
-    struct TCPSEG seg_tree;         /**< red black tree of TCP segments. Data is stored in TcpStream::sb */
-    uint32_t segs_right_edge;
+    StreamingBuffer sb;             /* 缓存的数据 */
+    struct TCPSEG seg_tree;         /* 接收到的数据段的序号和长度, TcpSegment, 数据在->sb中 */
+    uint32_t segs_right_edge;       /* 缓存数据右边界 */
 
     uint32_t sack_size;             /**< combined size of the SACK ranges currently in our tree. Updated
                                      *   at INSERT/REMOVE time. */
@@ -259,18 +259,18 @@ enum TcpState
 
 typedef struct TcpSession_ {
     PoolThreadReserved res;
-    uint8_t state:4;                        /* TCP_LAST_ACK */
-    uint8_t pstate:4;                       /**< previous state */
+    uint8_t state:4;                        /* TCP_SYN_SENT */
+    uint8_t pstate:4;                       /* 旧->state的值, previous state */
     uint8_t queue_len;                      /**< length of queue list below */
-    int8_t data_first_seen_dir;
+    int8_t data_first_seen_dir;             /* 首包方向, STREAM_TOSERVER */
     /** track all the tcp flags we've seen */
     uint8_t tcp_packet_flags;
     /* coccinelle: TcpSession:flags:STREAMTCP_FLAG */
-    uint16_t flags;
-    uint32_t reassembly_depth;      /**< reassembly depth for the stream */
-    TcpStream server;
-    TcpStream client;
-    TcpStateQueue *queue;                   /**< list of SYN/ACK candidates */
+    uint16_t flags;              /* 跟踪 Packet->tcph->th_flags */
+    uint32_t reassembly_depth;   /* 0表示不限制缓存总量, reassembly depth for the stream */
+    TcpStream server;            /* 服务器状态，跟踪服务器发出的报文 */
+    TcpStream client;            /* 客户端状态 */
+    TcpStateQueue *queue;        /* list of SYN/ACK candidates */
 } TcpSession;     /* TCP会话信息，用于跟踪流，流重组等 */
 
 #define StreamTcpSetStreamFlagAppProtoDetectionCompleted(stream) \

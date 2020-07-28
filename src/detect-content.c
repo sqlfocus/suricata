@@ -195,7 +195,7 @@ error:
 /**
  * \brief DetectContentParse
  * \initonly
- *//* 构建基于字符串的单模式规则 */
+ *//* 构建基于字符串的单模引擎 */
 DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
                                       const char *contentstr)
 {
@@ -321,7 +321,7 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
     SigMatch *sm = NULL;
 
     cd = DetectContentParse(de_ctx->spm_global_thread_ctx, contentstr);
-    if (cd == NULL)
+    if (cd == NULL)        /* 构建基于字符串的单模引擎 */
         goto error;
     if (s->init_data->negated == true) {
         cd->flags |= DETECT_CONTENT_NEGATED;

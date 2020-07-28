@@ -102,8 +102,8 @@ void DetectAppLayerMpmRegister2(const char *name,
         abort();
     }
 
-    DetectBufferTypeSupportsMpm(name);
-    DetectBufferTypeSupportsTransformations(name);
+    DetectBufferTypeSupportsMpm(name);             /* 设置支持多模引擎 */
+    DetectBufferTypeSupportsTransformations(name); /* 支持转换 */
     int sm_list = DetectBufferTypeGetByName(name);
     if (sm_list == -1) {
         FatalError(SC_ERR_INITIALIZATION,
@@ -126,7 +126,7 @@ void DetectAppLayerMpmRegister2(const char *name,
 
     if (g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] == NULL) {
         g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] = am;
-    } else {
+    } else {                    /* 注册到全局链表, g_mpm_list[] */
         DetectBufferMpmRegistery *t = g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP];
         while (t->next != NULL) {
             t = t->next;
@@ -136,7 +136,7 @@ void DetectAppLayerMpmRegister2(const char *name,
         am->id = t->id + 1;
     }
     g_mpm_list_cnt[DETECT_BUFFER_MPM_TYPE_APP]++;
-
+                                /* 加入快速匹配链表, sm_fp_support_smlist_list */
     SupportFastPatternForSigMatchList(sm_list, priority);
 }
 
@@ -208,7 +208,7 @@ void DetectAppLayerMpmRegisterByParentId(DetectEngineCtx *de_ctx,
 void DetectMpmInitializeAppMpms(DetectEngineCtx *de_ctx)
 {
     const DetectBufferMpmRegistery *list = g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP];
-    while (list != NULL) {
+    while (list != NULL) {   /* 将 g_mpm_list[] 复制至此 */
         DetectBufferMpmRegistery *n = SCCalloc(1, sizeof(*n));
         BUG_ON(n == NULL);
 
@@ -244,7 +244,7 @@ void DetectMpmInitializeAppMpms(DetectEngineCtx *de_ctx)
         } else {
             if (!(de_ctx->flags & DE_QUIET)) {
                 SCLogPerf("using shared mpm ctx' for %s", n->name);
-            }
+            }                      /* 共享环境，构造其通用特性Factory */
             n->sgh_mpm_context = MpmFactoryRegisterMpmCtxProfile(de_ctx, n->name);
         }
 
@@ -447,10 +447,10 @@ int DetectMpmPreparePktMpms(DetectEngineCtx *de_ctx)
     }
     return r;
 }
-
+/* 构建检测引擎的多模引擎工厂 */
 static int32_t SetupBuiltinMpm(DetectEngineCtx *de_ctx, const char *name)
 {
-    /* default to whatever the global setting is */
+    /* 判断是否需要共享, default to whatever the global setting is */
     int shared = (de_ctx->sgh_mpm_context == ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE);
 
     /* see if we use a unique or shared mpm ctx for this type */
@@ -462,10 +462,10 @@ static int32_t SetupBuiltinMpm(DetectEngineCtx *de_ctx, const char *name)
         shared = confshared;
 
     int32_t ctx;
-    if (shared == 0) {
+    if (shared == 0) { /* 非共享工厂环境 */
         ctx = MPM_CTX_FACTORY_UNIQUE_CONTEXT;
         SCLogPerf("using unique mpm ctx' for %s", name);
-    } else {
+    } else {           /* 注册工厂环境，以支持所有线程共享 */
         ctx = MpmFactoryRegisterMpmCtxProfile(de_ctx, name);
         SCLogPerf("using shared mpm ctx' for %s", name);
     }
@@ -473,7 +473,7 @@ static int32_t SetupBuiltinMpm(DetectEngineCtx *de_ctx, const char *name)
 }
 
 void DetectMpmInitializeBuiltinMpms(DetectEngineCtx *de_ctx)
-{
+{   /* 返回值 DetectEngineCtx->mpm_ctx_factory_container->items[]->id 索引 */
     de_ctx->sgh_mpm_context_proto_tcp_packet = SetupBuiltinMpm(de_ctx, "tcp-packet");
     de_ctx->sgh_mpm_context_stream = SetupBuiltinMpm(de_ctx, "tcp-stream");
 
@@ -682,13 +682,13 @@ void PatternMatchThreadPrepare(MpmThreadCtx *mpm_thread_ctx, uint16_t mpm_matche
 }
 
 /** \brief Predict a strength value for patterns
- *
+ *  预测模式的强度：离散度越高，强度越高
  *  Patterns with high character diversity score higher.
- *  Alpha chars score not so high
+ *  Alpha chars score not so high      字母符号强度最低
  *  Other printable + a few common codes a little higher
- *  Everything else highest.
+ *  Everything else highest.           可打印字符强度稍高，其他字符强度更高
  *  Longer patterns score better than short patters.
- *
+ *                                     长度越长，强度越高
  *  \param pat pattern
  *  \param patlen length of the pattern
  *
@@ -799,7 +799,7 @@ static void SetMpm(Signature *s, SigMatch *mpm_sm)
         }
     }
     cd->flags |= DETECT_CONTENT_MPM;
-    s->init_data->mpm_sm = mpm_sm;
+    s->init_data->mpm_sm = mpm_sm;     /* 记录快速匹配 */
     return;
 }
 
@@ -816,7 +816,7 @@ static SigMatch *GetMpmForList(const Signature *s, const int list, SigMatch *mpm
         if ((cd->flags & DETECT_CONTENT_NEGATED) && skip_negated_content)
             continue;
         if (cd->content_len != max_len)
-            continue;
+            continue;              /* 需要匹配最长长度 */
 
         if (mpm_sm == NULL) {
             mpm_sm = sm;
@@ -825,9 +825,9 @@ static SigMatch *GetMpmForList(const Signature *s, const int list, SigMatch *mpm
             DetectContentData *data2 = (DetectContentData *)mpm_sm->ctx;
             uint32_t ls = PatternStrength(data1->content, data1->content_len);
             uint32_t ss = PatternStrength(data2->content, data2->content_len);
-            if (ls > ss) {
+            if (ls > ss) {         /* 再匹配模式强度 */
                 mpm_sm = sm;
-            } else if (ls == ss) {
+            } else if (ls == ss) { /* 强度相同，则去长度最大的 */
                 /* if 2 patterns are of equal strength, we pick the longest */
                 if (data1->content_len > data2->content_len)
                     mpm_sm = sm;
@@ -841,7 +841,7 @@ static SigMatch *GetMpmForList(const Signature *s, const int list, SigMatch *mpm
 
 void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 {
-    if (s->init_data->mpm_sm != NULL)
+    if (s->init_data->mpm_sm != NULL)  /* 已提取了fast pattern，返回 */
         return;
 
     SigMatch *mpm_sm = NULL, *sm = NULL;
@@ -860,22 +860,22 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
             continue;
 
         if (!FastPatternSupportEnabledForSigMatchList(de_ctx, list_id))
-            continue;
+            continue;       /* 判断检测类型索引是否支持fast pattern */
 
         for (sm = s->init_data->smlists[list_id]; sm != NULL; sm = sm->next) {
             if (sm->type != DETECT_CONTENT)
-                continue;
+                continue;   /* 跳过非DETECT_CONTENT */
 
             const DetectContentData *cd = (DetectContentData *)sm->ctx;
             /* fast_pattern set in rule, so using this pattern */
             if ((cd->flags & DETECT_CONTENT_FAST_PATTERN)) {
-                SetMpm(s, sm);
+                SetMpm(s, sm);       /* 带有快速匹配标识 */
                 return;
             }
 
             if (cd->flags & DETECT_CONTENT_NEGATED) {
                 n_sm_list[list_id] = 1;
-                count_n_sm_list++;
+                count_n_sm_list++;   /* 记录不带快速匹配标识的匹配 */
             } else {
                 nn_sm_list[list_id] = 1;
                 count_nn_sm_list++;
@@ -902,9 +902,9 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
     int priority;
 
     const SCFPSupportSMList *tmp = sm_fp_support_smlist_list;
-    while (tmp != NULL) {
-        for (priority = tmp->priority;
-             tmp != NULL && priority == tmp->priority;
+    while (tmp != NULL) {            /* 从全局快速匹配链表中，按优先级查找 */
+        for (priority = tmp->priority;  /* 如果和上述记录结果一致，则找到 */
+             tmp != NULL && priority == tmp->priority; /* 支持快速匹配列表 */
              tmp = tmp->next)
         {
             if (tmp->list_id >= nlists)
@@ -919,7 +919,7 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 
     BUG_ON(count_final_sm_list == 0);
 
-    uint16_t max_len = 0;
+    uint16_t max_len = 0;            /* 提取快速匹配的内容最大长度 */
     for (int i = 0; i < count_final_sm_list; i++) {
         if (final_sm_list[i] >= (int)s->init_data->smlists_array_size)
             continue;
@@ -940,13 +940,13 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 
     for (int i = 0; i < count_final_sm_list; i++) {
         if (final_sm_list[i] >= (int)s->init_data->smlists_array_size)
-            continue;
+            continue;                /* 获取强度最大的匹配 */
 
         mpm_sm = GetMpmForList(s, final_sm_list[i], mpm_sm, max_len, skip_negated_content);
     }
 
     /* assign to signature */
-    SetMpm(s, mpm_sm);
+    SetMpm(s, mpm_sm);               /* 设置规则的快速匹配 */
     return;
 }
 
@@ -1731,7 +1731,7 @@ typedef struct DetectFPAndItsId_ {
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- */
+ *//* 找出快速匹配的个数，并记录下来 */
 int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
 {
     uint32_t struct_total_size = 0;
@@ -1746,8 +1746,8 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
         if (s->flags & SIG_FLAG_PREFILTER)
             continue;
 
-        RetrieveFPForSig(de_ctx, s);
-        if (s->init_data->mpm_sm != NULL) {
+        RetrieveFPForSig(de_ctx, s);          /* 提取规则的快速匹配 */
+        if (s->init_data->mpm_sm != NULL) {   /* 统计所需内存 */
             DetectContentData *cd = (DetectContentData *)s->init_data->mpm_sm->ctx;
             struct_total_size += sizeof(DetectFPAndItsId);
             content_total_size += cd->content_len;
@@ -1761,7 +1761,7 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
 
     /* array hash buffer - I've run out of ideas to name it */
     uint8_t *ahb = SCMalloc(sizeof(uint8_t) * (struct_total_size + content_total_size));
-    if (unlikely(ahb == NULL))
+    if (unlikely(ahb == NULL))                /* 分配内存 */
         return -1;
 
     uint8_t *content = NULL;
@@ -1841,7 +1841,7 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
         } /* if (s->mpm_sm != NULL) */
     } /* for */
 
-    de_ctx->max_fp_id = max_id;
+    de_ctx->max_fp_id = max_id;   /* 记录fast pattern的最大序号 */
 
     SCFree(ahb);
 

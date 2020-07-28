@@ -397,7 +397,7 @@ int SigParseGetMaxDsize(const Signature *s)
 
 /** \brief set prefilter dsize pair
  *  \param s signature to get dsize value from
- */
+ *//* 设定报文匹配范围 */
 void SigParseSetDsizePair(Signature *s)
 {
     if (s->flags & SIG_FLAG_DSIZE && s->init_data->dsize_sm != NULL) {
@@ -440,10 +440,10 @@ void SigParseApplyDsizeToContent(Signature *s)
     SCEnter();
 
     if (s->flags & SIG_FLAG_DSIZE) {
-        SigParseSetDsizePair(s);
+        SigParseSetDsizePair(s);             /* 设定匹配范围 */
 
         int dsize = SigParseGetMaxDsize(s);
-        if (dsize < 0) {
+        if (dsize < 0) {                     /* 获取范围的上限 */
             /* nothing to do */
             return;
         }
@@ -458,7 +458,7 @@ void SigParseApplyDsizeToContent(Signature *s)
             if (cd == NULL) {
                 continue;
             }
-
+                                             /* 据此调整内容检测的深度 */
             if (cd->depth == 0 || cd->depth >= dsize) {
                 cd->depth = (uint16_t)dsize;
                 SCLogDebug("updated %u, content %u to have depth %u "

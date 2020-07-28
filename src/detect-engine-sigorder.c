@@ -126,7 +126,7 @@ static void SCSigRegisterSignatureOrderingFunc(DetectEngineCtx *de_ctx,
  *
  * \retval flowbits The flowbits type for this signature if it is set; if it is
  *                  not set, return 0
- */
+ *//* 查看flowbits操作类型 */
 static inline int SCSigGetFlowbitsType(Signature *sig)
 {
     DetectFlowbitsData *fb = NULL;
@@ -529,7 +529,7 @@ static SCSigSignatureWrapper *SCSigOrder(SCSigSignatureWrapper *sw,
     SCSigSignatureWrapper *last = NULL;
     SCSigSignatureWrapper *new = NULL;
 
-    /* Divide input list into two sub-lists. */
+    /* 拆分为两个队列, Divide input list into two sub-lists. */
     while (sw != NULL) {
         first = sw;
         sw = sw->next;
@@ -550,11 +550,11 @@ static SCSigSignatureWrapper *SCSigOrder(SCSigSignatureWrapper *sw,
         return subA;
     }
 
-    /* Now sort each list */
+    /* 递归，Now sort each list */
     subA = SCSigOrder(subA, cmp_func_list);
     subB = SCSigOrder(subB, cmp_func_list);
 
-    /* Merge the two sorted lists. */
+    /* 归并排序, Merge the two sorted lists. */
     while (subA != NULL && subB != NULL) {
         if (SCSigLessThan(subA, subB, cmp_func_list)) {
             new = subA;
@@ -573,7 +573,7 @@ static SCSigSignatureWrapper *SCSigOrder(SCSigSignatureWrapper *sw,
             last = new;
         }
     }
-    /* Attach the rest of any remaining list. Only one can be non-NULL here. */
+    /* 挂接剩余的非空链，Attach the rest of any remaining list. Only one can be non-NULL here. */
     if (subA == NULL)
         last->next = subB;
     else if (subB == NULL)
@@ -703,7 +703,7 @@ static inline SCSigSignatureWrapper *SCSigAllocSignatureWrapper(Signature *sig)
     sw->sig = sig;
 
     /* Process data from the signature into a cache for further use by the
-     * sig_ordering module */
+     * sig_ordering module */  /* 计算辅助值，用于排序 */
     SCSigProcessUserDataForFlowbits(sw);
     SCSigProcessUserDataForFlowvar(sw);
     SCSigProcessUserDataForFlowint(sw);
@@ -740,7 +740,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
         i++;
     }
 
-    /* Sort the list */     /* 使用优先级函数排序规则 */
+    /* Sort the list */     /* 使用优先级函数排序规则（递归归并排序） */
     sigw_list = SCSigOrder(sigw_list, de_ctx->sc_sig_order_funcs);
 
     SCLogDebug("Total Signatures to be processed by the"
@@ -783,7 +783,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
 void SCSigRegisterSignatureOrderingFuncs(DetectEngineCtx *de_ctx)
 {
     SCLogDebug("registering signature ordering functions");
-
+    /* 初始化 DetectEngineCtx->sc_sig_order_funcs 列表 */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByActionCompare);     /* 按照执行动作 */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowbitsCompare);   /* */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowintCompare);
