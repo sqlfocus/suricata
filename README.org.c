@@ -240,3 +240,25 @@ tcp协议上的应用层协议检测时，需要做数据重组
       --DoInsertSegment()
       --InsertSegmentDataCustom()
   --StreamTcpReassembleAppLayer()
+
+
+* 基于规则的检测
+--FlowWorker()
+  --Detect()                    DetectEngineThreadCtx
+    --DetectFlow()              基于流的检测
+      --DetectRun()
+    --DetectNoFlow()            无流检测
+      --DetectRun()
+        --DetectRunInspectIPOnly()   IPonly规则引擎, DetectEngineIPOnlyCtx->tree_ipv4src
+          --IPOnlyMatchPacket()
+        --DetectRunPrefilterPkt()    运行prefilters引擎
+          --Prefilter()
+        --DetectRulePacketRules()    运行逐报文规则, Signature->pkt_inspect
+          --DetectEnginePktInspectionRun()
+        --DetectRunTx()              运行事务检测
+        --DetectRunPostRules()       检测后处理, 匹配Threshold规则，去掉部分告警
+          --PacketAlertFinalize()
+            --PacketAlertHandle()
+              --PacketAlertHandle()
+              --TagHandlePacket()
+              --FlowSetHasAlertsFlag()

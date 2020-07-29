@@ -63,8 +63,8 @@ typedef struct DetectRunScratchpad {
     const AppProto alproto;
     const uint8_t flow_flags; /* flow/state flags: STREAM_* */
     const bool app_decoder_events;
-    const SigGroupHead *sgh;
-    SignatureMask pkt_mask;
+    const SigGroupHead *sgh;  /* */
+    SignatureMask pkt_mask;   /* 条件过滤掩码, PacketCreateMask() */
 } DetectRunScratchpad;
 
 /* prototypes */
@@ -90,7 +90,7 @@ static void DetectRunCleanup(DetectEngineThreadCtx *det_ctx,
         Packet *p, Flow * const pflow);
 
 /** \internal
- */
+ *//* 规则检测入口 */
 static void DetectRun(ThreadVars *th_v,
         DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx,
         Packet *p)
@@ -110,10 +110,10 @@ static void DetectRun(ThreadVars *th_v,
 
     DetectRunScratchpad scratch = DetectRunSetup(de_ctx, det_ctx, p, pflow);
 
-    /* run the IPonly engine */
+    /* 运行IPonly检测引擎 */
     DetectRunInspectIPOnly(th_v, de_ctx, det_ctx, pflow, p);
 
-    /* get our rule group */
+    /* 获取规则组 */
     DetectRunGetRuleGroup(de_ctx, p, pflow, &scratch);
     /* if we didn't get a sig group head, we
      * have nothing to do.... */
@@ -122,28 +122,28 @@ static void DetectRun(ThreadVars *th_v,
         goto end;
     }
 
-    /* run the prefilters for packets */
+    /* 运行prefilters引擎 */
     DetectRunPrefilterPkt(th_v, de_ctx, det_ctx, p, &scratch);
 
     PACKET_PROFILING_DETECT_START(p, PROF_DETECT_RULES);
-    /* inspect the rules against the packet */
+    /* 运行逐报文规则 */
     DetectRulePacketRules(th_v, de_ctx, det_ctx, p, pflow, &scratch);
     PACKET_PROFILING_DETECT_END(p, PROF_DETECT_RULES);
 
-    /* run tx/state inspection. Don't call for ICMP error msgs. */
+    /* 运行事务检测，run tx/state inspection. Don't call for ICMP error msgs. */
     if (pflow && pflow->alstate && likely(pflow->proto == p->proto)) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_TX);
         DetectRunTx(th_v, de_ctx, det_ctx, p, pflow, &scratch);
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_TX);
     }
 
-end:
+end:/* 检测后处理：打标签，汇总动作等 */
     DetectRunPostRules(th_v, de_ctx, det_ctx, p, pflow, &scratch);
 
     DetectRunCleanup(det_ctx, p, pflow);
     SCReturn;
 }
-
+/* 规则匹配后，提取动作 */
 static void DetectRunPostMatch(ThreadVars *tv,
                                DetectEngineThreadCtx *det_ctx, Packet *p,
                                const Signature *s)
@@ -522,7 +522,7 @@ static inline void DetectRunGetRuleGroup(
 
     scratch->sgh = sgh;
 }
-
+/* IPonly规则检测 */
 static void DetectRunInspectIPOnly(ThreadVars *tv, const DetectEngineCtx *de_ctx,
         DetectEngineThreadCtx *det_ctx,
         Flow * const pflow, Packet * const p)
@@ -538,12 +538,12 @@ static void DetectRunInspectIPOnly(ThreadVars *tv, const DetectEngineCtx *de_ctx
             ((p->flowflags & FLOW_PKT_TOCLIENT) && !(p->flowflags & FLOW_PKT_TOCLIENT_IPONLY_SET)))
         {
             SCLogDebug("testing against \"ip-only\" signatures");
-
+            /* 检测 */
             PACKET_PROFILING_DETECT_START(p, PROF_DETECT_IPONLY);
             IPOnlyMatchPacket(tv, de_ctx, det_ctx, &de_ctx->io_ctx, &det_ctx->io_ctx, p);
             PACKET_PROFILING_DETECT_END(p, PROF_DETECT_IPONLY);
 
-            /* save in the flow that we scanned this direction... */
+            /* 设置已检测标识, save in the flow that we scanned this direction... */
             FlowSetIPOnlyFlag(pflow, p->flowflags & FLOW_PKT_TOSERVER ? 1 : 0);
 
         } else if (((p->flowflags & FLOW_PKT_TOSERVER) &&
@@ -560,7 +560,7 @@ static void DetectRunInspectIPOnly(ThreadVars *tv, const DetectEngineCtx *de_ctx
         }
     } else { /* p->flags & PKT_HAS_FLOW */
         /* no flow */
-
+        /* 无流表，仍然逐包检测 */
         /* Even without flow we should match the packet src/dst */
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_IPONLY);
         IPOnlyMatchPacket(tv, de_ctx, det_ctx, &de_ctx->io_ctx,
@@ -568,7 +568,7 @@ static void DetectRunInspectIPOnly(ThreadVars *tv, const DetectEngineCtx *de_ctx
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_IPONLY);
     }
 }
-
+/* 规则前提条件快速匹配 */
 /* returns 0 if no match, 1 if match */
 static inline int DetectRunInspectRuleHeader(
     const Packet *p,
@@ -577,7 +577,7 @@ static inline int DetectRunInspectRuleHeader(
     const uint32_t sflags,
     const uint8_t s_proto_flags)
 {
-    /* check if this signature has a requirement for flowvars of some type
+    /* 流变量匹配，check if this signature has a requirement for flowvars of some type
      * and if so, if we actually have any in the flow. If not, the sig
      * can't match and we skip it. */
     if ((p->flags & PKT_HAS_FLOW) && (sflags & SIG_FLAG_REQUIRE_FLOWVAR)) {
@@ -592,7 +592,7 @@ static inline int DetectRunInspectRuleHeader(
             return 0;
         }
     }
-
+    /* IP类型匹配 */
     if ((s_proto_flags & DETECT_PROTO_IPV4) && !PKT_IS_IPV4(p)) {
         SCLogDebug("ip version didn't match");
         return 0;
@@ -601,13 +601,13 @@ static inline int DetectRunInspectRuleHeader(
         SCLogDebug("ip version didn't match");
         return 0;
     }
-
+    /* L3协议匹配 */
     if (DetectProtoContainsProto(&s->proto, IP_GET_IPPROTO(p)) == 0) {
         SCLogDebug("proto didn't match");
         return 0;
     }
 
-    /* check the source & dst port in the sig */
+    /* L4协议匹配，check the source & dst port in the sig */
     if (p->proto == IPPROTO_TCP || p->proto == IPPROTO_UDP || p->proto == IPPROTO_SCTP) {
         if (!(sflags & SIG_FLAG_DP_ANY)) {
             if (p->flags & PKT_IS_FRAGMENT)
@@ -632,7 +632,7 @@ static inline int DetectRunInspectRuleHeader(
         return 0;
     }
 
-    /* check the destination address */
+    /* 匹配源、目的IP，check the destination address */
     if (!(sflags & SIG_FLAG_DST_ANY)) {
         if (PKT_IS_IPV4(p)) {
             if (DetectAddressMatchIPv4(s->addr_dst_match4, s->addr_dst_match4_cnt, &p->dst) == 0)
@@ -658,7 +658,7 @@ static inline int DetectRunInspectRuleHeader(
 
 /** \internal
  *  \brief run packet/stream prefilter engines
- */
+ *//* prefilter引擎, 以便于加速规则查找的整体流程 */
 static inline void DetectRunPrefilterPkt(
     ThreadVars *tv,
     DetectEngineCtx *de_ctx,
@@ -669,10 +669,10 @@ static inline void DetectRunPrefilterPkt(
 {
     DetectPrefilterSetNonPrefilterList(p, det_ctx, scratch);
 
-    /* create our prefilter mask */
+    /* 构建条件过滤掩码，create our prefilter mask */
     PacketCreateMask(p, &scratch->pkt_mask, scratch->alproto, scratch->app_decoder_events);
 
-    /* build and prefilter non_pf list against the mask of the packet */
+    /* 构建non_pf列表, build and prefilter non_pf list against the mask of the packet */
     PACKET_PROFILING_DETECT_START(p, PROF_DETECT_NONMPMLIST);
     det_ctx->non_pf_id_cnt = 0;
     if (likely(det_ctx->non_pf_store_cnt > 0)) {
@@ -680,7 +680,7 @@ static inline void DetectRunPrefilterPkt(
     }
     PACKET_PROFILING_DETECT_END(p, PROF_DETECT_NONMPMLIST);
 
-    /* run the prefilter engines */
+    /* 运行prefilter引擎, run the prefilter engines */
     Prefilter(det_ctx, scratch->sgh, p, scratch->flow_flags);
     /* create match list if we have non-pf and/or pf */
     if (det_ctx->non_pf_store_cnt || det_ctx->pmq.rule_id_array_cnt) {
@@ -701,7 +701,7 @@ static inline void DetectRunPrefilterPkt(
     }
 #endif
 }
-
+/* 逐报文规则匹配 */
 static inline void DetectRulePacketRules(
     ThreadVars * const tv,
     DetectEngineCtx * const de_ctx,
@@ -730,7 +730,7 @@ static inline void DetectRulePacketRules(
     if (match_cnt >= de_ctx->profile_match_logging_threshold)
         RulesDumpMatchArray(det_ctx, scratch->sgh, p);
 #endif
-
+    /* 遍历待匹配的规则列表, DetectEngineThreadCtx->match_array[] */
     uint32_t sflags, next_sflags = 0;
     if (match_cnt) {
         next_s = *match_array++;
@@ -745,7 +745,7 @@ static inline void DetectRulePacketRules(
 #endif
         s = next_s;
         sflags = next_sflags;
-        if (match_cnt) {
+        if (match_cnt) {       /* 提取下一个规则 */
             next_s = *match_array++;
             next_sflags = next_s->flags;
         }
@@ -761,14 +761,14 @@ static inline void DetectRulePacketRules(
          * There we depend on prefilter */
         if ((s->mask & scratch->pkt_mask) != s->mask) {
             SCLogDebug("mask mismatch %x & %x != %x", s->mask, scratch->pkt_mask, s->mask);
-            goto next;
+            goto next;         /* 匹配条件掩码 */
         }
 
         if (unlikely(sflags & SIG_FLAG_DSIZE)) {
             if (likely(p->payload_len < s->dsize_low || p->payload_len > s->dsize_high)) {
                 SCLogDebug("kicked out as p->payload_len %u, dsize low %u, hi %u",
                         p->payload_len, s->dsize_low, s->dsize_high);
-                goto next;
+                goto next;     /* 匹配报文长度 */
             }
         }
 
@@ -779,7 +779,7 @@ static inline void DetectRulePacketRules(
                     if (scratch->alproto != ALPROTO_SMB) {
                         SCLogDebug("DCERPC sig, alproto not SMB");
                         goto next;
-                    }
+                    }          /* 匹配应用层协议 */
                 } else {
                     SCLogDebug("alproto mismatch");
                     goto next;
@@ -788,16 +788,16 @@ static inline void DetectRulePacketRules(
         }
 
         if (DetectRunInspectRuleHeader(p, pflow, s, sflags, s_proto_flags) == 0) {
-            goto next;
+            goto next;         /* 快速匹配，包括L3协议、地址，L4协议等 */
         }
 
         if (DetectEnginePktInspectionRun(tv, det_ctx, s, pflow, p, &alert_flags) == false) {
-            goto next;
+            goto next;         /* 基于报文引擎的匹配 Signature->pkt_inspect */
         }
 
 #ifdef PROFILING
         smatch = true;
-#endif
+#endif                         /* 提取执行动作 */
         DetectRunPostMatch(tv, det_ctx, p, s);
 
         if (!(sflags & SIG_FLAG_NOALERT)) {
@@ -921,7 +921,7 @@ static inline void DetectRunPostRules(
     Flow * const pflow,
     DetectRunScratchpad *scratch)
 {
-    /* see if we need to increment the inspect_id and reset the de_state */
+    /* 事务相关操作，see if we need to increment the inspect_id and reset the de_state */
     if (pflow && pflow->alstate) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_TX_UPDATE);
         DeStateUpdateInspectTransactionId(pflow, scratch->flow_flags, (scratch->sgh == NULL));
@@ -931,7 +931,7 @@ static inline void DetectRunPostRules(
     /* so now let's iterate the alerts and remove the ones after a pass rule
      * matched (if any). This is done inside PacketAlertFinalize() */
     /* PR: installed "tag" keywords are handled after the threshold inspection */
-
+    /* 遍历告警，试图去掉一部分bypass的 */
     PACKET_PROFILING_DETECT_START(p, PROF_DETECT_ALERT);
     PacketAlertFinalize(de_ctx, det_ctx, p);
     if (p->alerts.cnt > 0) {
@@ -1517,19 +1517,19 @@ next:
 void DetectSignatureApplyActions(Packet *p,
         const Signature *s, const uint8_t alert_flags)
 {
-    PACKET_UPDATE_ACTION(p, s->action);
+    PACKET_UPDATE_ACTION(p, s->action);   /* 更新报文动作标识 */
 
-    if (s->action & ACTION_DROP) {
+    if (s->action & ACTION_DROP) {        /* 记录DROP动作 */
         if (p->alerts.drop.action == 0) {
             p->alerts.drop.num = s->num;
             p->alerts.drop.action = s->action;
             p->alerts.drop.s = (Signature *)s;
         }
-    } else if (s->action & ACTION_PASS) {
+    } else if (s->action & ACTION_PASS) { /* 打标签，后续此流的报文不再规则检测 */
         /* if an stream/app-layer match we enforce the pass for the flow */
         if ((p->flow != NULL) &&
                 (alert_flags & (PACKET_ALERT_FLAG_STATE_MATCH|PACKET_ALERT_FLAG_STREAM_MATCH)))
-        {
+        {   
             FlowSetNoPacketInspectionFlag(p->flow);
         }
 
@@ -1617,7 +1617,7 @@ TmEcode Detect(ThreadVars *tv, Packet *p, void *data)
     /* if in MT mode _and_ we have tenants registered, use
      * MT logic. */
     if (det_ctx->mt_det_ctxs_cnt > 0 && det_ctx->TenantGetId != NULL)
-    {
+    {   /* 多租户，获取检测环境 */
         uint32_t tenant_id = p->tenant_id;
         if (tenant_id == 0)
             tenant_id = det_ctx->TenantGetId(det_ctx, p);
@@ -1638,14 +1638,14 @@ TmEcode Detect(ThreadVars *tv, Packet *p, void *data)
             /* use default if no tenants are registered for this packet */
             de_ctx = det_ctx->de_ctx;
         }
-    } else {
+    } else {  /* 非多租户，获取检测环境 */
         de_ctx = det_ctx->de_ctx;
     }
 
     if (p->flow) {
-        DetectFlow(tv, de_ctx, det_ctx, p);
+        DetectFlow(tv, de_ctx, det_ctx, p);    /* 流检测 */
     } else {
-        DetectNoFlow(tv, de_ctx, det_ctx, p);
+        DetectNoFlow(tv, de_ctx, det_ctx, p);  /* 非流检测 */
     }
     return TM_ECODE_OK;
 error:

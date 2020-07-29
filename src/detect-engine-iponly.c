@@ -974,7 +974,7 @@ int IPOnlyMatchCompatSMs(ThreadVars *tv,
     if (smd) {
         while (1) {
             DEBUG_VALIDATE_BUG_ON(!(sigmatch_table[smd->type].flags & SIGMATCH_IPONLY_COMPAT));
-            KEYWORD_PROFILING_START;
+            KEYWORD_PROFILING_START;    /* 匹配非正则式单规则, 如 "tag"/DETECT_TAG -> DetectTagMatch() */
             if (sigmatch_table[smd->type].Match(det_ctx, p, s, smd->ctx) > 0) {
                 KEYWORD_PROFILING_END(det_ctx, smd->type, 1);
                 if (smd->is_last)
@@ -1008,7 +1008,7 @@ void IPOnlyMatchPacket(ThreadVars *tv,
     void *user_data_src = NULL, *user_data_dst = NULL;
 
     SCEnter();
-
+    /* 查找规则树，寻找匹配源、目的IP的规则组 */
     if (p->src.family == AF_INET) {
         (void)SCRadixFindKeyIPV4BestMatch((uint8_t *)&GET_IPV4_SRC_ADDR_U32(p),
                                               io_ctx->tree_ipv4src, &user_data_src);
@@ -1027,15 +1027,15 @@ void IPOnlyMatchPacket(ThreadVars *tv,
 
     src = user_data_src;
     dst = user_data_dst;
-
+    /* 无对应规则集，则返回 */
     if (src == NULL || dst == NULL)
         SCReturn;
-
+    /* 遍历匹配到的规则集 */
     uint32_t u;
     for (u = 0; u < src->size; u++) {
         SCLogDebug("And %"PRIu8" & %"PRIu8, src->array[u], dst->array[u]);
-
-        /* The final results will be at io_tctx */
+        /* 记录到DetectEngineThreadCtx->io_ctx */
+        /* <TK!!!>此处记录的是源、目的IP同时匹配的规则 */
         io_tctx->sig_match_array[u] = dst->array[u] & src->array[u];
 
         /* We have to move the logic of the signature checking
@@ -1047,9 +1047,9 @@ void IPOnlyMatchPacket(ThreadVars *tv,
             uint8_t i = 0;
 
             for (; i < 8; i++, bitarray = bitarray >> 1) {
-                if (bitarray & 0x01) {
+                if (bitarray & 0x01) {  /* 找到对应的规则/Signature */
                     Signature *s = de_ctx->sig_array[u * 8 + i];
-
+                    /* L3协议匹配 */
                     if ((s->proto.flags & DETECT_PROTO_IPV4) && !PKT_IS_IPV4(p)) {
                         SCLogDebug("ip version didn't match");
                         continue;
@@ -1064,14 +1064,14 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                         continue;
                     }
 
-                    /* check the source & dst port in the sig */
+                    /* L4协议匹配，check the source & dst port in the sig */
                     if (p->proto == IPPROTO_TCP || p->proto == IPPROTO_UDP || p->proto == IPPROTO_SCTP) {
                         if (!(s->flags & SIG_FLAG_DP_ANY)) {
-                            if (p->flags & PKT_IS_FRAGMENT)
+                            if (p->flags & PKT_IS_FRAGMENT)     /* 碎片报文不匹配 */
                                 continue;
 
                             DetectPort *dport = DetectPortLookupGroup(s->dp,p->dp);
-                            if (dport == NULL) {
+                            if (dport == NULL) {                /* 目的端口匹配 */
                                 SCLogDebug("dport didn't match.");
                                 continue;
                             }
@@ -1081,7 +1081,7 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                                 continue;
 
                             DetectPort *sport = DetectPortLookupGroup(s->sp,p->sp);
-                            if (sport == NULL) {
+                            if (sport == NULL) {                /* 源端口匹配 */
                                 SCLogDebug("sport didn't match.");
                                 continue;
                             }
@@ -1090,14 +1090,14 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                         SCLogDebug("port-less protocol and sig needs ports");
                         continue;
                     }
-
+                    /* 匹配非正则式列表, Signature->sm_arrays[DETECT_SM_LIST_MATCH] */
                     if (!IPOnlyMatchCompatSMs(tv, det_ctx, s, p)) {
                         continue;
                     }
 
                     SCLogDebug("Signum %"PRIu32" match (sid: %"PRIu32", msg: %s)",
                                u * 8 + i, s->id, s->msg);
-
+                    /* 获取匹配规则后的动作 */
                     if (s->sm_arrays[DETECT_SM_LIST_POSTMATCH] != NULL) {
                         KEYWORD_PROFILING_SET_LIST(det_ctx, DETECT_SM_LIST_POSTMATCH);
                         SigMatchData *smd = s->sm_arrays[DETECT_SM_LIST_POSTMATCH];
@@ -1114,7 +1114,7 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                                 smd++;
                             }
                         }
-                    }
+                    }/* 将动作记录到 Packet->alerts.alerts[] 数组，以记录匹配到的规则/Signature */
                     if (!(s->flags & SIG_FLAG_NOALERT)) {
                         if (s->action & ACTION_DROP)
                             PacketAlertAppend(det_ctx, s, p, 0, PACKET_ALERT_FLAG_DROP_FLOW);

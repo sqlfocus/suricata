@@ -246,7 +246,7 @@ void PacketAlertFinalize(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx
 
         int res = PacketAlertHandle(de_ctx, det_ctx, s, p, &p->alerts.alerts[i]);
         if (res > 0) {
-            /* Now, if we have an alert, we have to check if we want
+            /* 试图打tag，Now, if we have an alert, we have to check if we want
              * to tag this session or src/dst host */
             if (s->sm_arrays[DETECT_SM_LIST_TMATCH] != NULL) {
                 KEYWORD_PROFILING_SET_LIST(det_ctx, DETECT_SM_LIST_TMATCH);
@@ -261,7 +261,7 @@ void PacketAlertFinalize(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx
                     smd++;
                 }
             }
-
+            /* IPonly打tag */
             if (s->flags & SIG_FLAG_IPONLY) {
                 if (((p->flowflags & FLOW_PKT_TOSERVER) && !(p->flowflags & FLOW_PKT_TOSERVER_IPONLY_SET)) ||
                     ((p->flowflags & FLOW_PKT_TOCLIENT) && !(p->flowflags & FLOW_PKT_TOCLIENT_IPONLY_SET))) {
@@ -307,7 +307,7 @@ void PacketAlertFinalize(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx
             }
         }
 
-        /* Thresholding removes this alert */
+        /* 去掉不满足阈值的告警，Thresholding removes this alert */
         if (res == 0 || res == 2) {
             PacketAlertRemove(p, i);
 

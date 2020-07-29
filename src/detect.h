@@ -86,18 +86,18 @@ struct SCSigSignatureWrapper_;
  * These codes are access points to particular lists in the array
  * Signature->sm_lists[DETECT_SM_LIST_MAX]. */
 enum DetectSigmatchListEnum {
-    DETECT_SM_LIST_MATCH = 0,
+    DETECT_SM_LIST_MATCH = 0,  /* 非PCRE式匹配 */
     DETECT_SM_LIST_PMATCH,     /* PCRE式匹配 */
 
     /* base64_data keyword uses some hardcoded logic so consider
      * built-in
      * TODO convert to inspect engine */
-    DETECT_SM_LIST_BASE64_DATA,
+    DETECT_SM_LIST_BASE64_DATA,/* */
 
     /* list for post match actions: flowbit set, flowint increment, etc */
-    DETECT_SM_LIST_POSTMATCH,  /* */
+    DETECT_SM_LIST_POSTMATCH,  /* 匹配规则后的动作 */
 
-    DETECT_SM_LIST_TMATCH, /**< post-detection tagging */
+    DETECT_SM_LIST_TMATCH,     /* 匹配规则后打标签 */
 
     /* lists for alert thresholding and suppression */
     DETECT_SM_LIST_SUPPRESS,   /* 匹配threshold.config中的suppress规则 */
@@ -541,7 +541,7 @@ typedef struct Signature_ {
     uint8_t file_flags;
 
     /** addresses, ports and proto this sig matches on */
-    DetectProto proto;   /* 检测协议(L3-L4), IPPROTO_TCP等的bit位表示 */
+    DetectProto proto;   /* 检测协议(L3-L4)集, IPPROTO_TCP等的bit位表示 */
 
     /** classification id **/
     uint16_t class_id;   /* 赋值 SCClassConfClasstype->classtype_id */
@@ -551,7 +551,7 @@ typedef struct Signature_ {
     uint16_t addr_src_match4_cnt;
     uint16_t addr_dst_match6_cnt;
     uint16_t addr_src_match6_cnt;
-    DetectMatchAddressIPv4 *addr_dst_match4;
+    DetectMatchAddressIPv4 *addr_dst_match4;  /* 用于耗时匹配前的快速IP匹配 */
     DetectMatchAddressIPv4 *addr_src_match4;  /* 将->init_data->src->ipv4_head变更为此处的数组 */
     /** ipv6 match arrays */
     DetectMatchAddressIPv6 *addr_dst_match6;
@@ -572,8 +572,8 @@ typedef struct Signature_ {
     /** netblocks and hosts specified at the sid, in CIDR format */
     IPOnlyCIDRItem *CidrSrc, *CidrDst;  /* 当 SIG_FLAG_IPONLY 时, 加速 */
 
-    DetectEngineAppInspectionEngine *app_inspect;
-    DetectEnginePktInspectionEngine *pkt_inspect;
+    DetectEngineAppInspectionEngine *app_inspect;  /* 应用引擎 */
+    DetectEnginePktInspectionEngine *pkt_inspect;  /* 逐包报文引擎 */
 
     /* Matching structures for the built-ins. The others are in
      * their inspect engines. */
@@ -668,7 +668,7 @@ typedef struct DetectVarList_ {
 typedef struct DetectEngineIPOnlyThreadCtx_ {
     uint8_t *sig_match_array; /* bit array of sig nums */
     uint32_t sig_match_size;  /* size in bytes of the array */
-} DetectEngineIPOnlyThreadCtx;
+} DetectEngineIPOnlyThreadCtx;   /* 记录IPonly引擎匹配到的规则集 */
 
 /** \brief IP only rules matching ctx. */
 typedef struct DetectEngineIPOnlyCtx_ {
@@ -1019,8 +1019,8 @@ typedef struct DetectEngineThreadCtx_ {
 
     /** Array of non-prefiltered sigs that need to be evaluated. Updated
      *  per packet based on the rule group and traffic properties. */
-    SigIntId *non_pf_id_array;
-    uint32_t non_pf_id_cnt; // size is cnt * sizeof(uint32_t)
+    SigIntId *non_pf_id_array;   /* 匹配的non-prefilter列表 */
+    uint32_t non_pf_id_cnt;      // size is cnt * sizeof(uint32_t)
 
     uint32_t mt_det_ctxs_cnt;
     struct DetectEngineThreadCtx_ **mt_det_ctxs;
@@ -1088,7 +1088,7 @@ typedef struct DetectEngineThreadCtx_ {
 
     /** array of signature pointers we're going to inspect in the detection
      *  loop. */
-    Signature **match_array;
+    Signature **match_array;       /* 待检测的规则列表 */
     /** size of the array in items (mem size if * sizeof(Signature *)
      *  Only used during initialization. */
     uint32_t match_array_len;
@@ -1099,7 +1099,7 @@ typedef struct DetectEngineThreadCtx_ {
     uint32_t tx_candidates_size;
 
     SignatureNonPrefilterStore *non_pf_store_ptr;
-    uint32_t non_pf_store_cnt;
+    uint32_t non_pf_store_cnt;     /* non-pf列表 */
 
     /** pointer to the current mpm ctx that is stored
      *  in a rule group head -- can be either a content
@@ -1107,14 +1107,14 @@ typedef struct DetectEngineThreadCtx_ {
     MpmThreadCtx mtc;   /**< thread ctx for the mpm */
     MpmThreadCtx mtcu;  /**< thread ctx for uricontent mpm */
     MpmThreadCtx mtcs;  /**< thread ctx for stream mpm */
-    PrefilterRuleStore pmq;
+    PrefilterRuleStore pmq;               /* prefilter引擎添加的匹配规则 */
 
     /** SPM thread context used for scanning. This has been cloned from the
      * prototype held by DetectEngineCtx. */
     SpmThreadCtx *spm_thread_ctx;
 
     /** ip only rules ctx */
-    DetectEngineIPOnlyThreadCtx io_ctx;
+    DetectEngineIPOnlyThreadCtx io_ctx;   /* 记录IPonly检测结果 */
 
     /* byte jump values */
     uint64_t *bj_values;
@@ -1132,7 +1132,7 @@ typedef struct DetectEngineThreadCtx_ {
         uint64_t tx_id;
     } filestore[DETECT_FILESTORE_MAX];
 
-    DetectEngineCtx *de_ctx;
+    DetectEngineCtx *de_ctx;           /* 检测环境 */
     /** store for keyword contexts that need a per thread storage. Per de_ctx. */
     void **keyword_ctxs_array;
     int keyword_ctxs_size;
@@ -1362,7 +1362,7 @@ typedef struct SigGroupHead_ {
 
     uint32_t id; /**< unique id used to index sgh_array for stats */
 
-    PrefilterEngine *pkt_engines;
+    PrefilterEngine *pkt_engines;      /* prefilter引擎 */
     PrefilterEngine *payload_engines;
     PrefilterEngine *tx_engines;
 

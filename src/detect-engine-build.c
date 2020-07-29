@@ -390,11 +390,11 @@ deonly:
 #define MASK_TCP_UNUSUAL_FLAGS      (TH_URG|TH_ECN|TH_CWR)
 
 /* Create mask for this packet + it's flow if it has one
- */
+ *//* 创建规则条件过滤掩码 */
 void
 PacketCreateMask(Packet *p, SignatureMask *mask, AppProto alproto,
         bool app_decoder_events)
-{
+{   /* 是否需要报文内容 */
     if (!(p->flags & PKT_NOPAYLOAD_INSPECTION) && p->payload_len > 0) {
         SCLogDebug("packet has payload");
         (*mask) |= SIG_MASK_REQUIRE_PAYLOAD;
@@ -405,12 +405,12 @@ PacketCreateMask(Packet *p, SignatureMask *mask, AppProto alproto,
         SCLogDebug("packet has no payload");
         (*mask) |= SIG_MASK_REQUIRE_NO_PAYLOAD;
     }
-
+    /* 是否需要事件引擎 */
     if (p->events.cnt > 0 || app_decoder_events != 0 || p->app_layer_events != NULL) {
         SCLogDebug("packet/flow has events set");
         (*mask) |= SIG_MASK_REQUIRE_ENGINE_EVENT;
     }
-
+    /* TCP报文特征 */
     if (!(PKT_IS_PSEUDOPKT(p)) && PKT_IS_TCP(p)) {
         if ((p->tcph->th_flags & MASK_TCP_INITDEINIT_FLAGS) != 0) {
             (*mask) |= SIG_MASK_REQUIRE_FLAGS_INITDEINIT;
@@ -419,12 +419,12 @@ PacketCreateMask(Packet *p, SignatureMask *mask, AppProto alproto,
             (*mask) |= SIG_MASK_REQUIRE_FLAGS_UNUSUAL;
         }
     }
-
+    /* 是否已建流表 */
     if (p->flags & PKT_HAS_FLOW) {
         SCLogDebug("packet has flow");
         (*mask) |= SIG_MASK_REQUIRE_FLOW;
     }
-
+    /* 特殊协议 */
     if (alproto == ALPROTO_SMB || alproto == ALPROTO_DCERPC) {
         SCLogDebug("packet will be inspected for DCERPC");
         (*mask) |= SIG_MASK_REQUIRE_DCERPC;

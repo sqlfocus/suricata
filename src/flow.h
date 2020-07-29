@@ -450,8 +450,8 @@ typedef struct Flow_
     /** application level storage ptrs.
      *
      */
-    AppLayerParserState *alparser;     /**< parser internal state */
-    void *alstate;      /**< application layer state */
+    AppLayerParserState *alparser;  /**< parser internal state */
+    void *alstate;                  /**< application layer state */
 
     /** toclient sgh for this flow. Only use when FLOW_SGH_TOCLIENT flow flag
      *  has been set. */

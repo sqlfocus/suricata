@@ -140,7 +140,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         Packet *p, const uint8_t flags)
 {
     SCEnter();
-
+    /* 引擎：报文引擎 */
     if (sgh->pkt_engines) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_PKT);
         /* run packet engines */
@@ -157,7 +157,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_PKT);
     }
 
-    /* run payload inspecting engines */
+    /* 引擎：报文负载引擎，run payload inspecting engines */
     if (sgh->payload_engines &&
         (p->payload_len || (p->flags & PKT_DETECT_HAS_STREAMDATA)) &&
         !(p->flags & PKT_NOPAYLOAD_INSPECTION))
@@ -176,7 +176,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_PAYLOAD);
     }
 
-    /* Sort the rule list to lets look at pmq.
+    /* 按 Signature->id 排序已匹配的规则，Sort the rule list to lets look at pmq.
      * NOTE due to merging of 'stream' pmqs we *MAY* have duplicate entries */
     if (likely(det_ctx->pmq.rule_id_array_cnt > 1)) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_SORT1);

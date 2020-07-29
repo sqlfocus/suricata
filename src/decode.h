@@ -297,7 +297,7 @@ typedef struct PacketAlerts_ {
     PacketAlert alerts[PACKET_ALERT_MAX];
     /* single pa used when we're dropping,
      * so we can log it out in the drop log. */
-    PacketAlert drop;
+    PacketAlert drop;   /* 记录DROP动作 */
 } PacketAlerts;
 
 /** number of decoder events we support per packet. Power of 2 minus 1
@@ -544,7 +544,7 @@ typedef struct Packet_
     uint16_t payload_len;
 
     /* IPS action to take */
-    uint8_t action;
+    uint8_t action;         /* 待执行动作, ACTION_DROP */
 
     uint8_t pkt_src;        /* */
 
@@ -555,7 +555,7 @@ typedef struct Packet_
     /* Incoming interface */
     struct LiveDevice_ *livedev;
 
-    PacketAlerts alerts;
+    PacketAlerts alerts;        /* 匹配规则后的动作记录 */
 
     struct Host_ *host_src;
     struct Host_ *host_dst;

@@ -1456,7 +1456,7 @@ bool DetectEnginePktInspectionRun(ThreadVars *tv,
         uint8_t *alert_flags)
 {
     SCEnter();
-
+    /* 报文引擎检测 */
     for (DetectEnginePktInspectionEngine *e = s->pkt_inspect; e != NULL; e = e->next) {
         if (e->v1.Callback(det_ctx, e, s, p, alert_flags) == false) {
             SCLogDebug("sid %u: e %p Callback returned false", s->id, e);
