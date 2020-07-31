@@ -78,7 +78,7 @@ const char *builtin_mpms[] = {
  *
  * Keywords are registered at engine start up
  */
-
+/* 规则检测多模列表 */
 static DetectBufferMpmRegistery *g_mpm_list[DETECT_BUFFER_MPM_TYPE_SIZE] = { NULL, NULL };
 static int g_mpm_list_cnt[DETECT_BUFFER_MPM_TYPE_SIZE] = { 0, 0 };
 

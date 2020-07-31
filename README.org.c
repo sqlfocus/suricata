@@ -4,7 +4,8 @@
 --SuricataMain()
   --InitGlobal()
     --RunModeRegisterRunModes()    注册运行模式, runmodes[RUNMODE_PCAP_DEV]
-  --ParseCommandLine()             解析命令行，赋值运行模式  SCInstance->run_mode
+  --ParseCommandLine()
+    --ParseCommandLinePcapLive()   解析命令行-i，赋值运行模式 RUNMODE_PCAP_DEV
   --LoadYamlConfig()
   --SCLogLoadConfig()              初始化日志输出
     --SCLogInitLogModule()
@@ -13,18 +14,26 @@
       --MpmHSRegister()
     --SpmTableSetup()              注册单模匹配算法, spm_table[SPM_HS]
       --SpmHSRegister()
-    --AppLayerSetup()              应用层协议解析环境
+    --AppLayerSetup()              初始化应用层协议解析环境
       --AppLayerParserRegisterProtocolParsers()
       --AppLayerProtoDetectPrepareState()
     --SCHInfoLoadFromConfig()      加载主机os信息等，以更好的适配检测策略
     --SigTableSetup()              注册检测规则关键字, sigmatch_table[]
     --TmqhSetup()                  注册典型队列，用于线程间通信, tmqh_table[TMQH_SIMPLE]
+    --PacketAlertTagInit()         初始化 g_tag_signature/g_tag_pa
     --RegisterAllModules()         注册、初始化线程模块, tmm_modules[]
+      --TmModuleReceivePcapRegister()
+      --TmModuleDecodePcapRegister()    pcap收包/解析 TMM_RECEIVEPCAP/TMM_DECODEPCAP
+      --TmModuleLoggerRegister()        输出模块
     --TmModuleRunInit()
+    --InitSignalHandler()          注册信号处理函数
     --PreRunInit()
       --DefragInit()               IP重组初始化
+      --IPPairInitConfig()
       --FlowInitConfig()           流模块初始化
       --StreamTcpInitConfig()      TCP流重组初始化
+  --PreRunPostPrivsDropInit()
+    --RunModeInitializeOutputs()   激活输出模块
   --PostConfLoadedDetectSetup()
     --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
     --LoadSignatures()             加载检测规则文件
@@ -33,9 +42,23 @@
     --RunMode->RunModeFunc()       运行模式初始化, RunModeIdsPcapWorkers()
     --FlowManagerThreadSpawn()
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
+  --SuricataMainLoop()
+    --DetectEngineReload()         主循环，处理SIGUSR2信号，重新加载规则引擎
 
 * 重要的全局变量
 SCInstance suricata        全局环境数据
+RunModes runmodes[]        引擎支持的运行模式
+
+    
+* 日志环境初始化
+SCLogConfig *sc_log_config         日志配置信息结构
+    
+--SuricataMain()
+  --InitGlobal()               解析配置文件前，初始化日志输出为CONSOLE
+    --SCLogInitLogModule()
+  --SCLogLoadConfig()          解析配置文件后，重新初始化日志
+    --ConfGetNode()                读取"logging.outputs"配置
+    --SCLogInitLogModule()
     
 
 * 应用层协议解析环境初始化 AppLayerSetup()
@@ -74,11 +97,14 @@ SCInstance suricata        全局环境数据
       --DetectAppLayerEventRegister()             注册应用层检测/识别产生的事件的处理句柄
   --PostConfLoadedDetectSetup()
     --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
+      --DetectEngineCtxLoadConf()                 加载配置文件
       --SRepInit()                                加载IP信誉库
+        --SRepLoadCatFile()
+        --SRepLoadFile()
       --SCClassConfLoadClassficationConfigFile()  解析 classification.config
       --SCRConfLoadReferenceConfigFile()          解析 reference.config
       --ActionInitConfig()                        初始化动作优先级, action_order_sigs[]
-      --VarNameStoreSetupStaging()
+      --VarNameStoreSetupStaging()                初始化变量名空间, g_varnamestore_staging
     --LoadSignatures()             
       --SigLoadSignatures()
         --ProcessSigFiles()        加载检测规则文件, suricata.rules等

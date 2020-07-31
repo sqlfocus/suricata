@@ -132,8 +132,8 @@ typedef struct AppLayerProtoDetectPMCtx_ {
     AppLayerProtoDetectPMSignature *head;   /* 单模式匹配链表, 初始化后为NULL */
 
     /* \todo we don't need this except at setup time.  Get rid of it. */
-    PatIntId max_pat_id;    /* ->head中不重复的模式数量 */
-    SigIntId max_sig_id;    /* ->head中特征数量 */
+    PatIntId max_pat_id;    /* ->head中不重复的模式数量(DetectContentData) */
+    SigIntId max_sig_id;    /* ->head中特征数量(AppLayerProtoDetectPMSignature) */
 } AppLayerProtoDetectPMCtx;
 
 typedef struct AppLayerProtoDetectCtxIpproto_ {
@@ -148,7 +148,7 @@ typedef struct AppLayerProtoDetectCtx_ {
     /* Context per ip_proto.
      * \todo Modify ctx_ipp to hold for only tcp and udp. The rest can be
      *       implemented if needed.  Waste of space otherwise. */ /* 传输层协议->流方向->L7识别规则表 */
-    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];    /* L7协议识别环境，多摸环境上下文 */
+    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];    /* L7协议识别环境，多模环境上下文 */
 
     /* Global SPM thread context prototype. */
     SpmGlobalThreadCtx *spm_global_thread_ctx;   /* 全局, 单模式匹配的上下文 */
@@ -1577,7 +1577,7 @@ int AppLayerProtoDetectPrepareState(void)
             ctx_pm = &alpd_ctx.ctx_ipp[i].ctx_pm[j];
 
             if (AppLayerProtoDetectPMSetContentIDs(ctx_pm) < 0)
-                goto error;    /* 设置 DetectContentData->id, AppLayerProtoDetectPMCtx->max_pat_id/max_sig_id  */
+                goto error;    /* 计数pattern，设置 DetectContentData->id, 更新 AppLayerProtoDetectPMCtx->max_pat_id/max_sig_id  */
 
             if (ctx_pm->max_sig_id == 0)
                 continue;

@@ -95,12 +95,12 @@ typedef struct RootLogger_ {
 
 /* List of registered root loggers. These are registered at start up and
  * are independent of configuration. Later we will build a list of active
- * loggers based on configuration. */
-static TAILQ_HEAD(, RootLogger_) registered_loggers =
-    TAILQ_HEAD_INITIALIZER(registered_loggers);
+ * loggers based on configuration. *//* 注册的输出模块，代表本程序支持的全量 */
+static TAILQ_HEAD(, RootLogger_) registered_loggers = /* 后续根据配置文件初始化 */
+    TAILQ_HEAD_INITIALIZER(registered_loggers);       /* active_loggers */
 
 /* List of active root loggers. This means that at least one logger is enabled
- * for each root logger type in the config. */
+ * for each root logger type in the config. *//* 最终配置文件激活的输出模块 */
 static TAILQ_HEAD(, RootLogger_) active_loggers =
     TAILQ_HEAD_INITIALIZER(active_loggers);
 
@@ -1044,9 +1044,9 @@ static void OutputRegisterActiveLogger(RootLogger *reg)
 void OutputSetupActiveLoggers(void)
 {
     RootLogger *logger = TAILQ_FIRST(&registered_loggers);
-    while (logger) {
+    while (logger) {  /* 计数，查看是否有使用此输出方式, 如 OutputPacketLoggerGetActiveCount() */
         uint32_t cnt = logger->ActiveCntFunc();
-        if (cnt) {
+        if (cnt) {    /* 注册到激活链表, active_loggers */
             OutputRegisterActiveLogger(logger);
         }
 
@@ -1062,11 +1062,11 @@ void OutputClearActiveLoggers(void)
         SCFree(logger);
     }
 }
-
+/* 注册支持的日志模块 */
 void TmModuleLoggerRegister(void)
 {
-    OutputRegisterRootLoggers();
-    OutputRegisterLoggers();
+    OutputRegisterRootLoggers();   /* root权限的底层输出方式 */
+    OutputRegisterLoggers();       /* 非root权限的功能性输出模块 */
 }
 
 /**

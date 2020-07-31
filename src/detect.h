@@ -87,7 +87,7 @@ struct SCSigSignatureWrapper_;
  * Signature->sm_lists[DETECT_SM_LIST_MAX]. */
 enum DetectSigmatchListEnum {
     DETECT_SM_LIST_MATCH = 0,  /* 非PCRE式匹配 */
-    DETECT_SM_LIST_PMATCH,     /* PCRE式匹配 */
+    DETECT_SM_LIST_PMATCH,     /* PCRE式匹配，支持fast pattern, 加入 sm_fp_support_smlist_list */
 
     /* base64_data keyword uses some hardcoded logic so consider
      * built-in
@@ -189,10 +189,10 @@ enum {
 
 /** \brief Port structure for detection engine */
 typedef struct DetectPort_ {
-    uint16_t port;
-    uint16_t port2;
-
-    uint8_t flags;  /**< flags for this port */
+    uint16_t port;     /* 对于"80"，port=port2=80 */
+    uint16_t port2;    /* 对于"80:89"，port=80，port2=89 */
+                       /* 对于"any": port=0, port2=65535 */
+    uint8_t flags;     /* 对于"!80", port=port2=80, 并设置 PORT_FLAG_NOT */
 
     /* signatures that belong in this group
      *
@@ -434,7 +434,7 @@ typedef struct DetectBufferType_ {
     int parent_id;
     bool mpm;                  /* 是否支持多模引擎 */
     bool packet; /**< compat to packet matches */
-    bool supports_transforms;  /* 是否支持转换 */
+    bool supports_transforms;  /* 是否支持事务 */
     void (*SetupCallback)(const struct DetectEngineCtx_ *, struct Signature_ *);
     bool (*ValidateCallback)(const struct Signature_ *, const char **sigerror);
     DetectEngineTransforms transforms;
@@ -765,7 +765,7 @@ enum DetectEngineType
 /** \brief main detection engine ctx *//* 检测引擎信息结构 */
 typedef struct DetectEngineCtx_ {
     uint8_t flags;
-    int failure_fatal;
+    int failure_fatal;            /* 解析失败，是否强制进程退出？ */
 
     int tenant_id;
 
@@ -812,20 +812,20 @@ typedef struct DetectEngineCtx_ {
     DetectEngineIPOnlyCtx io_ctx;  /* IP Only检测环境 */
     ThresholdCtx ths_ctx;          /* */
 
-    uint16_t mpm_matcher;    /* 多模引擎类型, MPM_HS */
-    uint16_t spm_matcher;    /* 单模引擎类型, SPM_HS */
+    uint16_t mpm_matcher;    /* 默认多模引擎类型, MPM_HS */
+    uint16_t spm_matcher;    /* 默认单模引擎类型, SPM_HS */
 
     /* spm thread context prototype, built as spm matchers are constructed and
      * later used to construct thread context for each thread. */
     SpmGlobalThreadCtx *spm_global_thread_ctx;  /* 单模引擎全局上下文 */
                                                 /* 用于构建各线程检测上下文 */
     /* Config options */
-
-    uint16_t max_uniq_toclient_groups;  /* 20 */
-    uint16_t max_uniq_toserver_groups;  /* 40 */
+                             /* "detect.profile", 性能指标：高性能使用内存多 */
+    uint16_t max_uniq_toclient_groups;  /* 20 */  /* 低性能使用内存少；此选 */
+    uint16_t max_uniq_toserver_groups;  /* 40 */  /* 项需要在性能和内存之间平衡 */
 
     /* specify the configuration for mpm context factory */
-    uint8_t sgh_mpm_context; /* ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE, 来自配置文件detect.sgh-mpm-context */
+    uint8_t sgh_mpm_context; /* 多模匹配工厂模型, ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE, 来自配置文件detect.sgh-mpm-context */
 
     /* max flowbit id that is used */
     uint32_t max_fb_id;      /* */
@@ -835,7 +835,7 @@ typedef struct DetectEngineCtx_ {
     MpmCtxFactoryContainer *mpm_ctx_factory_container;
                              /* 多模引擎工厂 */
     /* maximum recursion depth for content inspection */
-    int inspection_recursion_limit;     /* 3000 */
+    int inspection_recursion_limit;     /* 性能指标 - 迭代检测上限，3000 */
 
     /* conf parameter that limits the length of the http request body inspected */
     int hcbd_buffer_limit;
@@ -894,7 +894,7 @@ typedef struct DetectEngineCtx_ {
 #endif
     uint32_t prefilter_maxid;
 
-    char config_prefix[64];         /* 重新加载对应的前缀 */
+    char config_prefix[64];         /* 每次重新加载引擎，都对应自己的前缀，用于寻找新版本suricata.yaml配置解析结果 */
 
     enum DetectEngineType type;     /* 检测引擎类型, DETECT_ENGINE_TYPE_NORMAL */
 
@@ -920,20 +920,20 @@ typedef struct DetectEngineCtx_ {
     /** table to store metadata keys and values */
     HashTable *metadata_table;
 
-    DetectBufferType **buffer_type_map;  /* 注册的检测类型数组 */
+    DetectBufferType **buffer_type_map;  /* 运行前注册的检测类型数组 */
     uint32_t buffer_type_map_elements;
 
     /* hash table with rule-time buffer registration. Start time registration
      * is in detect-engine.c::g_buffer_type_hash */
-    HashListTable *buffer_type_hash;     /* */
-    int buffer_type_id; /* = g_buffer_type_id */
+    HashListTable *buffer_type_hash;     /* 运行期间注册的检测类型 */
+    int buffer_type_id;                  /* = g_buffer_type_id */
 
     /* list with app inspect engines. Both the start-time registered ones and
      * the rule-time registered ones. */
-    DetectEngineAppInspectionEngine *app_inspect_engines; /* = g_app_inspect_engines */
+    DetectEngineAppInspectionEngine *app_inspect_engines; /* 复制自 g_app_inspect_engines */
     DetectBufferMpmRegistery *app_mpms_list;  
     uint32_t app_mpms_list_cnt;  /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
-    DetectEnginePktInspectionEngine *pkt_inspect_engines; /* = g_pkt_inspect_engines */
+    DetectEnginePktInspectionEngine *pkt_inspect_engines; /* 复制自 g_pkt_inspect_engines */
     DetectBufferMpmRegistery *pkt_mpms_list;
     uint32_t pkt_mpms_list_cnt;  /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] */
 
@@ -941,7 +941,7 @@ typedef struct DetectEngineCtx_ {
     HashListTable *prefilter_hash_table; /* */
 
     /** time of last ruleset reload */
-    struct timeval last_reload;          /* 规则加载后更新 */
+    struct timeval last_reload;          /* 规则加载后的时间 */
 
     /** signatures stats */
     SigFileLoaderStat sig_stat;          /* 规则文件解析统计结果 */
@@ -1429,7 +1429,7 @@ typedef struct DetectEngineMasterCtx_ {
     int multi_tenant_enabled;    /* 是否支持多租户 */
 
     /** version, incremented after each 'apply to threads' */
-    uint32_t version;            /* 版本号，每次引用到工作线程后++ */
+    uint32_t version;            /* 版本号，初始值99，每次加载规则后++ */
 
     /** list of active detection engines. This list is used to generate the
      *  threads det_ctx's */

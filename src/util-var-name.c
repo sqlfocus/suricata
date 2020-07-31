@@ -55,7 +55,7 @@ static VarNameStore *g_varnamestore_old = NULL;
 
 /* new VarNameStore that is being prepared. Multiple DetectLoader threads
  * may be updating it so a lock is used for synchronization. */
-static VarNameStore *g_varnamestore_staging = NULL;
+static VarNameStore *g_varnamestore_staging = NULL;  /* 变量名空间 */
 static SCMutex g_varnamestore_staging_m = SCMUTEX_INITIALIZER;
 
 /** \brief Name2idx mapping structure for flowbits, flowvars and pktvars. */

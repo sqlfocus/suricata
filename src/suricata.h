@@ -131,7 +131,7 @@ typedef struct SCInstance_ {
     char *regex_arg;
 
     char *keyword_info;
-    char *runmode_custom_mode;
+    char *runmode_custom_mode; /* 命令行--runmode指定的运行模式 */
 #ifndef OS_WIN32
     const char *user_name;
     const char *group_name;
@@ -150,7 +150,7 @@ typedef struct SCInstance_ {
     int daemon;                /* 是否作为精灵进程运行，由配置参数-D决定 */
     int offline;               /* 是否为离线模式，如PCAP FILE模式 */
     int verbose;               /* 日志详细程度，[0, 4]，对应参数-v/-v -v等（越多次对应INFO级别向更详细方向的次数） */
-    int checksum_validation;
+    int checksum_validation;   /* 是否支持流验证校验和 */
 
     struct timeval start_time;
 

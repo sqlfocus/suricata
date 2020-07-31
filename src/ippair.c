@@ -47,8 +47,8 @@ static IPPair *IPPairGetUsedIPPair(void);
 /** ippair hash table */
 IPPairHashRow *ippair_hash;
 /** queue with spare ippairs */
-static IPPairQueue ippair_spare_q;
-IPPairConfig ippair_config;
+static IPPairQueue ippair_spare_q;  /* 空闲队列 */
+IPPairConfig ippair_config;         /* IP Pair配置信息 */
 SC_ATOMIC_DECLARE(uint64_t,ippair_memuse);
 SC_ATOMIC_DECLARE(uint32_t,ippair_counter);
 SC_ATOMIC_DECLARE(uint32_t,ippair_prune_idx);

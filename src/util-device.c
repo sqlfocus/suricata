@@ -63,7 +63,7 @@ static int live_devices_stats = 1;
 
 static int LiveSafeDeviceName(const char *devname,
                               char *newdevname, size_t destlen);
-
+/* 是否支持网卡offloading */
 static int g_live_devices_disable_offloading = 1;
 
 void LiveSetOffloadDisable(void)

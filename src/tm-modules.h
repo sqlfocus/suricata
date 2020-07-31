@@ -84,7 +84,7 @@ typedef struct OutputCtx_ {
     void (*DeInit)(struct OutputCtx_ *);
 
     TAILQ_HEAD(, OutputModule_) submodules;
-} OutputCtx;
+} OutputCtx;  /* 输出模块上下文环境 */
 
 TmModule *TmModuleGetByName(const char *name);
 TmModule *TmModuleGetById(int id);

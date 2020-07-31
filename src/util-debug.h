@@ -115,18 +115,18 @@ typedef struct SCLogOPBuffer_ {
  * \brief The output interface context for the logging module
  */
 typedef struct SCLogOPIfaceCtx_ {
-    SCLogOPIface iface;
+    SCLogOPIface iface;    /* SC_LOG_OP_IFACE_SYSLOG */
 
     int16_t use_color;
-    int16_t type;
+    int16_t type;          /* SC_LOG_OP_TYPE_JSON */
 
     /* the output file to be used if the interface is SC_LOG_IFACE_FILE */
     const char *file;
     /* the output file descriptor for the above file */
-    FILE * file_d;                  /* 文件句柄 */
+    FILE * file_d;         /* 文件句柄 */
 
     /* registered to be set on a file rotation signal */
-    int rotation_flag;              /* 日志文件rotate标识 */
+    int rotation_flag;     /* 日志文件rotate标识 */
 
     /* the facility code if the interface is SC_LOG_IFACE_SYSLOG */
     int facility;
@@ -138,7 +138,7 @@ typedef struct SCLogOPIfaceCtx_ {
     const char *log_format;
 
     /* Mutex used for locking around rotate/write to a file. */
-    SCMutex fp_mutex;               /* 文件锁，用于文件rotate/write */
+    SCMutex fp_mutex;      /* 文件锁，用于文件rotate/write */
 
     struct SCLogOPIfaceCtx_ *next;
 } SCLogOPIfaceCtx;

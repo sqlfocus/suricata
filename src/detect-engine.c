@@ -2006,7 +2006,7 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     ThresholdHashInit(de_ctx);
     DetectParseDupSigHashInit(de_ctx);
     DetectAddressMapInit(de_ctx);
-    DetectMetadataHashInit(de_ctx);
+    DetectMetadataHashInit(de_ctx); /* 构建检测类型哈希表 */
     DetectBufferTypeSetupDetectEngine(de_ctx);
 
     /* init iprep... ignore errors for now */
@@ -2020,7 +2020,7 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     }
 
     de_ctx->version = DetectEngineGetVersion();  /* 初始化引擎版本号 */
-    VarNameStoreSetupStaging(de_ctx->version);   /* */
+    VarNameStoreSetupStaging(de_ctx->version);   /* 初始化变量名空间, g_varnamestore_staging */
     SCLogDebug("dectx with version %u", de_ctx->version);
     return de_ctx;
 error:
@@ -2179,7 +2179,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
     ConfNode *de_ctx_custom = ConfGetNode("detect-engine");
     ConfNode *opt = NULL;
 
-    if (de_ctx_custom != NULL) {   /* 读取自定义配置 */
+    if (de_ctx_custom != NULL) {   /* 读取自定义引擎配置 */
         TAILQ_FOREACH(opt, &de_ctx_custom->head, next) {
             if (de_ctx_profile == NULL) {
                 if (opt->val && strcmp(opt->val, "profile") == 0) {
@@ -2195,7 +2195,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         }
     }
 
-    if (de_ctx_profile != NULL) {  /* 设置profile级别 */
+    if (de_ctx_profile != NULL) {  /* 设置profile/性能级别 */
         if (strcmp(de_ctx_profile, "low") == 0 ||
             strcmp(de_ctx_profile, "lowest") == 0) {        // legacy
             profile = ENGINE_PROFILE_LOW;
@@ -2228,7 +2228,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
 #ifdef BUILD_HYPERSCAN
             de_ctx->mpm_matcher == MPM_HS ||
 #endif
-            de_ctx->mpm_matcher == MPM_AC_BS) { /* 选择默认的多模特征环境 */
+            de_ctx->mpm_matcher == MPM_AC_BS) { /* 设置多模匹配工厂模型 */
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE;
         } else {
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_FULL;
@@ -2251,9 +2251,9 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
     }
 
     /* parse profile custom-values */
-    opt = NULL;
-    switch (profile) {
-        case ENGINE_PROFILE_LOW:
+    opt = NULL;                    /* 分析并设置性能指标，高性能使用内存多 */
+    switch (profile) {             /* 低性能使用内存少；此选项需要在性能和内存之间平衡 */
+        case ENGINE_PROFILE_LOW:   
             de_ctx->max_uniq_toclient_groups = 15;
             de_ctx->max_uniq_toserver_groups = 25;
             break;
@@ -2335,7 +2335,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
             break;
     }
 
-    intmax_t value = 0;
+    intmax_t value = 0;            /* 性能相关指标，迭代检测上限 */
     if (ConfGetInt("detect.inspection-recursion-limit", &value) == 1)
     {
         if (value >= 0 && value <= INT_MAX) {
@@ -2398,7 +2398,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         ports = "53, 80, 139, 443, 445, 1433, 3306, 3389, 6666, 6667, 8080";
         SCLogConfig("grouping: tcp-whitelist (default) %s", ports);
 
-    }                         /* 解析端口白名单 */
+    }                         /* 解析端口白名单，配置格式仅允许利用逗号隔开的单个端口组 */
     if (DetectPortParse(de_ctx, &de_ctx->tcp_whitelist, ports) != 0) {
         SCLogWarning(SC_ERR_INVALID_YAML_CONF_ENTRY, "'%s' is not a valid value "
                 "for detect.grouping.tcp-whitelist", ports);

@@ -602,7 +602,7 @@ int SRepInit(DetectEngineCtx *de_ctx)
     files = ConfGetNode("reputation-files");
     if (filename == NULL && files == NULL) {
         SCLogConfig("IP reputation disabled");
-        return 0;
+        return 0;                 /* 获取配置文件列表 */
     }
 
     if (files == NULL) {
@@ -615,7 +615,7 @@ int SRepInit(DetectEngineCtx *de_ctx)
             SCLogError(SC_ERR_NO_REPUTATION, "\"reputation-categories-file\" not set");
             return -1;
         }
-
+                                  /* 加载配置文件 */
         /* init even if we have reputation files, so that when we
          * have a live reload, we have inited the cats */
         if (SRepLoadCatFile(filename) < 0) {

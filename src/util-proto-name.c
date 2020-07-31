@@ -30,8 +30,8 @@
 
 /** Lookup array to hold the information related to known protocol
  *  in /etc/protocols */
-char *known_proto[256];      /* 传输层协议映射表 */
-static int init_once = 0;
+char *known_proto[256];      /* 传输层协议映射表, 来自/etc/protocols */
+static int init_once = 0;    /*       示例: ip  0  IP   ==> 0 -> "IP" */
 
 /**
  *  \brief  Function to load the protocol names from the specified protocol

@@ -87,7 +87,7 @@ SC_ATOMIC_DECLARE(unsigned int, flow_flags);
 
 /** FlowProto specific timeouts and free/state functions */
 
-FlowProtoTimeout flow_timeouts_normal[FLOW_PROTO_MAX];
+FlowProtoTimeout flow_timeouts_normal[FLOW_PROTO_MAX];  /* 流超时时限 */
 FlowProtoTimeout flow_timeouts_emerg[FLOW_PROTO_MAX];
 FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];       /* 流清理函数 */
 

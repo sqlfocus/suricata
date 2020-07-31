@@ -45,7 +45,7 @@ static int DetectFastPatternSetup(DetectEngineCtx *, Signature *, const char *);
 void DetectFastPatternRegisterTests(void);
 
 /* holds the list of sm match lists that need to be searched for a keyword
- * that has fp support *//* 快速模式匹配关键字列表，按优先级降序排序 */
+ * that has fp support *//* 支持快速模式匹配的索引 (Signature->sm_lists[DETECT_SM_LIST_PMATCH])列表，按优先级降序排序 */
 SCFPSupportSMList *sm_fp_support_smlist_list = NULL;
 
 /**
@@ -86,7 +86,7 @@ int FastPatternSupportEnabledForSigMatchList(const DetectEngineCtx *de_ctx,
  *
  * \param list_id SM list id.
  * \param priority Priority for this list.
- *//* 某引用检测规则，加入 sm_fp_support_smlist_list 快速匹配链表 */
+ *//* 某检测规则组，加入 sm_fp_support_smlist_list 快速匹配链表 */
 void SupportFastPatternForSigMatchList(int list_id, int priority)
 {
     SCFPSupportSMList *ip = NULL;

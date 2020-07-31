@@ -44,14 +44,14 @@ void RunModeIdsPcapRegister(void)
 {
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "single",
                               "Single threaded pcap live mode",
-                              RunModeIdsPcapSingle);  /* */
+                              RunModeIdsPcapSingle);  /* 单线程模式 */
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "autofp",
                               "Multi threaded pcap live mode.  Packets from "
                               "each flow are assigned to a single detect thread, "
                               "unlike \"pcap_live_auto\" where packets from "
                               "the same flow can be processed by any detect "
                               "thread",
-                              RunModeIdsPcapAutoFp);  /* 自动流负载均衡 */
+                              RunModeIdsPcapAutoFp);  /* PIPELINE模式，自动流负载均衡 */
     RunModeRegisterNewRunMode(RUNMODE_PCAP_DEV, "workers",
                               "Workers pcap live mode, each thread does all"
                               " tasks from acquisition to logging",

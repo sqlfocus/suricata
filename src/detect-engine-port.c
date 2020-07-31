@@ -161,11 +161,11 @@ int DetectPortInsert(DetectEngineCtx *de_ctx, DetectPort **head,
         int r = 0;
 
         for (cur = *head; cur != NULL; cur = cur->next) {
-            r = DetectPortCmp(new,cur);
+            r = DetectPortCmp(new,cur);  /* 检测包含关系 */
             BUG_ON(r == PORT_ER);
 
             /* if so, handle that */
-            if (r == PORT_EQ) {
+            if (r == PORT_EQ) {          /* 完全重叠，处理Signature，返回0 */
                 SCLogDebug("PORT_EQ %p %p", cur, new);
                 /* exact overlap/match */
                 if (cur != new) {
@@ -174,7 +174,7 @@ int DetectPortInsert(DetectEngineCtx *de_ctx, DetectPort **head,
                     return 0;
                 }
                 return 1;
-            } else if (r == PORT_GT) {
+            } else if (r == PORT_GT) {   /* 不重叠，添加到列表 */
                 SCLogDebug("PORT_GT (cur->next %p)", cur->next);
                 /* only add it now if we are bigger than the last
                  * group. Otherwise we'll handle it later. */
@@ -185,7 +185,7 @@ int DetectPortInsert(DetectEngineCtx *de_ctx, DetectPort **head,
                     cur->next = new;
                     return 1;
                 }
-            } else if (r == PORT_LT) {
+            } else if (r == PORT_LT) {   /* 不重叠，添加到列表 */
                 SCLogDebug("PORT_LT");
 
                 /* see if we need to insert the ag anywhere */
@@ -205,7 +205,7 @@ int DetectPortInsert(DetectEngineCtx *de_ctx, DetectPort **head,
             /* alright, those were the simple cases,
              * lets handle the more complex ones now */
 
-            } else {
+            } else {                     /* 部分重叠，截断后插入 */
                 DetectPort *c = NULL;
                 r = DetectPortCut(de_ctx, cur, new, &c);
                 if (r == -1)
@@ -546,7 +546,7 @@ static int DetectPortCutNot(DetectPort *a, DetectPort **b)
  *
  * \retval PORT_XX (Port enum value, XX is EQ, ES, EB, LE, etc)
  * \retval PORT_ER on error
- * */
+ * *//* a端口范围的起始未知，比起b，是靠前(LT)/等于(EQ)/靠后(GT)/... */
 int DetectPortCmp(DetectPort *a, DetectPort *b)
 {
     /* check any */
@@ -750,7 +750,7 @@ static int DetectPortParseInsertString(const DetectEngineCtx *de_ctx,
     SCLogDebug("head %p, *head %p, s %s", head, *head, s);
 
     /** parse the address */
-    ad = PortParse(s);
+    ad = PortParse(s);    /* 解析端口，支持"80"/"!80"/"80:90"/"any"等 */
     if (ad == NULL) {
         SCLogError(SC_ERR_INVALID_ARGUMENT," failed to parse port \"%s\"",s);
         return -1;
@@ -765,20 +765,20 @@ static int DetectPortParseInsertString(const DetectEngineCtx *de_ctx,
         DetectPort *ad2 = NULL;
 
         if (DetectPortCutNot(ad, &ad2) < 0) {
-            goto error;
+            goto error;   /* 处理求反，即将"!80:89"分成两个端口段 */
         }
 
         /** normally a 'not' will result in two ad's unless the 'not' is on the
          *  start or end of the address space(e.g. 0.0.0.0 or 255.255.255.255)
          */
-        if (ad2 != NULL) {
+        if (ad2 != NULL) {/* 有分离出来的新段，加入列表 */
             if (DetectPortParseInsert(head, ad2) < 0) {
                 if (ad2 != NULL) SCFree(ad2);
                 goto error;
             }
         }
     }
-
+                          /* 加入新段 */
     r = DetectPortParseInsert(head, ad);
     if (r < 0)
         goto error;
@@ -789,7 +789,7 @@ static int DetectPortParseInsertString(const DetectEngineCtx *de_ctx,
 
         ad_any = PortParse("0:65535");
         if (ad_any == NULL)
-            goto error;
+            goto error;   /* 处理any的情形 */
 
         if (DetectPortParseInsert(head, ad_any) < 0)
 	        goto error;
@@ -855,7 +855,7 @@ static int DetectPortParseDo(const DetectEngineCtx *de_ctx,
         address[x] = s[u];
         x++;
 
-        if (s[u] == ':')
+        if (s[u] == ':')                  /* 80:90 */
             range = 1;
 
         if (range == 1 && s[u] == '!') {
@@ -863,15 +863,15 @@ static int DetectPortParseDo(const DetectEngineCtx *de_ctx,
             return -1;
         } else if (!o_set && s[u] == '!') {
             SCLogDebug("negation encountered");
-            n_set = 1;
+            n_set = 1;                    /* !80 */
             x--;
-        } else if (s[u] == '[') {
+        } else if (s[u] == '[') {         /* [80,90] [80:90, 100] */
             if (!o_set) {
                 o_set = 1;
                 x = 0;
             }
             depth++;
-        } else if (s[u] == ']') {
+        } else if (s[u] == ']') {         /* [80,90] */
             if (depth == 1) {
                 address[x - 1] = '\0';
                 SCLogDebug("Parsed port from DetectPortParseDo - %s", address);
@@ -887,7 +887,7 @@ static int DetectPortParseDo(const DetectEngineCtx *de_ctx,
             depth--;
             range = 0;
         } else if (depth == 0 && s[u] == ',') {
-            if (o_set == 1) {
+            if (o_set == 1) {             /* 80,90,... */
                 o_set = 0;
             } else if (d_set == 1) {
                 char *temp_rule_var_port = NULL,
@@ -930,7 +930,7 @@ static int DetectPortParseDo(const DetectEngineCtx *de_ctx,
             } else {
                 address[x - 1] = '\0';
                 SCLogDebug("Parsed port from DetectPortParseDo - %s", address);
-
+                /* 解析具体的端口段 */
                 if (negate == 0 && n_set == 0) {
                     r = DetectPortParseInsertString(de_ctx, head, address);
                 } else {
@@ -1243,7 +1243,7 @@ int DetectPortParse(const DetectEngineCtx *de_ctx,
     SCLogDebug("Port string to be parsed - str %s", str);
 
     /* negate port list */
-    DetectPort *nhead = NULL;
+    DetectPort *nhead = NULL;    /* 存放!结果 */
 
     int r = DetectPortParseDo(de_ctx, head, &nhead, str,
             /* start with negate no */ 0, NULL, 0);
@@ -1254,7 +1254,7 @@ int DetectPortParse(const DetectEngineCtx *de_ctx,
 
     /* merge the 'not' address groups */
     if (DetectPortParseMergeNotPorts(de_ctx, head, &nhead) < 0)
-        goto error;   /* 合并端口范围 */
+        goto error;   /* 合并端口 */
 
     /* free the temp negate head */
     DetectPortCleanupList(de_ctx, nhead);

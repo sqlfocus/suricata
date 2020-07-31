@@ -70,7 +70,7 @@ void SCHSRegisterTests(void);
 /* Global prototype scratch, built incrementally as Hyperscan databases are
  * built and then cloned for each thread context. Access is serialised via
  * g_scratch_proto_mutex. */
-static hs_scratch_t *g_scratch_proto = NULL;
+static hs_scratch_t *g_scratch_proto = NULL;    /* 在 SCHSPreparePatterns() 中初始化 */
 static SCMutex g_scratch_proto_mutex = SCMUTEX_INITIALIZER;
 
 /* Global hash table of Hyperscan databases, used for de-duplication. Access is
@@ -580,7 +580,7 @@ static PatternDatabase *PatternDatabaseAlloc(uint32_t pattern_cnt)
  * \brief Process the patterns added to the mpm, and create the internal tables.
  *
  * \param mpm_ctx Pointer to the mpm context.
- */
+ *//* 整理注册的pattern，并编译 */
 int SCHSPreparePatterns(MpmCtx *mpm_ctx)
 {
     SCHSCtx *ctx = (SCHSCtx *)mpm_ctx->ctx;

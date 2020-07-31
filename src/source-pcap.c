@@ -590,16 +590,16 @@ void PcapTranslateIPToDevice(char *pcap_dev, size_t len)
     ai_hints.ai_family = AF_UNSPEC;
     ai_hints.ai_flags = AI_NUMERICHOST;
 
-    /* try to translate IP */
+    /* 试图获取-i指定网口的地址信息，try to translate IP */
     if ((ret = getaddrinfo(pcap_dev, NULL, &ai_hints, &ai_list)) != 0) {
         return;
     }
-
+    /* 通过libpcap库获取所有接口信息 */
     if (pcap_findalldevs(&alldevsp, errbuf)) {
         freeaddrinfo(ai_list);
         return;
     }
-
+    /* 遍历接口信息列表 */
     for (pcap_if_t *devsp = alldevsp; devsp ; devsp = devsp->next) {
         for (pcap_addr_t *ip = devsp->addresses; ip ; ip = ip->next) {
 
@@ -627,7 +627,7 @@ void PcapTranslateIPToDevice(char *pcap_dev, size_t len)
 
             freeaddrinfo(ai_list);
 
-            memset(pcap_dev, 0, len);
+            memset(pcap_dev, 0, len);   /* 找到网口后，更新其名字 */
             strlcpy(pcap_dev, devsp->name, len);
 
             pcap_freealldevs(alldevsp);

@@ -95,7 +95,7 @@ typedef struct AppLayerParserProtoCtx_
     /* 0 - to_server, 1 - to_client. */
     AppLayerParserFPtr Parser[2]; /* 如 HTPHandleRequestData()/HTPHandleResponseData() */
     bool logger;
-    uint32_t logger_bits;   /**< registered loggers for this proto */
+    uint32_t logger_bits;   /* 参考 logger_bits[], registered loggers for this proto */
 
     void *(*StateAlloc)(void);
     void (*StateFree)(void *);

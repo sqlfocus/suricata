@@ -317,7 +317,7 @@ void GlobalsInitPreConfig(void)
 {
     TimeInit();      /* 设置时区 */
     SupportFastPatternForSigMatchTypes(); /* 快速模式匹配，注册关键字 */
-    SCThresholdConfGlobalInit();          /* threshold配置匹配规则 */
+    SCThresholdConfGlobalInit();          /* threshold配置pcre匹配规则 */
 }
 
 static void GlobalsDestroy(SCInstance *suri)
@@ -884,7 +884,7 @@ void RegisterAllModules(void)
     TmModuleRespondRejectRegister();
 
     /* log api */
-    TmModuleLoggerRegister();
+    TmModuleLoggerRegister();           /* 注册输出日志模块 */
     TmModuleStatsLoggerRegister();
 
     TmModuleDebugList();
@@ -1128,7 +1128,7 @@ static int ParseCommandLinePcapLive(SCInstance *suri, const char *in_arg)
         } else {
             strlcpy(suri->pcap_dev, in_arg, sizeof(suri->pcap_dev));
             PcapTranslateIPToDevice(suri->pcap_dev, sizeof(suri->pcap_dev));
-        }
+        }                  /* 此处通过libpcap库确认指定接口是否存在，并重新更新其名字 */
 
         if (strcmp(suri->pcap_dev, in_arg) != 0) {
             SCLogInfo("translated %s to pcap device %s", in_arg, suri->pcap_dev);
@@ -1139,7 +1139,7 @@ static int ParseCommandLinePcapLive(SCInstance *suri, const char *in_arg)
     }
 
     if (suri->run_mode == RUNMODE_UNKNOWN) {
-        suri->run_mode = RUNMODE_PCAP_DEV;    /* 指定引擎默认运行模式 */
+        suri->run_mode = RUNMODE_PCAP_DEV;          /* 指定引擎默认运行模式 */
         if (in_arg) {
             LiveRegisterDeviceName(suri->pcap_dev); /* 将网卡加入 pre_live_devices, 待最终初始化 */
         }
@@ -1996,7 +1996,7 @@ void PreRunInit(const int runmode)
     if (runmode == RUNMODE_UNIX_SOCKET)
         return;
 
-    StatsInit();
+    StatsInit();                      /* 统计环境初始化 */
 #ifdef PROFILING                      /* 初始化内建性能分析模块 */
     SCProfilingRulesGlobalInit();
     SCProfilingKeywordsGlobalInit();
@@ -2004,12 +2004,12 @@ void PreRunInit(const int runmode)
     SCProfilingSghsGlobalInit();
     SCProfilingInit();
 #endif /* PROFILING */
-    DatasetsInit();
-    DefragInit();                     /* 初始化IP分片重组模块 */
-    FlowInitConfig(FLOW_QUIET);       /* 初始化FLOW引擎 */
-    IPPairInitConfig(FLOW_QUIET);     /* */
-    StreamTcpInitConfig(STREAM_VERBOSE);  /* 初始化tcp流重组模块 */
-    AppLayerParserPostStreamSetup();
+    DatasetsInit();                   /* */
+    DefragInit();                     /* 初始化IP分片重组模块配置 */
+    FlowInitConfig(FLOW_QUIET);       /* 初始化FLOW引擎配置，包括流超时 */
+    IPPairInitConfig(FLOW_QUIET);     /* IP Pair配置信息初始化 */
+    StreamTcpInitConfig(STREAM_VERBOSE);  /* 初始化tcp流重组模块配置，及环境 */
+    AppLayerParserPostStreamSetup();  /* */
     AppLayerRegisterGlobalCounters(); /* 注册引用层全局计数器 */
 }
 
@@ -2146,7 +2146,7 @@ static int FinalizeRunMode(SCInstance *suri, char **argv)
     run_mode = suri->run_mode;       /* 初始化运行模式 */
 
     if (!CheckValidDaemonModes(suri->daemon, suri->run_mode)) {
-        return TM_ECODE_FAILED;      /* pcap模式不允许daemon化 */
+        return TM_ECODE_FAILED;      /* pcapfile/unittest模式不允许daemon化 */
     }
 
     return TM_ECODE_OK;
@@ -2521,7 +2521,7 @@ int PostConfLoadedSetup(SCInstance *suri)
     SCProtoNameInit();              /* 传输层协议映射表，来自/etc/protocols */
 
     TagInitCtx();                   /* tag/bit等关键字注册到storage模块 */
-    PacketAlertTagInit();
+    PacketAlertTagInit();           /* tag告警, g_tag_signature/g_tag_pa */
     ThresholdInit();
     HostBitInitCtx();
     IPPairBitInitCtx();
@@ -2723,8 +2723,8 @@ int SuricataMain(int argc, char **argv)
     switch (StartInternalRunMode(&suricata, argc, argv)) {
         case TM_ECODE_DONE:
             exit(EXIT_SUCCESS);          /* 检查是否为内部模式(打印使用说明等)，如果是运行后结束 */
-        case TM_ECODE_FAILED:
-            exit(EXIT_FAILURE);
+        case TM_ECODE_FAILED:            
+            exit(EXIT_FAILURE);          /* >RUNMODE_USER_MAX 的模式为内部模式 */
     }
 
     /* Initializations for global vars, queues, etc (memsets, mutex init..) */
@@ -2740,10 +2740,10 @@ int SuricataMain(int argc, char **argv)
         exit(EXIT_SUCCESS);
     }
 
-    int vlan_tracking = 1;               /* 跟踪流时，是否考虑vlan id */
+    int vlan_tracking = 1;               /* 建流时，是否考虑vlan id, 默认应该考虑 */
     if (ConfGetBool("vlan.use-for-tracking", &vlan_tracking) == 1 && !vlan_tracking) {
-        /* Ignore vlan_ids when comparing flows. */
-        g_vlan_mask = 0x0000;
+        /* Ignore vlan_ids when comparing flows. *//* 但一些特殊场景，如同一条流的 */
+        g_vlan_mask = 0x0000;                      /* 正反向具有不同的vlan id，不能考虑 */
     }
     SCLogDebug("vlan tracking is %s", vlan_tracking == 1 ? "enabled" : "disabled");
 

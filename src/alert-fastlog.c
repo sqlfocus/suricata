@@ -219,7 +219,7 @@ TmEcode AlertFastLogThreadDeinit(ThreadVars *t, void *data)
  * \brief Create a new LogFileCtx for "fast" output style.
  * \param conf The configuration node for this output.
  * \return A LogFileCtx pointer on success, NULL on failure.
- */
+ *//* "fast"/LOGGER_ALERT_FAST 日志模块 */
 OutputInitResult AlertFastLogInitCtx(ConfNode *conf)
 {
     OutputInitResult result = { NULL, false };
@@ -228,12 +228,12 @@ OutputInitResult AlertFastLogInitCtx(ConfNode *conf)
         SCLogDebug("AlertFastLogInitCtx2: Could not create new LogFileCtx");
         return result;
     }
-
+    /* 默认文件"fast.log" */
     if (SCConfLogOpenGeneric(conf, logfile_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
         LogFileFreeCtx(logfile_ctx);
         return result;
     }
-
+    /* 分配环境结构 */
     OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
     if (unlikely(output_ctx == NULL)) {
         LogFileFreeCtx(logfile_ctx);

@@ -30,7 +30,7 @@
 #include "threads.h"
 #include "util-logopenfile.h"
 
-TmModule tmm_modules[TMM_SIZE];
+TmModule tmm_modules[TMM_SIZE];   /* 注册的功能模块列表 */
 
 void TmModuleDebugList(void)
 {
@@ -136,8 +136,8 @@ void TmModuleRunInit(void)
         if (t->name == NULL)
             continue;
 
-        if (t->Init == NULL)    /* */
-            continue;
+        if (t->Init == NULL)    /* TMM_RECEIVEPCAP -> NULL */
+            continue;           /* TMM_DECODEPCAP  -> NULL */
 
         t->Init();
     }

@@ -476,7 +476,7 @@ static void RunOutputFreeList(void)
 
 static int file_logger_count = 0;
 static int filedata_logger_count = 0;
-static LoggerId logger_bits[ALPROTO_MAX];
+static LoggerId logger_bits[ALPROTO_MAX];  /* "1<<LoggerID" 的位掩码或 */
 
 int RunModeOutputFileEnabled(void)
 {
@@ -573,7 +573,7 @@ static void SetupOutput(const char *name, OutputModule *module, OutputCtx *outpu
         debuglog_enabled = 1;
     }
 
-    if (module->PacketLogFunc) {
+    if (module->PacketLogFunc) {   /* "fast"/LOGGER_ALERT_FAST, 注册到"static OutputPacketLogger *list" */
         SCLogDebug("%s is a packet logger", module->name);
         OutputRegisterPacketLogger(module->logger_id, module->name,
             module->PacketLogFunc, module->PacketConditionFunc, output_ctx,
@@ -725,9 +725,9 @@ void RunModeInitializeOutputs(void)
     const char *enabled;
     char tls_log_enabled = 0;
     char tls_store_present = 0;
-
+    /* 清理输出方式控制数组 */
     memset(&logger_bits, 0, sizeof(logger_bits));
-
+    /* 遍历suricata.yaml/“outputs”节点 */
     TAILQ_FOREACH(output, &outputs->head, next) {
 
         output_config = ConfNodeLookupChild(output, output->val);
@@ -745,7 +745,7 @@ void RunModeInitializeOutputs(void)
         if (enabled == NULL || !ConfValIsTrue(enabled)) {
             continue;
         }
-
+        /* 已过时，不再支持的配置项 */
         if (strcmp(output->val, "file-log") == 0) {
             SCLogWarning(SC_ERR_NOT_SUPPORTED,
                     "file-log is no longer supported,"
@@ -787,18 +787,18 @@ void RunModeInitializeOutputs(void)
         } else if (strcmp(output->val, "tls-log") == 0) {
             tls_log_enabled = 1;
         }
-
+        /* 遍历已注册的输出模块，查找配置对应模块 */
         OutputModule *module;
         int count = 0;
         TAILQ_FOREACH(module, &output_modules, entries) {
             if (strcmp(module->conf_name, output->val) != 0) {
-                continue;
+                continue;                   /* 仅仅通过名字匹配 */
             }
 
             count++;
 
             OutputCtx *output_ctx = NULL;
-            if (module->InitFunc != NULL) {
+            if (module->InitFunc != NULL) { /* 初始化输出环境, 如 "fast" -> AlertFastLogInitCtx() */
                 OutputInitResult r = module->InitFunc(output_config);
                 if (!r.ok) {
                     FatalErrorOnInit(SC_ERR_INVALID_ARGUMENT,
@@ -827,10 +827,10 @@ void RunModeInitializeOutputs(void)
                     continue;
                 RunModeInitializeLuaOutput(output_config, output_ctx);
                 AddOutputToFreeList(module, output_ctx);
-            } else {
+            } else {                        /* 添加到 output_free_list */
                 AddOutputToFreeList(module, output_ctx);
                 SetupOutput(module->name, module, output_ctx);
-            }
+            }                               /* 添加到对应的功能性输出列表, 如static OutputPacketLogger *list */
         }
         if (count == 0) {
             FatalErrorOnInit(SC_ERR_INVALID_ARGUMENT,
@@ -838,7 +838,7 @@ void RunModeInitializeOutputs(void)
             continue;
         }
     }
-
+    /* 后向兼容性代码，暂且不理 */
     /* Backward compatibility code */
     if (!tls_store_present && tls_log_enabled) {
         /* old YAML with no "tls-store" in outputs. "tls-log" value needs
@@ -877,7 +877,7 @@ void RunModeInitializeOutputs(void)
         }
     }
 
-    /* register the logger bits to the app-layer */
+    /* 更新应用协议的日志方式, register the logger bits to the app-layer */
     int a;
     for (a = 0; a < ALPROTO_MAX; a++) {
         if (logger_bits[a] == 0)
@@ -892,11 +892,11 @@ void RunModeInitializeOutputs(void)
         SCLogDebug("logger bits for %s: %08x", AppProtoToString(a), logger_bits[a]);
         if (tcp)
             AppLayerParserRegisterLoggerBits(IPPROTO_TCP, a, logger_bits[a]);
-        if (udp)
+        if (udp)                    /* 赋值 alp_ctx.ctxs[][].logger_bits */
             AppLayerParserRegisterLoggerBits(IPPROTO_UDP, a, logger_bits[a]);
 
     }
-    OutputSetupActiveLoggers();            /* 激活日志输出 */
+    OutputSetupActiveLoggers();     /* 底层输出实现注册到激活链表 */
 }
 
 float threading_detect_ratio = 1;

@@ -140,7 +140,7 @@ typedef struct MpmCtxFactoryContainer_ {
 
 typedef struct MpmTableElmt_ {
     const char *name;
-    void (*InitCtx)(struct MpmCtx_ *);
+    void (*InitCtx)(struct MpmCtx_ *);   /* 上下文环境初始化函数指针 */
     void (*InitThreadCtx)(struct MpmCtx_ *, struct MpmThreadCtx_ *);
     void (*DestroyCtx)(struct MpmCtx_ *);
     void (*DestroyThreadCtx)(struct MpmCtx_ *, struct MpmThreadCtx_ *);
@@ -158,7 +158,7 @@ typedef struct MpmTableElmt_ {
      */
     int  (*AddPattern)(struct MpmCtx_ *, uint8_t *, uint16_t, uint16_t, uint16_t, uint32_t, SigIntId, uint8_t);
     int  (*AddPatternNocase)(struct MpmCtx_ *, uint8_t *, uint16_t, uint16_t, uint16_t, uint32_t, SigIntId, uint8_t);
-    int  (*Prepare)(struct MpmCtx_ *);
+    int  (*Prepare)(struct MpmCtx_ *);   /* 构建上下文，匹配函数 */
     uint32_t (*Search)(const struct MpmCtx_ *, struct MpmThreadCtx_ *, PrefilterRuleStore *, const uint8_t *, uint32_t);
     void (*PrintCtx)(struct MpmCtx_ *);
     void (*PrintThreadCtx)(struct MpmThreadCtx_ *);
