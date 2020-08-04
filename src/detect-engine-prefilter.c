@@ -249,7 +249,7 @@ int PrefilterAppendPayloadEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         e->id = t->id + 1;
     }
 
-    e->name = name;
+    e->name = name;      /* 缓存如hash表 */
     e->gid = PrefilterStoreGetId(de_ctx, e->name, e->Free);
     return 0;
 }
@@ -344,14 +344,14 @@ void PrefilterCleanupRuleGroup(const DetectEngineCtx *de_ctx, SigGroupHead *sgh)
         sgh->tx_engines = NULL;
     }
 }
-
+/* 构建prefilter规则组 */
 void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
-{
+{   /* 构建 SigGroupHead 的多模引擎 */
     int r = PatternMatchPrepareGroup(de_ctx, sgh);
     if (r != 0) {
         FatalError(SC_ERR_INITIALIZATION, "failed to set up pattern matching");
     }
-
+    /* 按注册需求构建多模引擎 */
     /* set up engines if needed - when prefilter is set to auto we run
      * all engines, otherwise only those that have been forced by the
      * prefilter keyword. */
@@ -365,7 +365,7 @@ void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
             sigmatch_table[i].SetupPrefilter(de_ctx, sgh);
         }
     }
-
+    /* 将结果转移到 SigGroupHead->pkt_engines/payload_engines/tx_engines */
     /* we have lists of engines in sgh->init now. Lets setup the
      * match arrays */
     PrefilterEngineList *el;
@@ -620,7 +620,7 @@ int PrefilterGenericMpmRegister(DetectEngineCtx *de_ctx,
     pectx->GetData = mpm_reg->app_v2.GetData;
     pectx->mpm_ctx = mpm_ctx;
     pectx->transforms = &mpm_reg->transforms;
-
+    /* 添加 SigGroupHead->init->tx_engines */
     int r = PrefilterAppendTxEngine(de_ctx, sgh, PrefilterMpm,
         mpm_reg->app_v2.alproto, mpm_reg->app_v2.tx_min_progress,
         pectx, PrefilterGenericMpmFree, mpm_reg->pname);

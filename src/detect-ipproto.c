@@ -427,7 +427,7 @@ void DetectIPProtoRemoveAllSMs(DetectEngineCtx *de_ctx, Signature *s)
 {
     SigMatch *sm = s->init_data->smlists[DETECT_SM_LIST_MATCH];
 
-    while (sm != NULL) {
+    while (sm != NULL) { /* 通过 "ip_proto" 关键字配置的匹配环境 */
         if (sm->type != DETECT_IPPROTO) {
             sm = sm->next;
             continue;

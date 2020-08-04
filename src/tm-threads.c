@@ -74,7 +74,7 @@ thread_local uint64_t rwr_lock_cnt;
 static int SetCPUAffinity(uint16_t cpu);
 static void TmThreadDeinitMC(ThreadVars *tv);
 
-/* 线程信息列表，root of the threadvars list */
+/* 线程链表，root of the threadvars list */
 ThreadVars *tv_root[TVT_MAX] = { NULL };
 
 /* lock to protect tv_root */
@@ -256,7 +256,7 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
         if (slot->SlotThreadInit != NULL) { /* ReceivePcapThreadInit() */
             void *slot_data = NULL;         /* DecodePcapThreadInit() */
             r = slot->SlotThreadInit(tv, slot->slot_initdata, &slot_data);
-            if (r != TM_ECODE_OK) {
+            if (r != TM_ECODE_OK) {         /* FlowWorkerThreadInit() */
                 if (r == TM_ECODE_DONE) {
                     EngineDone();
                     TmThreadsSetFlag(tv, THV_CLOSED | THV_INIT_DONE | THV_RUNNING_DONE);

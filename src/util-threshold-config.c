@@ -984,11 +984,11 @@ static int SCThresholdConfAddThresholdtype(char *rawstr, DetectEngineCtx *de_ctx
     if (r < 0)                           /* 解析文本行，得到字段值 */
         goto error;
 
-    if (parsed_type == TYPE_SUPPRESS) {  /* 加入到 Signature->init_data->smlist[] 列表 */
+    if (parsed_type == TYPE_SUPPRESS) {  /* 加入到 Signature->init_data->smlist[DETECT_SM_LIST_SUPPRESS] 列表 */
         r = SetupSuppressRule(de_ctx, id, gid, parsed_type, parsed_track,
                     parsed_count, parsed_seconds, parsed_timeout, parsed_new_action,
                     th_ip);
-    } else {
+    } else {                             /* 加入到 Signature->init_data->smlist[DETECT_SM_LIST_THRESHOLD] 列表 */
         r = SetupThresholdRule(de_ctx, id, gid, parsed_type, parsed_track,
                     parsed_count, parsed_seconds, parsed_timeout, parsed_new_action,
                     th_ip);

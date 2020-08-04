@@ -82,7 +82,7 @@
 
 #include "rust.h"
 
-struct AppLayerParserThreadCtx_ {
+struct AppLayerParserThreadCtx_ {   /* 局部存储需求 */
     void *alproto_local_storage[FLOW_PROTO_MAX][ALPROTO_MAX];
 };
 
@@ -262,7 +262,7 @@ AppLayerParserThreadCtx *AppLayerParserThreadCtxAlloc(void)
     if (tctx == NULL)
         goto end;
     memset(tctx, 0, sizeof(*tctx));
-
+    /* 初始化线程协议解析 */
     for (flow_proto = 0; flow_proto < FLOW_PROTO_DEFAULT; flow_proto++) {
         for (alproto = 0; alproto < ALPROTO_MAX; alproto++) {
             uint8_t ipproto = FlowGetReverseProtoMapping(flow_proto);
@@ -614,7 +614,7 @@ void *AppLayerParserGetProtocolParserLocalStorage(uint8_t ipproto, AppProto alpr
 {
     SCEnter();
     void * r = NULL;
-
+    /* 调用注册的函数 */
     if (alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].
         LocalStorageAlloc != NULL)
     {

@@ -434,7 +434,7 @@ TcpReassemblyThreadCtx *StreamTcpReassembleInitThreadCtx(ThreadVars *tv)
         return NULL;
 
     memset(ra_ctx, 0x00, sizeof(TcpReassemblyThreadCtx));
-    /* 配置应用识别环境 */
+    /* 配置协议识别环境 */
     ra_ctx->app_tctx = AppLayerGetCtxThread(tv);
     /* 流汇聚需要的池 */
     SCMutexLock(&segment_thread_pool_mutex);

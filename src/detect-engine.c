@@ -476,7 +476,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
     const int files_id = DetectBufferTypeGetByName("files");
 
     /* convert lists to SigMatchData arrays */
-    int i = 0;               /* 将匹配链表转换为匹配数组 */
+    int i = 0;               /* 将自定义类型的匹配链表转换为匹配数组 */
     for (i = DETECT_SM_LIST_DYNAMIC_START; i < nlists; i++) {
         if (s->init_data->smlists[i] == NULL)
             continue;
@@ -487,7 +487,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
     /* set up pkt inspect engines */
     const DetectEnginePktInspectionEngine *e = de_ctx->pkt_inspect_engines;
-    while (e != NULL) {
+    while (e != NULL) {      /* 构建自定义类型的包检测引擎 Signature->pkt_inspect */
         SCLogDebug("e %p sm_list %u nlists %u ptrs[] %p", e, e->sm_list, nlists, e->sm_list < nlists ? ptrs[e->sm_list] : NULL);
         if (e->sm_list < nlists && ptrs[e->sm_list] != NULL) {
             bool prepend = false;
@@ -511,10 +511,10 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
             if (s->pkt_inspect == NULL) {
                 s->pkt_inspect = new_engine;
-            } else if (prepend) {
+            } else if (prepend) {   /* 支持多模式的匹配在前 */
                 new_engine->next = s->pkt_inspect;
                 s->pkt_inspect = new_engine;
-            } else {
+            } else {                /* 其他匹配在后 */
                 DetectEnginePktInspectionEngine *a = s->pkt_inspect;
                 while (a->next != NULL) {
                     a = a->next;
@@ -529,7 +529,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
     bool head_is_mpm = false;
     uint32_t last_id = DE_STATE_FLAG_BASE;
     const DetectEngineAppInspectionEngine *t = de_ctx->app_inspect_engines;
-    while (t != NULL) {
+    while (t != NULL) {      /* 构建自定义类型的应用检测引擎 Signature->app_inspect */
         bool prepend = false;
 
         if (t->sm_list >= nlists)
@@ -623,7 +623,7 @@ next:
 
     if ((s->init_data->init_flags & SIG_FLAG_INIT_STATE_MATCH) &&
             s->init_data->smlists[DETECT_SM_LIST_PMATCH] != NULL)
-    {
+    {                        /* 构建基于流的应用检测引擎 */
         /* if engine is added multiple times, we pass it the same list */
         SigMatchData *stream = SigMatchList2DataArray(s->init_data->smlists[DETECT_SM_LIST_PMATCH]);
         BUG_ON(stream == NULL);
@@ -2789,7 +2789,7 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
  *
  *  \retval TM_ECODE_OK if all went well
  *  \retval TM_ECODE_FAILED on serious errors
- */
+ *//* 初始化线程的检测引擎环境 */
 TmEcode DetectEngineThreadCtxInit(ThreadVars *tv, void *initdata, void **data)
 {
     DetectEngineThreadCtx *det_ctx = SCMalloc(sizeof(DetectEngineThreadCtx));
@@ -2797,7 +2797,7 @@ TmEcode DetectEngineThreadCtxInit(ThreadVars *tv, void *initdata, void **data)
         return TM_ECODE_FAILED;
     memset(det_ctx, 0, sizeof(DetectEngineThreadCtx));
 
-    det_ctx->tv = tv;
+    det_ctx->tv = tv;         /* 赋值当前检测环境 */
     det_ctx->de_ctx = DetectEngineGetCurrent();
     if (det_ctx->de_ctx == NULL) {
 #ifdef UNITTESTS
@@ -2815,7 +2815,7 @@ TmEcode DetectEngineThreadCtxInit(ThreadVars *tv, void *initdata, void **data)
 
     if (det_ctx->de_ctx->type == DETECT_ENGINE_TYPE_NORMAL ||
         det_ctx->de_ctx->type == DETECT_ENGINE_TYPE_TENANT)
-    {
+    {                         /* 初始化线程级别引擎 */
         if (ThreadCtxDoInit(det_ctx->de_ctx, det_ctx) != TM_ECODE_OK) {
             DetectEngineThreadCtxDeinit(tv, det_ctx);
             return TM_ECODE_FAILED;

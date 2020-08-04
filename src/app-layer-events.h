@@ -54,8 +54,8 @@ enum {
 
 /* the event types for app events */
 typedef enum AppLayerEventType_ {
-    APP_LAYER_EVENT_TYPE_TRANSACTION = 1,
-    APP_LAYER_EVENT_TYPE_PACKET,
+    APP_LAYER_EVENT_TYPE_TRANSACTION = 1,  /* 基于事务 */
+    APP_LAYER_EVENT_TYPE_PACKET,           /* 基于逐包 */
 } AppLayerEventType;
 
 int AppLayerGetPktEventInfo(const char *event_name, int *event_id);

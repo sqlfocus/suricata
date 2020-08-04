@@ -53,11 +53,11 @@ typedef struct FlowWorkerThreadData_ {
 
     union {
         StreamTcpThread *stream_thread;
-        void *stream_thread_ptr;
+        void *stream_thread_ptr; /* */
     };
 
     SC_ATOMIC_DECLARE(DetectEngineThreadCtxPtr, detect_thread);
-
+                                 /* 检测线程信息结构 */
     void *output_thread; /* Output thread data. */
 
     uint16_t local_bypass_pkts;  /* 计数器 */

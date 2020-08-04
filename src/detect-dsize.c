@@ -397,7 +397,7 @@ int SigParseGetMaxDsize(const Signature *s)
 
 /** \brief set prefilter dsize pair
  *  \param s signature to get dsize value from
- *//* 设定报文匹配范围 */
+ *//* 如果设定了报文匹配范围，则利用此初始化 Signature->dsize_low/dsize_high */
 void SigParseSetDsizePair(Signature *s)
 {
     if (s->flags & SIG_FLAG_DSIZE && s->init_data->dsize_sm != NULL) {
@@ -434,13 +434,13 @@ void SigParseSetDsizePair(Signature *s)
 /**
  *  \brief Apply dsize as depth to content matches in the rule
  *  \param s signature to get dsize value from
- */
-void SigParseApplyDsizeToContent(Signature *s)
+ *//* 如果指定了数据长度，则内容检测的最大长度为此 */
+void SigParseApplyDsizeToContent(Signature *s)/* 据此更新检测长度，以加快MPM */
 {
     SCEnter();
 
     if (s->flags & SIG_FLAG_DSIZE) {
-        SigParseSetDsizePair(s);             /* 设定匹配范围 */
+        SigParseSetDsizePair(s);             /* 初始化规则的内容匹配范围 */
 
         int dsize = SigParseGetMaxDsize(s);
         if (dsize < 0) {                     /* 获取范围的上限 */

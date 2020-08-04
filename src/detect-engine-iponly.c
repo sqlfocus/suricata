@@ -872,14 +872,14 @@ error:
 void IPOnlyInit(DetectEngineCtx *de_ctx, DetectEngineIPOnlyCtx *io_ctx)
 {
     io_ctx->sig_init_size = DetectEngineGetMaxSigId(de_ctx) / 8 + 1;
-
+    /* 构建规则bit位数组 */
     if ( (io_ctx->sig_init_array = SCMalloc(io_ctx->sig_init_size)) == NULL) {
         SCLogError(SC_ERR_FATAL, "Fatal error encountered in IPOnlyInit. Exiting...");
         exit(EXIT_FAILURE);
     }
 
     memset(io_ctx->sig_init_array, 0, io_ctx->sig_init_size);
-
+    /* 创建radix树 */
     io_ctx->tree_ipv4src = SCRadixCreateRadixTree(SigNumArrayFree,
                                                   SigNumArrayPrint);
     io_ctx->tree_ipv4dst = SCRadixCreateRadixTree(SigNumArrayFree,
@@ -1564,7 +1564,7 @@ void IPOnlyAddSignature(DetectEngineCtx *de_ctx, DetectEngineIPOnlyCtx *io_ctx,
     if (!(s->flags & SIG_FLAG_IPONLY))
         return;
 
-    /* Set the internal signum to the list before merging */
+    /* 设置对应的规则ID，Set the internal signum to the list before merging */
     IPOnlyCIDRListSetSigNum(s->CidrSrc, s->num);
 
     IPOnlyCIDRListSetSigNum(s->CidrDst, s->num);
@@ -1572,14 +1572,14 @@ void IPOnlyAddSignature(DetectEngineCtx *de_ctx, DetectEngineIPOnlyCtx *io_ctx,
     /**
      * ipv4 and ipv6 are mixed, but later we will separate them into
      * different trees
-     */
+     *//* 汇集对应的IP-mask */
     io_ctx->ip_src = IPOnlyCIDRItemInsert(io_ctx->ip_src, s->CidrSrc);
     io_ctx->ip_dst = IPOnlyCIDRItemInsert(io_ctx->ip_dst, s->CidrDst);
-
+    /* 赋值出现过的最大规则序号，以减少后续遍历 */
     if (s->num > io_ctx->max_idx)
         io_ctx->max_idx = s->num;
 
-    /* enable the sig in the bitarray */
+    /* 赋值bit位数组，enable the sig in the bitarray */
     io_ctx->sig_init_array[(s->num/8)] |= 1 << (s->num % 8);
 
     /** no longer ref to this, it's in the table now */

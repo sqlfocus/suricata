@@ -219,7 +219,7 @@ end:
  *
  * \retval NULL if invalid option
  * \retval DetectFlowintData pointer with the flowint parsed
- */
+ *//* 解析字符串"flowint:applayer.anomaly.count,+,1;" */
 static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char *rawstr)
 {
     DetectFlowintData *sfd = NULL;
@@ -325,7 +325,7 @@ static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char
     if (unlikely(sfd->name == NULL)) {
         SCLogError(SC_ERR_MEM_ALLOC, "malloc from strdup failed");
         goto error;
-    }
+    }      /* 添加到变量名空间, g_varnamestore_staging_m */
     sfd->idx = VarNameStoreSetupAdd(varname, VAR_TYPE_FLOW_INT);
     SCLogDebug("sfd->name %s id %u", sfd->name, sfd->idx);
     sfd->modifier = modifier;

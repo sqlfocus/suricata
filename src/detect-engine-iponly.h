@@ -33,7 +33,7 @@
 typedef struct SigNumArray_ {
     uint8_t *array; /* bit array of sig nums */
     uint32_t size;  /* size in bytes of the array */
-} SigNumArray;     /* IPonly规则的掩码集，存储在radix树，键为某个IP段 */
+} SigNumArray;     /* IPonly规则组的掩码集，存储在radix树，键为某个IP段 */
 
 void IPOnlyCIDRListFree(IPOnlyCIDRItem *tmphead);
 int IPOnlySigParseAddress(const DetectEngineCtx *, Signature *, const char *, char);

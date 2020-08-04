@@ -213,7 +213,7 @@ int SignatureIsIPOnly(DetectEngineCtx *de_ctx, const Signature *s)
      * tags are compatible to IP-only. */
 
     /* if any of the addresses uses negation, we don't support
-     * it in ip-only */
+     * it in ip-only *//* 使用了"!"的地址段，不支持ip-only */
     if (s->init_data->src_contains_negation)
         return 0;
     if (s->init_data->dst_contains_negation)
@@ -249,14 +249,14 @@ iponly:
  *  \param s the signature
  *  \retval 1 sig is dp only
  *  \retval 0 sig is not dp only
- */
+ *//* 判断规则是否仅检测协议 */
 static int SignatureIsPDOnly(const DetectEngineCtx *de_ctx, const Signature *s)
 {
     if (s->alproto != ALPROTO_UNKNOWN)
-        return 0;
+        return 0;        /* 需要应用协议检测 */
 
     if (s->init_data->smlists[DETECT_SM_LIST_PMATCH] != NULL)
-        return 0;
+        return 0;        /* 需要应用内容检测 */
 
     /* for now assume that all registered buffer types are incompatible */
     const int nlists = s->init_data->smlists_array_size;
@@ -264,7 +264,7 @@ static int SignatureIsPDOnly(const DetectEngineCtx *de_ctx, const Signature *s)
         if (s->init_data->smlists[i] == NULL)
             continue;
         if (!(DetectBufferTypeGetNameById(de_ctx, i)))
-            continue;
+            continue;    /* 注册的检测类型完整 */
 
         SCReturnInt(0);
     }
@@ -276,7 +276,7 @@ static int SignatureIsPDOnly(const DetectEngineCtx *de_ctx, const Signature *s)
      * logic as IP-only so we can use that flag */
 
     SigMatch *sm = s->init_data->smlists[DETECT_SM_LIST_MATCH];
-    if (sm == NULL)
+    if (sm == NULL)      /* 检查DETECT_SM_LIST_MATCH的配置逻辑 */
         return 0;
 
     int pd = 0;
@@ -937,20 +937,20 @@ static int RulesGroupByProto(DetectEngineCtx *de_ctx)
     uint32_t max_idx = 0;
     SigGroupHead *sgh_ts[256] = {NULL};
     SigGroupHead *sgh_tc[256] = {NULL};
-
+    /* 加入组 */
     for ( ; s != NULL; s = s->next) {
         if (s->flags & SIG_FLAG_IPONLY)
-            continue;
+            continue;      /* 掠过IPonly，有单独的组 ->io_ctx */
 
         int p;
         for (p = 0; p < 256; p++) {
             if (p == IPPROTO_TCP || p == IPPROTO_UDP) {
-                continue;
+                continue;  /* 掠过UDP/TCP, 有单独的组 ->flow_gh[] */
             }
             if (!(s->proto.proto[p / 8] & (1<<(p % 8)) || (s->proto.flags & DETECT_PROTO_ANY))) {
                 continue;
             }
-
+                           /* 加入对应的组 */
             if (s->flags & SIG_FLAG_TOCLIENT) {
                 SigGroupHeadAppendSig(de_ctx, &sgh_tc[p], s);
                 max_idx = s->num;
@@ -963,7 +963,7 @@ static int RulesGroupByProto(DetectEngineCtx *de_ctx)
     }
     SCLogDebug("max_idx %u", max_idx);
 
-    /* lets look at deduplicating this list */
+    /* 去重，lets look at deduplicating this list */
     SigGroupHeadHashFree(de_ctx);
     SigGroupHeadHashInit(de_ctx);
 
@@ -987,7 +987,7 @@ static int RulesGroupByProto(DetectEngineCtx *de_ctx)
             SigGroupHeadBuildMatchArray(de_ctx, sgh_ts[p], max_idx);
 
             SigGroupHeadHashAdd(de_ctx, sgh_ts[p]);
-            SigGroupHeadStore(de_ctx, sgh_ts[p]);
+            SigGroupHeadStore(de_ctx, sgh_ts[p]);   /* 也记录到 DetectEngineCtx->sgh_array[] */
 
             de_ctx->gh_unique++;
             own++;
@@ -1040,7 +1040,7 @@ static int RulesGroupByProto(DetectEngineCtx *de_ctx)
     }
     SCLogPerf("OTHER %s: %u proto groups, %u unique SGH's, %u copies",
             "toclient", cnt, own, ref);
-
+    /* 记录到 ->flow_gh[]->sgh[] */
     for (p = 0; p < 256; p++) {
         if (p == IPPROTO_TCP || p == IPPROTO_UDP)
             continue;
@@ -1069,7 +1069,7 @@ static int PortIsWhitelisted(const DetectEngineCtx *de_ctx,
 
     return 0;
 }
-
+/**/
 static int RuleSetWhitelist(Signature *s)
 {
     DetectPort *p = NULL;
@@ -1115,12 +1115,12 @@ static int RuleSetWhitelist(Signature *s)
 
 int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, DetectPort **newhead, uint32_t unique_groups, int (*CompareFunc)(DetectPort *, DetectPort *), uint32_t max_idx);
 int CreateGroupedPortListCmpCnt(DetectPort *a, DetectPort *b);
-
+/* 构建基于端口的规则组 */
 static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint32_t direction) {
     /* step 1: create a hash of 'DetectPort' objects based on all the
      *         rules. Each object will have a SGH with the sigs added
-     *         that belong to the SGH. */
-    DetectPortHashInit(de_ctx);
+     *         that belong to the SGH. *//* 建立 DetectPort <-> Signature */
+    DetectPortHashInit(de_ctx);  /* 的对应关系(1对多) */
 
     uint32_t max_idx = 0;
     const Signature *s = de_ctx->sig_list;
@@ -1148,7 +1148,7 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
             BUG_ON(1);
 
         /* see if we want to exclude directionless sigs that really care only for
-         * to_server syn scans/floods */
+         * to_server syn scans/floods */     /* 从逻辑层面，过滤不必要处理的端口 */
         if ((direction == SIG_FLAG_TOCLIENT) &&
              DetectFlagsSignatureNeedsSynPackets(s) &&
              DetectFlagsSignatureNeedsSynOnlyPackets(s) &&
@@ -1162,7 +1162,7 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
         }
 
         int wl = s->init_data->whitelist;
-        while (p) {
+        while (p) {                          /* 建立端口 DetectPort 与 Signature 的对应关系 */
             int pwl = PortIsWhitelisted(de_ctx, p, ipproto) ? 111 : 0;
             pwl = MAX(wl,pwl);
 
@@ -1173,27 +1173,27 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
             } else {
                 DetectPort *tmp2 = DetectPortCopySingle(de_ctx, p);
                 BUG_ON(tmp2 == NULL);
-                SigGroupHeadAppendSig(de_ctx, &tmp2->sh, s);
+                SigGroupHeadAppendSig(de_ctx, &tmp2->sh, s); /* 添加到bit表 */
                 tmp2->sh->init->whitelist = pwl;
                 DetectPortHashAdd(de_ctx, tmp2);
             }
 
             p = p->next;
         }
-        max_idx = s->num;
+        max_idx = s->num;                    /* 记录处理的最大的Signature的序号  */
     next:
         s = s->next;
     }
 
     /* step 2: create a list of DetectPort objects */
-    HashListTableBucket *htb = NULL;
+    HashListTableBucket *htb = NULL;  /* 将所有DetectPort串成链表 */
     for (htb = HashListTableGetListHead(de_ctx->dport_hash_table);
             htb != NULL;
             htb = HashListTableGetListNext(htb))
     {
         DetectPort *p = HashListTableGetListData(htb);
         DetectPort *tmp = DetectPortCopySingle(de_ctx, p);
-        BUG_ON(tmp == NULL);
+        BUG_ON(tmp == NULL);                 /* 合并式插入 */
         int r = DetectPortInsert(de_ctx, &list , tmp);
         BUG_ON(r == -1);
     }
@@ -1203,13 +1203,13 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
     SCLogDebug("rules analyzed");
 
     /* step 3: group the list and shrink it if necessary */
-    DetectPort *newlist = NULL;
+    DetectPort *newlist = NULL;       /* 根据配置，缩减列表长度，以支持内存消耗 */
     uint16_t groupmax = (direction == SIG_FLAG_TOCLIENT) ? de_ctx->max_uniq_toclient_groups :
                                                            de_ctx->max_uniq_toserver_groups;
     CreateGroupedPortList(de_ctx, list, &newlist, groupmax, CreateGroupedPortListCmpCnt, max_idx);
     list = newlist;
 
-    /* step 4: deduplicate the SGH's */
+    /* step 4: deduplicate the SGH's *//* 删除重叠的部分，并存储起来 */
     SigGroupHeadHashFree(de_ctx);
     SigGroupHeadHashInit(de_ctx);
 
@@ -1225,11 +1225,11 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
         if (lookup_sgh == NULL) {
             SCLogDebug("port group %p sgh %p is the original", iter, iter->sh);
 
-            SigGroupHeadSetSigCnt(iter->sh, max_idx);
-            SigGroupHeadBuildMatchArray(de_ctx, iter->sh, max_idx);
-            SigGroupHeadSetProtoAndDirection(iter->sh, ipproto, direction);
-            SigGroupHeadHashAdd(de_ctx, iter->sh);
-            SigGroupHeadStore(de_ctx, iter->sh);
+            SigGroupHeadSetSigCnt(iter->sh, max_idx);     /* 重新计数 SigGroupHead->sig_cnt */
+            SigGroupHeadBuildMatchArray(de_ctx, iter->sh, max_idx); /* 初始化包含的规则 */
+            SigGroupHeadSetProtoAndDirection(iter->sh, ipproto, direction); /* 设置方向/协议 */
+            SigGroupHeadHashAdd(de_ctx, iter->sh);        /* 添加到hash表 */
+            SigGroupHeadStore(de_ctx, iter->sh);          /* 存储到全局数组 */
             iter->flags |= PORT_SIGGROUPHEAD_COPY;
             de_ctx->gh_unique++;
             own++;
@@ -1262,14 +1262,14 @@ static DetectPort *RulesGroupByPorts(DetectEngineCtx *de_ctx, int ipproto, uint3
 
 void SignatureSetType(DetectEngineCtx *de_ctx, Signature *s)
 {
-    /* see if the sig is dp only */
+    /* 仅仅检测protocol，see if the sig is dp only */
     if (SignatureIsPDOnly(de_ctx, s) == 1) {
         s->flags |= SIG_FLAG_PDONLY;
 
-    /* see if the sig is ip only */
+    /* 仅仅检测IP，see if the sig is ip only */
     } else if (SignatureIsIPOnly(de_ctx, s) == 1) {
         s->flags |= SIG_FLAG_IPONLY;
-
+    /* 仅仅检测解码事件 */
     } else if (SignatureIsDEOnly(de_ctx, s) == 1) {
         s->init_data->init_flags |= SIG_FLAG_INIT_DEONLY;
     }
@@ -1282,7 +1282,7 @@ void SignatureSetType(DetectEngineCtx *de_ctx, Signature *s)
  *
  * \retval  0 on success
  * \retval -1 on failure
- *//* 分类规则 */
+ *//* 创建规则数组，初始化规则标识，约束内容检测等 */
 int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
 {
     uint32_t cnt_iponly = 0;
@@ -1353,12 +1353,12 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
         }
 #endif /* DEBUG */
 
-        if (RuleMpmIsNegated(s)) {        /* 匹配带有"!"，具备取反操作 */
+        if (RuleMpmIsNegated(s)) {        /* MPM匹配带有"!"，具备取反操作 */
             s->flags |= SIG_FLAG_MPM_NEG;
         }
 
-        SignatureCreateMask(s);           /* 创建规则标识, Signature->mask */
-        DetectContentPropagateLimits(s);  /* */
+        SignatureCreateMask(s);           /* 创建规则标识（如获取报文内容等）, Signature->mask */
+        DetectContentPropagateLimits(s);  /* 精确content匹配区间，减少MPM消耗 */
         SigParseApplyDsizeToContent(s);   /* 依据信号设定的检测范围, 调整内容检测深度 */
 
         RuleSetWhitelist(s);              /* 设置 Signature->init_data->whitelist */
@@ -1366,8 +1366,8 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
         /* if keyword engines are enabled in the config, handle them here */
         if (de_ctx->prefilter_setting == DETECT_PREFILTER_AUTO &&
                 !(s->flags & SIG_FLAG_PREFILTER))
-        {                                 /* 处理prefilter的情形 */
-            int prefilter_list = DETECT_TBLSIZE;
+        {                                 /* 如果规则中有prefilter关键字，则处理之 */
+            int prefilter_list = DETECT_TBLSIZE; /* 设定 ->init_data->prefilter_sm */
 
             /* get the keyword supporting prefilter with the lowest type */
             for (int i = 0; i < (int)s->init_data->smlists_array_size; i++) {
@@ -1419,7 +1419,7 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
                "preprocessing rules... complete");
     }
 
-    if (DetectFlowbitsAnalyze(de_ctx) != 0)   /* 分析flowbits检测 */
+    if (DetectFlowbitsAnalyze(de_ctx) != 0)   /* 分析flowbits检测配置是否正确 */
         goto error;
 
     return 0;
@@ -1432,7 +1432,7 @@ static int PortGroupWhitelist(const DetectPort *a)
 {
     return a->sh->init->whitelist;
 }
-
+/* 比较端口列表的优先级，具有whitelist或者较大的优先级高 */
 int CreateGroupedPortListCmpCnt(DetectPort *a, DetectPort *b)
 {
     if (PortGroupWhitelist(a) && !PortGroupWhitelist(b)) {
@@ -1485,7 +1485,7 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
    /* insert the addresses into the tmplist, where it will
      * be sorted descending on 'cnt' and on wehther a group
      * is whitelisted. */
-
+    /* 按照优先级（whitelist值、sigcnt值）排序，降序 */
     DetectPort *oldhead = port_list;
     while (oldhead) {
         /* take the top of the list */
@@ -1494,8 +1494,8 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
         list->next = NULL;
 
         groups++;
-
-        SigGroupHeadSetSigCnt(list->sh, max_idx);
+                                          
+        SigGroupHeadSetSigCnt(list->sh, max_idx);     /* 计数包含的规则数 */
 
         /* insert it */
         DetectPort *tmpgr = tmplist, *prevtmpgr = NULL;
@@ -1505,7 +1505,7 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
         } else {
             /* look for the place to insert */
             for ( ; tmpgr != NULL && !insert; tmpgr = tmpgr->next) {
-                if (CompareFunc(list, tmpgr) == 1) {
+                if (CompareFunc(list, tmpgr) == 1) {  /* 依据 whitelist 比较优先级 */
                     if (tmpgr == tmplist) {
                         list->next = tmplist;
                         tmplist = list;
@@ -1526,11 +1526,11 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
             insert = 0;
         }
     }
-
+    /* 提取最终限定的 DetectPort 数 */
     uint32_t left = unique_groups;
-    if (left == 0)
+    if (left == 0)                /* 参数为0，表示无限制 */
         left = groups;
-
+    /* 根据设定的DetectPort数，截取链表 */
     /* create another list: take the port groups from above
      * and add them to the 2nd list until we have met our
      * count. The rest is added to the 'join' group. */
@@ -1544,7 +1544,7 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
 
         /* if we've set up all the unique groups, add the rest to the
          * catch-all joingr */
-        if (left == 0) {
+        if (left == 0) {          /* 剩余部分，加入“catch-all”端口 */
             if (joingr == NULL) {
                 DetectPortParse(de_ctx, &joingr, "0:65535");
                 if (joingr == NULL) {
@@ -1578,7 +1578,7 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
 
         gr = next_gr;
     }
-
+    /* 将‘catch-all’添加到返回列表的尾部后边 */
     /* if present, append the joingr that covers the rest */
     if (joingr != NULL) {
         SCLogDebug("appending joingr %p %u:%u", joingr, joingr->port, joingr->port2);
@@ -1594,7 +1594,7 @@ int CreateGroupedPortList(DetectEngineCtx *de_ctx, DetectPort *port_list, Detect
         SCLogDebug("no joingr");
     }
 
-    /* pass back our new list to the caller */
+    /* 返回截取后的链表，pass back our new list to the caller */
     *newhead = tmplist2;
     DetectPortPrintList(*newhead);
 
@@ -1621,7 +1621,7 @@ static void DetectEngineAddDecoderEventSig(DetectEngineCtx *de_ctx, Signature *s
  *
  * \retval  0 On success
  * \retval -1 On failure
- */
+ *//* 构建IPonly规则组、基于端口的规则组、基于事件的规则组 */
 int SigAddressPrepareStage2(DetectEngineCtx *de_ctx)
 {
     uint32_t sigs = 0;
@@ -1629,23 +1629,23 @@ int SigAddressPrepareStage2(DetectEngineCtx *de_ctx)
     SCLogDebug("building signature grouping structure, stage 2: "
             "building source address lists...");
 
-    IPOnlyInit(de_ctx, &de_ctx->io_ctx);      /* 构建IP only检测环境 */
-                                              /* 基于端口构建规则组 */
+    IPOnlyInit(de_ctx, &de_ctx->io_ctx);      /* 初始化IP only检测环境 */
+                                              /* 基于TCP/UDP端口，构建规则组 */
     de_ctx->flow_gh[1].tcp = RulesGroupByPorts(de_ctx, IPPROTO_TCP, SIG_FLAG_TOSERVER);
     de_ctx->flow_gh[0].tcp = RulesGroupByPorts(de_ctx, IPPROTO_TCP, SIG_FLAG_TOCLIENT);
     de_ctx->flow_gh[1].udp = RulesGroupByPorts(de_ctx, IPPROTO_UDP, SIG_FLAG_TOSERVER);
     de_ctx->flow_gh[0].udp = RulesGroupByPorts(de_ctx, IPPROTO_UDP, SIG_FLAG_TOCLIENT);
 
     /* Setup the other IP Protocols (so not TCP/UDP) */
-    RulesGroupByProto(de_ctx);
+    RulesGroupByProto(de_ctx);                /* 基于非TCP/UDP端口，构建规则组 */
 
     /* now for every rule add the source group to our temp lists */
     for (Signature *s = de_ctx->sig_list; s != NULL; s = s->next) {
         SCLogDebug("s->id %"PRIu32, s->id);
-        if (s->flags & SIG_FLAG_IPONLY) {     /* 将IP only加入到单独组 */
+        if (s->flags & SIG_FLAG_IPONLY) {     /* 将IP only加入规则组 */
             IPOnlyAddSignature(de_ctx, &de_ctx->io_ctx, s);
         }
-                                              /* 将解码事件加入到单独组 */
+                                              /* 将解码事件加入规则组 */
         if (s->init_data->init_flags & SIG_FLAG_INIT_DEONLY) {
             DetectEngineAddDecoderEventSig(de_ctx, s);
         }
@@ -1653,8 +1653,8 @@ int SigAddressPrepareStage2(DetectEngineCtx *de_ctx)
         sigs++;
     }
 
-    IPOnlyPrepare(de_ctx);
-    IPOnlyPrint(de_ctx, &de_ctx->io_ctx);
+    IPOnlyPrepare(de_ctx);                    /* 构建IPonly规则组的radix树 */
+    IPOnlyPrint(de_ctx, &de_ctx->io_ctx);     /* IP段 -> SigNumArray */
 
     return 0;
 }
@@ -1767,20 +1767,20 @@ int SigAddressPrepareStage4(DetectEngineCtx *de_ctx)
 
         SCLogDebug("sgh %p", sgh);
 
-        SigGroupHeadSetFilemagicFlag(de_ctx, sgh);
+        SigGroupHeadSetFilemagicFlag(de_ctx, sgh); /* 设置 SigGroupHead->flags */
         SigGroupHeadSetFileHashFlag(de_ctx, sgh);
         SigGroupHeadSetFilesizeFlag(de_ctx, sgh);
         SigGroupHeadSetFilestoreCount(de_ctx, sgh);
         SCLogDebug("filestore count %u", sgh->filestore_cnt);
 
-        PrefilterSetupRuleGroup(de_ctx, sgh);
+        PrefilterSetupRuleGroup(de_ctx, sgh);      /* 建立SigGroupHead的prefilter多模环境 */
 
         SigGroupHeadBuildNonPrefilterArray(de_ctx, sgh);
-
+                                                   /* 汇总SigGroupHead的非prefilter */
         SigGroupHeadInitDataFree(sgh->init);
         sgh->init = NULL;
 
-        sgh->id = idx;
+        sgh->id = idx;                             /* 构建索引 */
         cnt++;
     }
     SCLogPerf("Unique rule groups: %u", cnt);
@@ -1799,7 +1799,7 @@ int SigAddressPrepareStage4(DetectEngineCtx *de_ctx)
     int dump_grouping = 0;
     (void)ConfGetBool("detect.profiling.grouping.dump-to-disk", &dump_grouping);
 
-    if (dump_grouping) {
+    if (dump_grouping) {                           /* 输出构建结果到文件 */
         int add_rules = 0;
         (void)ConfGetBool("detect.profiling.grouping.include-rules", &add_rules);
         int add_mpm_stats = 0;
@@ -1828,10 +1828,10 @@ static int SigMatchPrepare(DetectEngineCtx *de_ctx)
 
     Signature *s = de_ctx->sig_list;
     for (; s != NULL; s = s->next) {
-        /* set up inspect engines */
+        /* 构建自定义类型的检测引擎，Signature->app_inspect/pkt_inspect, set up inspect engines */
         DetectEngineAppInspectionEngine2Signature(de_ctx, s);
 
-        /* built-ins */
+        /* 构建内置类型的检测引擎, Signature->sm_arrays[], built-ins */
         int type;
         for (type = 0; type < DETECT_SM_LIST_MAX; type++) {
             /* skip PMATCH if it is used in a stream 'app engine' instead */
@@ -1840,13 +1840,13 @@ static int SigMatchPrepare(DetectEngineCtx *de_ctx)
             SigMatch *sm = s->init_data->smlists[type];
             s->sm_arrays[type] = SigMatchList2DataArray(sm);
         }
-        /* set up the pkt inspection engines */
+        /* 构建报文检测引擎, DETECT_SM_LIST_MATCH/DETECT_SM_LIST_PMATCH, set up the pkt inspection engines */
         DetectEnginePktInspectionSetup(s);
 
         if (rule_engine_analysis_set) {
             EngineAnalysisRules2(de_ctx, s);
         }
-        /* free lists. Ctx' are xferred to sm_arrays so won't get freed */
+        /* 释放资源，free lists. Ctx' are xferred to sm_arrays so won't get freed */
         uint32_t i;
         for (i = 0; i < s->init_data->smlists_array_size; i++) {
             SigMatch *sm = s->init_data->smlists[i];
@@ -1898,34 +1898,34 @@ int SigGroupBuild(DetectEngineCtx *de_ctx)
                               /* 注册多模引擎工厂 */
     if (SigAddressPrepareStage1(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段1: 创建规则数组，以加速查找, DetectEngineCtx->sig_array[] */
+        exit(EXIT_FAILURE);   /* 准备阶段1: 创建规则数组, DetectEngineCtx->sig_array[]; 约束内容查找范围；检测flowbit配置状态等 */
     }
 
     if (SigAddressPrepareStage2(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* */
+        exit(EXIT_FAILURE);   /* 准备阶段2: 构建规则组，基于IP、端口 */
     }
 
     if (SigAddressPrepareStage3(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段3: 创建基于解码事件的组 */
+        exit(EXIT_FAILURE);   /* 准备阶段3: 构建基于解码事件的规则组 */
     }
     if (SigAddressPrepareStage4(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* */
+        exit(EXIT_FAILURE);   /* 准备阶段4: 构建规则组的prefilter多模匹配引擎 */
     }
 
     int r = DetectMpmPrepareBuiltinMpms(de_ctx);
     r |= DetectMpmPrepareAppMpms(de_ctx);
     r |= DetectMpmPreparePktMpms(de_ctx);
-    if (r != 0) {             /* */
+    if (r != 0) {             /* 共享环境下，构建多模式匹配引擎 */
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
         exit(EXIT_FAILURE);
     }
 
     if (SigMatchPrepare(de_ctx) != 0) {
         SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* */
+        exit(EXIT_FAILURE);   /* 初始化基于单个Signature匹配环境 */
     }
 
 #ifdef PROFILING
@@ -1941,7 +1941,7 @@ int SigGroupBuild(DetectEngineCtx *de_ctx)
 #endif
 
     if (!DetectEngineMultiTenantEnabled()) {
-        VarNameStoreActivateStaging();
+        VarNameStoreActivateStaging();   /* 激活变量空间, g_varnamestore_current */
     }
     return 0;
 }

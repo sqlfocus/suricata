@@ -274,7 +274,7 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
         SCLogInfo("Going to use %" PRId32 " thread(s)", threads_count);
     }
 
-    /* create the threads */
+    /* 创建工作线程，create the threads */
     for (int thread = 0; thread < threads_count; thread++) {
         char tname[TM_THREAD_NAME_MAX];
         TmModule *tm_module = NULL;
@@ -284,8 +284,8 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
             FatalError(SC_ERR_MEM_ALLOC, "failed to alloc printable thread name: %s", strerror(errno));
             exit(EXIT_FAILURE);
         }
-
-        if (single_mode) {
+      
+        if (single_mode) {     /* 构建线程名: "W01-eth0" */
             snprintf(tname, sizeof(tname), "%s#01-%s", thread_name, visual_devname);
             snprintf(printable_threadname, strlen(thread_name)+5+strlen(live_dev), "%s#01-%s",
                      thread_name, live_dev);
@@ -294,7 +294,7 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
                      thread+1, visual_devname);
             snprintf(printable_threadname, strlen(thread_name)+5+strlen(live_dev), "%s#%02d-%s",
                      thread_name, thread+1, live_dev);
-        }
+        }                      /* 创建线程 */
         ThreadVars *tv = TmThreadCreatePacketHandler(tname,
                 "packetpool", "packetpool",
                 "packetpool", "packetpool",
@@ -303,25 +303,25 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
             FatalError(SC_ERR_THREAD_CREATE, "TmThreadsCreate failed");
         }
         tv->printable_name = printable_threadname;
-
+                               /* 添加接收模块 */
         tm_module = TmModuleGetByName(recv_mod_name);
         if (tm_module == NULL) {
             FatalError(SC_ERR_INVALID_VALUE, "TmModuleGetByName failed for %s", recv_mod_name);
         }
         TmSlotSetFuncAppend(tv, tm_module, aconf);
-
+                               /* 添加解码模块 */
         tm_module = TmModuleGetByName(decode_mod_name);
         if (tm_module == NULL) {
             FatalError(SC_ERR_INVALID_VALUE, "TmModuleGetByName %s failed", decode_mod_name);
         }
         TmSlotSetFuncAppend(tv, tm_module, NULL);
-
+                               /* 添加流模块 */
         tm_module = TmModuleGetByName("FlowWorker");
         if (tm_module == NULL) {
             FatalError(SC_ERR_RUNMODE, "TmModuleGetByName for FlowWorker failed");
         }
         TmSlotSetFuncAppend(tv, tm_module, NULL);
-
+                               /* 添加应答拒绝模块 */
         tm_module = TmModuleGetByName("RespondReject");
         if (tm_module == NULL) {
             FatalError(SC_ERR_RUNMODE, "TmModuleGetByName RespondReject failed");
@@ -329,7 +329,7 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
         TmSlotSetFuncAppend(tv, tm_module, NULL);
 
         TmThreadSetCPU(tv, WORKER_CPU_SET);
-
+                               /* 启动线程，并加入链表 tv_root[] */
         if (TmThreadSpawn(tv) != TM_ECODE_OK) {
             FatalError(SC_ERR_THREAD_SPAWN, "TmThreadSpawn failed");
         }
@@ -357,9 +357,9 @@ int RunModeSetLiveCaptureWorkers(ConfigIfaceParserFunc ConfigParser,
                 FatalError(SC_ERR_MEM_ALLOC, "Can't allocate interface name");
             }
         } else {
-            live_dev_c = LiveGetDeviceName(ldev);
-            aconf = ConfigParser(live_dev_c);
-        }
+            live_dev_c = LiveGetDeviceName(ldev);  /* 获取接口配置信息 */
+            aconf = ConfigParser(live_dev_c);      /* "pcap" - ParsePcapConfig() */
+        }                                          /* 创建并启动工作线程 */
         RunModeSetLiveCaptureWorkersForDevice(ModThreadsCount,
                 recv_mod_name,
                 decode_mod_name,

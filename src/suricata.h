@@ -152,7 +152,7 @@ typedef struct SCInstance_ {
     int verbose;               /* 日志详细程度，[0, 4]，对应参数-v/-v -v等（越多次对应INFO级别向更详细方向的次数） */
     int checksum_validation;   /* 是否支持流验证校验和 */
 
-    struct timeval start_time;
+    struct timeval start_time; /* 启动时间 */
 
     const char *log_dir;
     const char *progname;      /**进程名，指向argv[0] */

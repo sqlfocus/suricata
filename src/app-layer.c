@@ -837,9 +837,9 @@ AppLayerThreadCtx *AppLayerGetCtxThread(ThreadVars *tv)
     memset(app_tctx, 0, sizeof(*app_tctx));
 
     if ((app_tctx->alpd_tctx = AppLayerProtoDetectGetCtxThread()) == NULL)
-        goto error;    /* 检测环境 */
+        goto error;    /* 协议识别环境 */
     if ((app_tctx->alp_tctx = AppLayerParserThreadCtxAlloc()) == NULL)
-        goto error;    /* 解析环境 */
+        goto error;    /* 协议解析环境 */
 
     goto done;
  error:

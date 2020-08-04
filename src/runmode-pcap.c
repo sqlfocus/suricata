@@ -317,7 +317,7 @@ int RunModeIdsPcapWorkers(void)
     TimeModeSetLive();
 
     (void) ConfGet("pcap.single-pcap-dev", &live_dev);
-
+    /* const char *thread_name_workers = "W" */
     ret = RunModeSetLiveCaptureWorkers(ParsePcapConfig,
                                     PcapConfigGeThreadsCount,
                                     "ReceivePcap",

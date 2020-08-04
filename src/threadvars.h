@@ -57,11 +57,11 @@ struct TmSlot_;
 
 /** \brief Per thread variable structure */
 typedef struct ThreadVars_ {
-    pthread_t t;
+    pthread_t t;               /* linux线程结构 */
     /** function pointer to the function that runs the packet pipeline for
      *  this thread. It is passed directly to pthread_create(), hence the
      *  void pointers in and out. */ /* "management"->TmThreadsManagement() */
-    void *(*tm_func)(void *);        /* 线程主函数, "pktacqloop" -> TmThreadsSlotPktAcqLoop() */
+    void *(*tm_func)(void *);  /* 线程主函数, "pktacqloop" -> TmThreadsSlotPktAcqLoop() */
 
     char name[16];
     char *printable_name;
@@ -112,7 +112,7 @@ typedef struct ThreadVars_ {
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */
-    struct PacketQueue_ *stream_pq;         /* 维护此流报文 */
+    struct PacketQueue_ *stream_pq;         /* 维护此线程的流报文 */
     struct PacketQueue_ *stream_pq_local;
 
     /* counters */

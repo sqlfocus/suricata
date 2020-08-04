@@ -27,9 +27,9 @@
 #include "detect-engine-state.h"
 
 typedef struct PrefilterStore_ {
-    const char *name;
+    const char *name; /* "stream"/"pkt" */
     void (*FreeFunc)(void *);
-    uint32_t id;
+    uint32_t id;      /* 由 DetectEngineCtx->prefilter_id++ 得到 */
 } PrefilterStore;
 
 void Prefilter(DetectEngineThreadCtx *, const SigGroupHead *, Packet *p,

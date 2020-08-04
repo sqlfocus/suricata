@@ -345,7 +345,7 @@ void SigTableApplyStrictCommandlineOption(const char *str)
  * \param s    Signature.
  * \param new  The sig match to append.
  * \param list The list to append to.
- */
+ *//* 添加匹配环境到规则匹配列表 */
 void SigMatchAppendSMToList(Signature *s, SigMatch *new, int list)
 {
     if (list > 0 && (uint32_t)list >= s->init_data->smlists_array_size)
@@ -372,7 +372,7 @@ void SigMatchAppendSMToList(Signature *s, SigMatch *new, int list)
         s->init_data->smlists_tail[list] = new;
         new->next = NULL;
         new->prev = NULL;
-    } else {       /* 加入信号的匹配链表 */
+    } else {       /* 加入信号的匹配链表尾端 */
         SigMatch *cur = s->init_data->smlists_tail[list];
         cur->next = new;
         new->prev = cur;
@@ -1969,10 +1969,10 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     }
 
     /* check what the type of this sig is */
-    SignatureSetType(de_ctx, sig); /* 初始化检测类型，估计是为匹配加速 */
+    SignatureSetType(de_ctx, sig); /* 初始化检测类型，为匹配加速 */
 
     if (sig->flags & SIG_FLAG_IPONLY) {
-        /* For IPOnly */           /* IPONLY查找加速 */
+        /* For IPOnly */           /* 构建IPONLY查找加速结构 */
         if (IPOnlySigParseAddress(de_ctx, sig, parser.src, SIG_DIREC_SRC ^ dir) < 0)
             goto error;
 

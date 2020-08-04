@@ -105,7 +105,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
       --SCRConfLoadReferenceConfigFile()          解析 reference.config
       --ActionInitConfig()                        初始化动作优先级, action_order_sigs[]
       --VarNameStoreSetupStaging()                初始化变量名空间, g_varnamestore_staging
-    --LoadSignatures()             
+    --LoadSignatures()
       --SigLoadSignatures()
         --ProcessSigFiles()        加载检测规则文件, suricata.rules等
           --DetectLoadSigFile()
@@ -114,14 +114,45 @@ SCLogConfig *sc_log_config         日志配置信息结构
                 --SigInitHelper()
                   --SigParse()
                     --SigParseBasics()
-                    --SigParseOptions()           调用sigmatch_table[].Setup()
+                    --SigParseOptions()           调用 sigmatch_table[].Setup()
                   --DetectAppLayerEventPrepare()
                     --DetectAppLayerEventSetupP2()"app-layer-events"阶段2
-                  --SigBuildAddressMatchArray()
+                  --SigBuildAddressMatchArray()   规则五元组变更为数组，以加速匹配
+                  --DetectBufferRunSetupCallback()进一步构建检测类型环境
+                    --DetectBufferType->SetupCallback()
+                  --SignatureSetType()
+                  --IPOnlySigParseAddress()       构建IPonly加速查找数据结构
         --SCSigRegisterSignatureOrderingFuncs()   注册规则优先级函数
         --SCSigOrderSignatures()                  按优先级排序规则列表
         --SCThresholdConfInitContext()            解析threshold.config文件
         --SigGroupBuild()          调整规则列表为运行时刻需要的结构
+          --DetectSetFastPatternAndItsId()
+          --SigInitStandardMpmFactoryContexts()
+          --SigAddressPrepareStage1()
+            --SignatureCreateMask()               计算规则标识，如 SIG_MASK_REQUIRE_PAYLOAD 等
+            --RuleSetWhitelist()
+            --DetectFlowbitsAnalyze()
+          --SigAddressPrepareStage2()
+            --RulesGroupByPorts()                 构建基于端口的规则组
+            --IPOnlyPrepare()                     构建IPonly检测规则组
+          --SigAddressPrepareStage3()
+            --DetectEngineBuildDecoderEventSgh()  构建基于事件的规则组
+          --SigAddressPrepareStage4()
+            --PrefilterSetupRuleGroup()           构建规则组的prefilter多模环境
+              --PatternMatchPrepareGroup()
+                --MpmStorePrepareBuffer()
+                  --MpmStoreSetup()
+                    --PopulateMpmHelperAddPattern()
+                    --mpm_table[].Prepare()
+                --PrepareAppMpms()
+                --PreparePktMpms()
+              --sigmatch_table[].SetupPrefilter()
+            --SigGroupHeadBuildNonPrefilterArray()汇总规则组的非prefilter的规则
+          --DetectMpmPrepareBuiltinMpms()
+          --DetectMpmPrepareAppMpms()             共享环境构建多模引擎
+          --DetectMpmPreparePktMpms()
+          --SigMatchPrepare()                     初始化单规则的检测引擎
+          --VarNameStoreActivateStaging()         激活变量命名空间
 
     
     
@@ -158,7 +189,10 @@ SCLogConfig *sc_log_config         日志配置信息结构
   --TmSlot->SlotThreadInit()       初始化PIPELINE处理函数环境
     --ReceivePcapThreadInit()
     --DecodePcapThreadInit()
-    --FlowWorkerThreadInit()          初始化 TMM_FLOWWORKER 运行环境
+    --FlowWorkerThreadInit()       初始化 TMM_FLOWWORKER 运行环境
+      --StreamTcpThreadInit()         流汇聚环境
+      --DetectEngineThreadCtxInit()   检测环境
+      --OutputLoggerThreadInit()      输出环境
   --while(True)
     --ReceivePcapLoop()            主循环, ThreadVars->tm_slots[0]->PktAcqLoop
       --pcap_dispatch()

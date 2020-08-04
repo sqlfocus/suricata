@@ -432,7 +432,7 @@ bool DetectContentPMATCHValidateCallback(const Signature *s)
  *  Another example: 'content:"1"; depth:1; content:"2"; distance:0;'. Here we
  *  cannot set a depth, but we can set an offset of 'offset:1;'. This will
  *  make the mpm a bit more precise.
- */
+ *//* 尽量更具配置规则，精确MPM匹配内容区间，以减少匹配消耗 */
 void DetectContentPropagateLimits(Signature *s)
 {
     BUG_ON(s == NULL || s->init_data == NULL);
@@ -449,7 +449,7 @@ void DetectContentPropagateLimits(Signature *s)
         uint16_t ends_with_depth = 0;
 
         bool have_anchor = false;
-
+        /* 遍历所有匹配，找寻content最大检测深度 */
         SigMatch *sm = s->init_data->smlists[list];
         for ( ; sm != NULL; sm = sm->next) {
             switch (sm->type) {
@@ -595,7 +595,7 @@ void DetectContentPropagateLimits(Signature *s)
                 }
             }
         }
-        /* apply anchored 'ends with' as depth to all patterns */
+        /* 尽量减少匹配长度，apply anchored 'ends with' as depth to all patterns */
         if (has_depth && has_ends_with) {
             sm = s->init_data->smlists[list];
             for ( ; sm != NULL; sm = sm->next) {

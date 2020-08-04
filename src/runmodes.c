@@ -374,7 +374,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
         TmqhFlowPrintAutofpHandler();
     }
 
-    mode->RunModeFunc();                 /* 模式初始化函数, RunModeIdsPcapAutoFp() */
+    mode->RunModeFunc();                 /* 模式初始化函数, RunModeIdsPcapAutoFp()/RunModeIdsPcapWorkers() */
 
     if (local_custom_mode != NULL)
         SCFree(local_custom_mode);

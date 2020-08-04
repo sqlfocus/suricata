@@ -367,7 +367,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     SCThresholdConfInitContext(de_ctx);           /* 解析 /etc/suricata/threshold.config */
 
     /* Setup the signature group lookup structure and pattern matchers */
-    if (SigGroupBuild(de_ctx) < 0)      /* 构建匹配正则引擎 */
+    if (SigGroupBuild(de_ctx) < 0)      /* 调整规则链表，变更为运行时所需结构 */
         goto end;
 
     ret = 0;

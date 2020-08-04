@@ -656,7 +656,7 @@ int SigGroupHeadBuildNonPrefilterArray(DetectEngineCtx *de_ctx, SigGroupHead *sg
         return 0;
 
     BUG_ON(sgh->non_pf_other_store_array != NULL);
-
+    /* 计数非perfilter规则 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)
@@ -666,7 +666,7 @@ int SigGroupHeadBuildNonPrefilterArray(DetectEngineCtx *de_ctx, SigGroupHead *sg
             if (!(DetectFlagsSignatureNeedsSynPackets(s))) {
                 non_pf++;
             }
-            non_pf_syn++;
+            non_pf_syn++;  /* bug??? */
         }
     }
 
@@ -675,19 +675,19 @@ int SigGroupHeadBuildNonPrefilterArray(DetectEngineCtx *de_ctx, SigGroupHead *sg
         sgh->non_pf_syn_store_array = NULL;
         return 0;
     }
-
+    /* 非syn，非prefilter */
     if (non_pf > 0) {
         sgh->non_pf_other_store_array = SCMalloc(non_pf * sizeof(SignatureNonPrefilterStore));
         BUG_ON(sgh->non_pf_other_store_array == NULL);
         memset(sgh->non_pf_other_store_array, 0, non_pf * sizeof(SignatureNonPrefilterStore));
     }
-
+    /* syn, 非prefilter */
     if (non_pf_syn > 0) {
         sgh->non_pf_syn_store_array = SCMalloc(non_pf_syn * sizeof(SignatureNonPrefilterStore));
         BUG_ON(sgh->non_pf_syn_store_array == NULL);
         memset(sgh->non_pf_syn_store_array, 0, non_pf_syn * sizeof(SignatureNonPrefilterStore));
     }
-
+    /* 从 Signature 复制 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)

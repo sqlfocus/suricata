@@ -28,8 +28,8 @@
 *   switching the source and dest (for ip addresses and ports)
 *   or otherwise as normal */
 enum {
-    SIG_DIREC_NORMAL,
-    SIG_DIREC_SWITCHED
+    SIG_DIREC_NORMAL,   /* 解析时，当Signature设置了SIG_FLAG_INIT_BIDIREC */
+    SIG_DIREC_SWITCHED  /* 标志，需要反向解析时 */
 };
 
 /** Flags to indicate if are referencing the source of the Signature

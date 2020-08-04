@@ -355,19 +355,19 @@ int DetectFlowSetupImplicit(Signature *s, uint32_t flags)
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 处理flow配置字符串"flow:established,to_server;" */
 int DetectFlowSetup (DetectEngineCtx *de_ctx, Signature *s, const char *flowstr)
 {
-    /* ensure only one flow option */
+    /* 每条规则仅能有一条flow选项，ensure only one flow option */
     if (s->init_data->init_flags & SIG_FLAG_INIT_FLOW) {
         SCLogError (SC_ERR_INVALID_SIGNATURE, "A signature may have only one flow option.");
         return -1;
     }
-
+    /* 解析配置字符串 */
     DetectFlowData *fd = DetectFlowParse(de_ctx, flowstr);
     if (fd == NULL)
         return -1;
-
+    /* 初始化匹配环境 */
     SigMatch *sm = SigMatchAlloc();
     if (sm == NULL)
         goto error;
@@ -375,7 +375,7 @@ int DetectFlowSetup (DetectEngineCtx *de_ctx, Signature *s, const char *flowstr)
     sm->type = DETECT_FLOW;
     sm->ctx = (SigMatchCtx *)fd;
 
-    /* set the signature direction flags */
+    /* 设置对应的规则的标识，set the signature direction flags */
     if (fd->flags & DETECT_FLOW_FLAG_TOSERVER) {
         s->flags |= SIG_FLAG_TOSERVER;
     } else if (fd->flags & DETECT_FLOW_FLAG_TOCLIENT) {
@@ -399,7 +399,7 @@ int DetectFlowSetup (DetectEngineCtx *de_ctx, Signature *s, const char *flowstr)
     } else {
         s->init_data->init_flags |= SIG_FLAG_INIT_FLOW;
     }
-
+    /* 将匹配环境添加到 ->init_data->smlists[DETECT_SM_LIST_MATCH] */
     if (sm != NULL) {
         SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
     }
