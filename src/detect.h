@@ -1019,7 +1019,7 @@ typedef struct DetectEngineThreadCtx_ {
 
     /** Array of non-prefiltered sigs that need to be evaluated. Updated
      *  per packet based on the rule group and traffic properties. */
-    SigIntId *non_pf_id_array;   /* 匹配的non-prefilter列表 */
+    SigIntId *non_pf_id_array;   /* 适用于当前流/报文的规则组(非prefilter)，来自于 ->non_pf_store_ptr */
     uint32_t non_pf_id_cnt;      // size is cnt * sizeof(uint32_t)
 
     uint32_t mt_det_ctxs_cnt;
@@ -1056,8 +1056,8 @@ typedef struct DetectEngineThreadCtx_ {
     int inspect_list; /**< list we're currently inspecting, DETECT_SM_LIST_* */
 
     struct {
-        InspectionBuffer *buffers;
-        uint32_t buffers_size;          /**< in number of elements */
+        InspectionBuffer *buffers;      /* 检测类型信息数组 */
+        uint32_t buffers_size;          /* 检测类型数量, = DetectEngineCtx->buffer_type_id  */
         uint32_t to_clear_idx;
         uint32_t *to_clear_queue;
     } inspect;
@@ -1081,14 +1081,14 @@ typedef struct DetectEngineThreadCtx_ {
     uint64_t tx_id;
     Packet *p;
 
-    SC_ATOMIC_DECLARE(int, so_far_used_by_detect);
+    SC_ATOMIC_DECLARE(int, so_far_used_by_detect);   /* 使用计数 */
 
     /* holds the current recursion depth on content inspection */
     int inspection_recursion_counter;
 
     /** array of signature pointers we're going to inspect in the detection
      *  loop. */
-    Signature **match_array;       /* 待检测的规则列表 */
+    Signature **match_array;       /* prefilter匹配到的规则，待逐个匹配检测 */
     /** size of the array in items (mem size if * sizeof(Signature *)
      *  Only used during initialization. */
     uint32_t match_array_len;
@@ -1096,28 +1096,28 @@ typedef struct DetectEngineThreadCtx_ {
     SigIntId match_array_cnt;
 
     RuleMatchCandidateTx *tx_candidates;
-    uint32_t tx_candidates_size;
+    uint32_t tx_candidates_size;   /* 事务相关信息，= match_array_len */
 
     SignatureNonPrefilterStore *non_pf_store_ptr;
-    uint32_t non_pf_store_cnt;     /* non-pf列表 */
+    uint32_t non_pf_store_cnt;     /* non-prefilter列表, 赋值为 SigGroupHead->non_pf_syn_store_array/->non_pf_other_store_array */
 
     /** pointer to the current mpm ctx that is stored
      *  in a rule group head -- can be either a content
-     *  or uricontent ctx. */
+     *  or uricontent ctx. */      /* 多模匹配环境 */
     MpmThreadCtx mtc;   /**< thread ctx for the mpm */
     MpmThreadCtx mtcu;  /**< thread ctx for uricontent mpm */
     MpmThreadCtx mtcs;  /**< thread ctx for stream mpm */
-    PrefilterRuleStore pmq;               /* prefilter引擎添加的匹配规则 */
+    PrefilterRuleStore pmq;        /* prefilter引擎添加的匹配规则 */
 
     /** SPM thread context used for scanning. This has been cloned from the
      * prototype held by DetectEngineCtx. */
-    SpmThreadCtx *spm_thread_ctx;
+    SpmThreadCtx *spm_thread_ctx;  /* 单模式匹配环境 */
 
     /** ip only rules ctx */
     DetectEngineIPOnlyThreadCtx io_ctx;   /* 记录IPonly检测结果 */
 
     /* byte jump values */
-    uint64_t *bj_values;
+    uint64_t *bj_values;           /* */
 
     /* string to replace */
     DetectReplaceList *replist;
@@ -1134,13 +1134,13 @@ typedef struct DetectEngineThreadCtx_ {
 
     DetectEngineCtx *de_ctx;           /* 当前的检测环境 */
     /** store for keyword contexts that need a per thread storage. Per de_ctx. */
-    void **keyword_ctxs_array;
+    void **keyword_ctxs_array;         /* */
     int keyword_ctxs_size;
     /** store for keyword contexts that need a per thread storage. Global. */
     int global_keyword_ctxs_size;
     void **global_keyword_ctxs_array;
 
-    uint8_t *base64_decoded;
+    uint8_t *base64_decoded;           /* */
     int base64_decoded_len;
     int base64_decoded_len_max;
 
@@ -1169,7 +1169,7 @@ typedef struct DetectEngineThreadCtx_ {
     struct SCProfilePrefilterData_ *prefilter_perf_data;
     int prefilter_perf_size;
 #endif
-} DetectEngineThreadCtx;
+} DetectEngineThreadCtx;   /* 存放检测所需的临时信息 */
 
 /** \brief element in sigmatch type table.
  */

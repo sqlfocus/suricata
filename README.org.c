@@ -1,5 +1,6 @@
 本文档介绍suricata主流程，以便于快速浏览
   1. 可参考单元测试 RunUnittests() 入口，了解环境初始化，以便于支持lib编译
+  2. TODO 协议解析/ TCP状态机/ 流重组/ 日志输出/ 存储
 
 --SuricataMain()
   --InitGlobal()
@@ -190,8 +191,10 @@ SCLogConfig *sc_log_config         日志配置信息结构
     --ReceivePcapThreadInit()
     --DecodePcapThreadInit()
     --FlowWorkerThreadInit()       初始化 TMM_FLOWWORKER 运行环境
+      --DecodeThreadVarsAlloc()       协议识别环境
       --StreamTcpThreadInit()         流汇聚环境
       --DetectEngineThreadCtxInit()   检测环境
+        --ThreadCtxDoInit()
       --OutputLoggerThreadInit()      输出环境
   --while(True)
     --ReceivePcapLoop()            主循环, ThreadVars->tm_slots[0]->PktAcqLoop
@@ -264,7 +267,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
     --IPPairTimeoutHash()
 
 
-* TCP流重组
+* TCP流重组/应用协议识别
 tcp协议上的应用层协议检测时，需要做数据重组
     
 --SuricataMain()
@@ -274,6 +277,13 @@ tcp协议上的应用层协议检测时，需要做数据重组
         --StreamTcpReassembleInit()
         --FlowSetProtoFreeFunc()     注册 flow_freefuncs[]
 
+    
+--TmThreadsSlotPktAcqLoop()        PCAP入口函数
+  --TmSlot->SlotThreadInit()
+  -->FlowWorkerThreadInit()        初始化 TMM_FLOWWORKER 运行环境
+    --StreamTcpThreadInit()        初始化流汇聚环境
+
+    
 --FlowWorker()
   --StreamTcp()                    流汇聚入口
     --StreamTcpPacket()
@@ -288,18 +298,20 @@ tcp协议上的应用层协议检测时，需要做数据重组
 
 --StreamTcpReassembleHandleSegment()
   --StreamTcpReassembleHandleSegmentUpdateACK()
-    --StreamTcpReassembleAppLayer()                 应用识别
+    --StreamTcpReassembleAppLayer()              对端已缓存数据处理
       --ReassembleUpdateAppLayer()
         --AppLayerHandleTCPData()
           --TCPProtoDetect()
-            --AppLayerProtoDetectGetProto()         基于规则、端口的协议识别
+            --AppLayerProtoDetectGetProto()         协议识别
+              --AppLayerProtoDetectPMGetProto()        基于规则
+              --AppLayerProtoDetectPPGetProto()        基于端口
+              --AppLayerProtoDetectPEGetProto()        基于特殊配置
             --AppLayerParserParse()                 协议解析
           --AppLayerParserParse()
-  --StreamTcpReassembleHandleSegmentHandleData()    缓存数据, TcpStream
+  --StreamTcpReassembleHandleSegmentHandleData() 缓存数据, TcpStream
     --StreamTcpReassembleInsertSegment()
       --DoInsertSegment()
       --InsertSegmentDataCustom()
-  --StreamTcpReassembleAppLayer()
 
 
 * 基于规则的检测

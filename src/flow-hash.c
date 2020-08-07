@@ -613,7 +613,7 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
     SCLogDebug("fb %p fb->head %p", fb, fb->head);
 
     /* see if the bucket already has a flow */
-    if (fb->head == NULL) {  /* case: hash桶为空 */
+    if (fb->head == NULL) {  /* CASE: hash桶为空, 新建流 */
         f = FlowGetNew(tv, dtv, p);
         if (f == NULL) {
             FBLOCK_UNLOCK(fb);
@@ -647,7 +647,7 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
             pf = f;
             f = f->hnext;
 
-            if (f == NULL) {
+            if (f == NULL) { /* CASE: hash桶非空，但未找到 */
                 f = pf->hnext = FlowGetNew(tv, dtv, p);
                 if (f == NULL) {
                     FBLOCK_UNLOCK(fb);
@@ -670,11 +670,11 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
                 FBLOCK_UNLOCK(fb);
                 return f;
             }
-
+                             /* CASE: hash桶非空，找到匹配流表 */
             if (FlowCompare(f, p) != 0) {
                 /* we found our flow, lets put it on top of the
                  * hash list -- this rewards active flows */
-                if (f->hnext) {
+                if (f->hnext) {       /* 将此流表提前到链表首位，以回应激活访问 */
                     f->hnext->hprev = f->hprev;
                 }
                 if (f->hprev) {
@@ -706,7 +706,7 @@ Flow *FlowGetFlowFromHash(ThreadVars *tv, DecodeThreadVars *dtv, const Packet *p
             }
         }
     }
-
+                             /* CASE: hash桶第一个流表为匹配流表 */
     /* lock & return */
     FLOWLOCK_WRLOCK(f);
     if (unlikely(TcpSessionPacketSsnReuse(p, f, f->protoctx) == 1)) {

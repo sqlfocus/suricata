@@ -146,7 +146,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         /* run packet engines */
         PrefilterEngine *engine = sgh->pkt_engines;
         do {
-            PREFILTER_PROFILING_START;
+            PREFILTER_PROFILING_START;   /* 最终引擎函数 */
             engine->cb.Prefilter(det_ctx, p, engine->pectx);
             PREFILTER_PROFILING_END(det_ctx, engine->gid);
 

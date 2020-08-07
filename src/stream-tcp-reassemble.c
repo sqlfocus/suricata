@@ -528,7 +528,7 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
     }
 
     uint64_t seg_depth;
-    if (SEQ_GT(stream->base_seq, seq)) {
+    if (SEQ_GT(stream->base_seq, seq)) {/* 计算，存入此报文后的缓存深度 */
         if (SEQ_LEQ(seq+size, stream->base_seq)) {
             SCLogDebug("segment entirely before base_seq, weird: base %u, seq %u, re %u",
                     stream->base_seq, seq, seq+size);
@@ -1016,8 +1016,8 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
     const uint8_t *mydata;
     uint32_t mydata_len;
 
-    while (1) {
-        GetAppBuffer(*stream, &mydata, &mydata_len, app_progress);  /* 获取数据 */
+    while (1) {         /* 获取数据 */
+        GetAppBuffer(*stream, &mydata, &mydata_len, app_progress);
         DEBUG_VALIDATE_BUG_ON(mydata_len > (uint32_t)INT_MAX);
         if (mydata == NULL && mydata_len > 0 && CheckGap(ssn, *stream, p)) {
             SCLogDebug("sending GAP to app-layer (size: %u)", mydata_len);
@@ -1114,7 +1114,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
  *  stream opposing the stream it is called with.  This shouldn't cause
  *  any issues, since processing of each stream is independent of the
  *  other stream.
- */
+ *//* 应用识别入口 */
 int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                  TcpSession *ssn, TcpStream *stream,
                                  Packet *p, enum StreamUpdateDir dir)

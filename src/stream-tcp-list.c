@@ -67,12 +67,12 @@ int TcpSegmentCompare(struct TcpSegment *a, struct TcpSegment *b)
  *  \param seg segment to store stream offset in
  *  \param data segment data after overlap handling (if any)
  *  \param data_len data length
- */
+ *//* 将报文数据copy到缓存 */
 static inline int InsertSegmentDataCustom(TcpStream *stream, TcpSegment *seg, uint8_t *data, uint16_t data_len)
 {
     uint64_t stream_offset;
     uint16_t data_offset;
-    /* 计算偏移，包括数据偏移、缓存偏移 */
+    /* 计算偏移，包括(待拷贝报文的)数据偏移、(拷贝目的地的)缓存偏移 */
     if (likely(SEQ_GEQ(seg->seq, stream->base_seq))) {
         stream_offset = STREAM_BASE_OFFSET(stream) + (seg->seq - stream->base_seq);
         data_offset = 0;
@@ -571,7 +571,7 @@ int StreamTcpReassembleInsertSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
         SCReturnInt(-1);
     }
 
-    if (likely(r == 0)) {  /* 无重叠，则缓存全部数据 */
+    if (likely(r == 0)) {           /* 无重叠，则缓存全部数据 */
         /* no overlap, straight data insert */
         int res = InsertSegmentDataCustom(stream, seg, pkt_data, pkt_datalen);
         if (res < 0) {
@@ -581,7 +581,7 @@ int StreamTcpReassembleInsertSegment(ThreadVars *tv, TcpReassemblyThreadCtx *ra_
             SCReturnInt(-1);
         }
 
-    } else if (r == 1 || r == 2) {
+    } else if (r == 1 || r == 2) {  /* =1 部分重叠；=2 全部重叠*/
         SCLogDebug("overlap (%s%s)", r == 1 ? "normal" : "", r == 2 ? "duplicate" : "");
 
         if (r == 2) {

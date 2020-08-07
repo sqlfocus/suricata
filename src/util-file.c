@@ -1057,12 +1057,12 @@ void FileUpdateFlowFileFlags(Flow *f, uint16_t set_file_flags, uint8_t direction
 
     /* remove flags not in our direction and
        don't disable what is globally enabled */
-    if (direction == STREAM_TOSERVER) {
+    if (direction == STREAM_TOSERVER) { /* 清理强制启动的标识 */
         set_file_flags &= ~(FLOWFILE_NONE_TC|g_file_flow_mask);
     } else {
         set_file_flags &= ~(FLOWFILE_NONE_TS|g_file_flow_mask);
     }
-    f->file_flags |= set_file_flags;
+    f->file_flags |= set_file_flags;    /* 设置流文件检测标识 */
 
     SCLogDebug("f->file_flags %04x set_file_flags %04x g_file_flow_mask %04x",
             f->file_flags, set_file_flags, g_file_flow_mask);
@@ -1087,7 +1087,7 @@ void FileUpdateFlowFileFlags(Flow *f, uint16_t set_file_flags, uint8_t direction
             per_file_flags |= FILE_NOSTORE;
 
         FileContainer *ffc = AppLayerParserGetFiles(f, direction);
-        if (ffc != NULL) {
+        if (ffc != NULL) {              /* 设置单个文件检测标识，并清理不必要环境 */
             for (File *ptr = ffc->head; ptr != NULL; ptr = ptr->next) {
                 ptr->flags |= per_file_flags;
 

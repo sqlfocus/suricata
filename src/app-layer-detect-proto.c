@@ -165,7 +165,7 @@ typedef struct AppLayerProtoDetectCtx_ {
  * \brief The app layer protocol detection thread context.
  */
 struct AppLayerProtoDetectThreadCtx_ {
-    PrefilterRuleStore pmq;        /* 单模规则列表 */
+    PrefilterRuleStore pmq;        /* 多模匹配后, 匹配到的规则列表; 后续遍历此列表进行单模匹配 */
     /* The value 2 is for direction(0 - toserver, 1 - toclient). */
     MpmThreadCtx mpm_tctx[FLOW_PROTO_DEFAULT][2];
     SpmThreadCtx *spm_thread_ctx;
@@ -270,11 +270,11 @@ static inline int PMGetProtoInspect(
     uint16_t searchlen = MIN(buflen, pm_ctx->mpm_ctx.maxdepth);
     SCLogDebug("searchlen %u buflen %u", searchlen, buflen);
 
-    /* do the mpm search */  /* 多模引擎搜索获取匹配数, MPM_HS -> SCHSSearch() */
+    /* do the mpm search */  /* 多模引擎搜索获取匹配结果, MPM_HS -> SCHSSearch() */
     uint32_t search_cnt = mpm_table[pm_ctx->mpm_ctx.mpm_type].Search(
             &pm_ctx->mpm_ctx, mpm_tctx, &tctx->pmq,
-            buf, searchlen); 
-    if (search_cnt == 0) {   /* 未匹配, 匹配数为0 */
+            buf, searchlen);    /* 匹配结果存入tctx->pmq */
+    if (search_cnt == 0) {      /* 未匹配, 匹配数为0 */
         if (buflen >= pm_ctx->mpm_ctx.maxdepth)
             return -1;
         return 0;
@@ -289,14 +289,14 @@ static inline int PMGetProtoInspect(
      * contains only *unique* matches. */
     for (uint32_t cnt = 0; cnt < tctx->pmq.rule_id_array_cnt; cnt++) {
         const AppLayerProtoDetectPMSignature *s = pm_ctx->map[tctx->pmq.rule_id_array[cnt]];
-        while (s != NULL) {  /* 遍历单模，获取匹配规则，得到匹配结果 */
+        while (s != NULL) {  /* 遍历已匹配的规则，继续单模匹配，得到应用协议 */
             AppProto proto = AppLayerProtoDetectPMMatchSignature(s,
                     tctx, f, direction, buf, buflen, searchlen, rflow);
 
             /* store each unique proto once */
             if (AppProtoIsValid(proto) &&
                 !(pm_results_bf[proto / 8] & (1 << (proto % 8))) )
-            {
+            {                /* 记录得到的应用协议 */
                 pm_results[pm_matches++] = proto;
                 pm_results_bf[proto / 8] |= 1 << (proto % 8);
             }
@@ -331,14 +331,14 @@ static AppProto AppLayerProtoDetectPMGetProto(
         return ALPROTO_FAILED;
 
     if (direction & STREAM_TOSERVER) {      /* CASE: 抽取正方向匹配引擎, AppLayerProtoDetectCtx */
-        pm_ctx = &alpd_ctx.ctx_ipp[f->protomap].ctx_pm[0];
-        mpm_tctx = &tctx->mpm_tctx[f->protomap][0];
+        pm_ctx = &alpd_ctx.ctx_ipp[f->protomap].ctx_pm[0];  /* 规则引擎 */
+        mpm_tctx = &tctx->mpm_tctx[f->protomap][0];         /* 临时运行空间 */
     } else {
         pm_ctx = &alpd_ctx.ctx_ipp[f->protomap].ctx_pm[1];
         mpm_tctx = &tctx->mpm_tctx[f->protomap][1];
     }
     if (likely(pm_ctx->mpm_ctx.pattern_cnt > 0)) {
-        m = PMGetProtoInspect(tctx,         /* 识别 */
+        m = PMGetProtoInspect(tctx,         /* 配置了识别规则，识别 */
                 pm_ctx, mpm_tctx,
                 f, buf, buflen, direction,
                 pm_results, rflow);
@@ -1487,7 +1487,7 @@ static int AppLayerProtoDetectPMRegisterPattern(uint8_t ipproto, AppProto alprot
 }
 
 /***** Protocol Retrieval *****/
-
+/* 协议识别入口 */
 AppProto AppLayerProtoDetectGetProto(AppLayerProtoDetectThreadCtx *tctx,
                                      Flow *f,
                                      const uint8_t *buf, uint32_t buflen,
@@ -1532,7 +1532,7 @@ AppProto AppLayerProtoDetectGetProto(AppLayerProtoDetectThreadCtx *tctx,
     }
 
     /* Look if flow can be found in expectation list */
-    if (!FLOW_IS_PE_DONE(f, direction)) {  /* CASE: */
+    if (!FLOW_IS_PE_DONE(f, direction)) {  /* CASE: 基于特殊设定的协议识别 */
         alproto = AppLayerProtoDetectPEGetProto(f, ipproto, direction);
     }
 

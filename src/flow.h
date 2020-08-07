@@ -39,7 +39,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_VERBOSE    FALSE
 
 #define TOSERVER 0      /* 相对于创建流的报文而言，如果syn+ack创建流，关注 FLOW_DIR_REVERSED */
-#define TOCLIENT 1
+#define TOCLIENT 1      /* <TK!!!>TOSERVER必须为0, 因为后续用于异或操作 */
 
 /* per flow flags */
 
@@ -367,16 +367,16 @@ typedef struct Flow_
     struct LiveDevice_ *livedev;
 
     /** flow hash - the flow hash before hash table size mod. */
-    uint32_t flow_hash;
+    uint32_t flow_hash;        /* 五元组hash值 */
 
     /* time stamp of last update (last packet). Set/updated under the
      * flow and flow hash row locks, safe to read under either the
      * flow lock or flow hash row lock. */
-    struct timeval lastts;           /* 上次收到报文时间 */
+    struct timeval lastts;     /* 上次收到报文时间 */
 
     /* end of flow "header" */
-
-    SC_ATOMIC_DECLARE(FlowStateType, flow_state);   /* 流状态, FLOW_STATE_NEW */
+                               /* 流状态, FLOW_STATE_NEW */
+    SC_ATOMIC_DECLARE(FlowStateType, flow_state);
 
     /** how many pkts and stream msgs are using the flow *right now*. This
      *  variable is atomic so not protected by the Flow mutex "m".
@@ -393,9 +393,9 @@ typedef struct Flow_
     uint32_t probing_parser_toserver_alproto_masks;
     uint32_t probing_parser_toclient_alproto_masks;
 
-    uint32_t flags;         /**< generic flags */
+    uint32_t flags;         /* FLOW_DIR_REVERSED: midstream建流时反向了 */
 
-    uint16_t file_flags;    /**< file tracking/extraction flags */
+    uint16_t file_flags;    /* 文件检测标志, FLOWFILE_NONE_TS */
 
     /** destination port to be used in protocol detection. This is meant
      *  for use with STARTTLS and HTTP CONNECT detection */
@@ -422,9 +422,9 @@ typedef struct Flow_
     uint8_t flow_end_flags;
     /* coccinelle: Flow:flow_end_flags:FLOW_END_FLAG_ */
 
-    AppProto alproto; /**< \brief application level protocol */
-    AppProto alproto_ts;   /* 到服务器 */
-    AppProto alproto_tc;   /* 到客户端 */
+    AppProto alproto;      /* 已识别的应用层协议 */
+    AppProto alproto_ts;   /* 到服务器的 */
+    AppProto alproto_tc;   /* 到客户端的 */
 
     /** original application level protocol. Used to indicate the previous
        protocol when changing to another protocol , e.g. with STARTTLS. */
@@ -436,13 +436,13 @@ typedef struct Flow_
     /** detection engine ctx version used to inspect this flow. Set at initial
      *  inspection. If it doesn't match the currently in use de_ctx, the
      *  stored sgh ptrs are reset. */
-    uint32_t de_ctx_version;
+    uint32_t de_ctx_version;    /* 检测引擎版本号，以发现引擎重新加载 */
 
     /** Thread ID for the stream/detect portion of this flow */
     FlowThreadId thread_id[2];  /* 对应流汇聚、检测的本地线程索引, ThreadVars->id */
 
     /** ttl tracking */
-    uint8_t min_ttl_toserver;
+    uint8_t min_ttl_toserver;   /* 跟踪报文TTL */
     uint8_t max_ttl_toserver;
     uint8_t min_ttl_toclient;
     uint8_t max_ttl_toclient;
@@ -451,11 +451,11 @@ typedef struct Flow_
      *
      */
     AppLayerParserState *alparser;  /**< parser internal state */
-    void *alstate;                  /**< application layer state */
+    void *alstate;                  /* 应用协议状态, *< application layer state */
 
     /** toclient sgh for this flow. Only use when FLOW_SGH_TOCLIENT flow flag
-     *  has been set. */
-    const struct SigGroupHead_ *sgh_toclient;
+     *  has been set. */            /* 匹配到的基于端口的规则集，保存下来 */
+    const struct SigGroupHead_ *sgh_toclient;  /* 避免本流后续报文多次搜索 */
     /** toserver sgh for this flow. Only use when FLOW_SGH_TOSERVER flow flag
      *  has been set. */
     const struct SigGroupHead_ *sgh_toserver;
@@ -464,7 +464,7 @@ typedef struct Flow_
     GenericVar *flowvar;
 
     /** hash list pointers, protected by fb->s */
-    struct Flow_ *hnext; /* hash list */
+    struct Flow_ *hnext;       /* 桶内以hash链表组织 */
     struct Flow_ *hprev;
     struct FlowBucket_ *fb;    /* 对应的hash桶 */
 

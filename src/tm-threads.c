@@ -116,7 +116,7 @@ TmEcode TmThreadsSlotVarRun(ThreadVars *tv, Packet *p, TmSlot *slot)
         PACKET_PROFILING_TMM_START(p, s->tm_id);
         TmEcode r = s->SlotFunc(tv, p, SC_ATOMIC_GET(s->slot_data));
         PACKET_PROFILING_TMM_END(p, s->tm_id);   /* 运行注册的报文处理链 */
-
+                                                 /* DecodePcap() - FlowWorker() - RespondRejectFunc() */
         /* handle error */
         if (unlikely(r == TM_ECODE_FAILED)) {
             /* Encountered error.  Return packets to packetpool and return */

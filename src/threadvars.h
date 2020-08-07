@@ -108,7 +108,7 @@ typedef struct ThreadVars_ {
 
     /** queue for decoders to temporarily store extra packets they
      *  generate. */
-    PacketQueueNoLock decode_pq;
+    PacketQueueNoLock decode_pq;            /* 解码过程中临时产生的报文 */
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */

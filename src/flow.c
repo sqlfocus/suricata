@@ -304,12 +304,12 @@ static inline void TcpStreamFlowSwap(Flow *f)
  */
 void FlowSwap(Flow *f)
 {
-    f->flags |= FLOW_DIR_REVERSED;
+    f->flags |= FLOW_DIR_REVERSED;   /* syn+ack创建的流，设置此标识 */
 
     SWAP_VARS(uint32_t, f->probing_parser_toserver_alproto_masks,
                    f->probing_parser_toclient_alproto_masks);
 
-    FlowSwapFlags(f);
+    FlowSwapFlags(f);                /* 倒换标识 */
     FlowSwapFileFlags(f);
 
     if (f->proto == IPPROTO_TCP) {
@@ -332,7 +332,7 @@ void FlowSwap(Flow *f)
  *  \brief determine the direction of the packet compared to the flow
  *  \retval 0 to_server
  *  \retval 1 to_client
- */
+ *//* 根据流确定报文方向 */
 int FlowGetPacketDirection(const Flow *f, const Packet *p)
 {
     const int reverse = (f->flags & FLOW_DIR_REVERSED) != 0;
@@ -440,7 +440,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
 #endif
     /* update flags and counters */
     if (FlowGetPacketDirection(f, p) == TOSERVER) {
-        f->todstpktcnt++;
+        f->todstpktcnt++;                     /* 更新收发报文计数 */
         f->todstbytecnt += GET_PKT_LEN(p);
         p->flowflags = FLOW_PKT_TOSERVER;
         if (!(f->flags & FLOW_TO_DST_SEEN)) {
@@ -473,7 +473,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
 
     if (SC_ATOMIC_GET(f->flow_state) == FLOW_STATE_ESTABLISHED) {
         SCLogDebug("pkt %p FLOW_PKT_ESTABLISHED", p);
-        p->flowflags |= FLOW_PKT_ESTABLISHED;   /* 设置报文中流状态 */
+        p->flowflags |= FLOW_PKT_ESTABLISHED;   /* 设置报文的流状态 */
 
     } else if ((f->flags & (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) ==
             (FLOW_TO_DST_SEEN|FLOW_TO_SRC_SEEN)) {
@@ -490,7 +490,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p)
         SCLogDebug("setting FLOW_NOPACKET_INSPECTION flag on flow %p", f);
         DecodeSetNoPacketInspectionFlag(p);
     }
-    if (f->flags & FLOW_NOPAYLOAD_INSPECTION) {
+    if (f->flags & FLOW_NOPAYLOAD_INSPECTION) { /* 报文负载不过DETECT标识 */
         SCLogDebug("setting FLOW_NOPAYLOAD_INSPECTION flag on flow %p", f);
         DecodeSetNoPayloadInspectionFlag(p);
     }

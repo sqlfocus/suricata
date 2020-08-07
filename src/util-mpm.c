@@ -255,9 +255,9 @@ void MpmFactoryDeRegisterAllMpmCtxProfiles(DetectEngineCtx *de_ctx)
 
     return;
 }
-
+/* 初始化检测线程的多模环境 */
 void MpmInitThreadCtx(MpmThreadCtx *mpm_thread_ctx, uint16_t matcher)
-{
+{   /* MPM_HS - SCHSInitThreadCtx() */
     mpm_table[matcher].InitThreadCtx(NULL, mpm_thread_ctx);
 }
 

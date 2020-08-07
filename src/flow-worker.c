@@ -109,7 +109,7 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
     fw->local_bypass_bytes = StatsRegisterCounter("flow_bypassed.local_bytes", tv);
     fw->both_bypass_pkts = StatsRegisterCounter("flow_bypassed.local_capture_pkts", tv);
     fw->both_bypass_bytes = StatsRegisterCounter("flow_bypassed.local_capture_bytes", tv);
-
+    /* 构建协议识别环境 */
     fw->dtv = DecodeThreadVarsAlloc(tv);
     if (fw->dtv == NULL) {
         FlowWorkerThreadDeinit(tv, fw);
@@ -199,7 +199,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
     }
 
     /* handle Flow */
-    if (p->flags & PKT_WANTS_FLOW) {      /* case: 查找/新建流 */
+    if (p->flags & PKT_WANTS_FLOW) {      /* CASE: 查找/新建流 */
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_FLOW);
 
         FlowHandlePacket(tv, fw->dtv, p);    /* 查找或建流 */
@@ -216,19 +216,19 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 
     /* if PKT_WANTS_FLOW is not set, but PKT_HAS_FLOW is, then this is a
      * pseudo packet created by the flow manager. */
-    } else if (p->flags & PKT_HAS_FLOW) { /* case: 已经有对应的流，比如已经查找过了 */
+    } else if (p->flags & PKT_HAS_FLOW) { /* CASE: 已经有对应的流，比如已经查找过了 */
         FLOWLOCK_WRLOCK(p->flow);
     }
 
     SCLogDebug("packet %"PRIu64" has flow? %s", p->pcap_cnt, p->flow ? "yes" : "no");
 
     /* handle TCP and app layer */
-    if (p->flow && PKT_IS_TCP(p)) {       /* TCP协议处理 */
+    if (p->flow && PKT_IS_TCP(p)) {       /* CASE: TCP协议处理 */
         SCLogDebug("packet %"PRIu64" is TCP. Direction %s", p->pcap_cnt, PKT_IS_TOSERVER(p) ? "TOSERVER" : "TOCLIENT");
         DEBUG_ASSERT_FLOW_LOCKED(p->flow);
 
         /* if detect is disabled, we need to apply file flags to the flow
-         * here on the first packet. */
+         * here on the first packet. */                /* 未使能检测，首包在流上打文件不检测标识 */
         if (detect_thread == NULL &&
                 ((PKT_IS_TOSERVER(p) && (p->flowflags & FLOW_PKT_TOSERVER_FIRST)) ||
                  (PKT_IS_TOCLIENT(p) && (p->flowflags & FLOW_PKT_TOCLIENT_FIRST))))
@@ -267,7 +267,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         }
 
     /* handle the app layer part of the UDP packet payload */
-    } else if (p->flow && p->proto == IPPROTO_UDP) {
+    } else if (p->flow && p->proto == IPPROTO_UDP) {  /* CASE: UDP处理 */
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_APPLAYERUDP);
         AppLayerHandleUdp(tv, fw->stream_thread->ra_ctx->app_tctx, p, p->flow);
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_APPLAYERUDP);

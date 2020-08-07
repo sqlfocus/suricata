@@ -2683,20 +2683,20 @@ error:
 
 /** \internal
  *  \brief Helper for DetectThread setup functions
- */
+ *//* 初始化线程的检测引擎环境 */
 static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx)
-{
+{   /* 初始化多模式检测环境 */
     PatternMatchThreadPrepare(&det_ctx->mtc, de_ctx->mpm_matcher);
     PatternMatchThreadPrepare(&det_ctx->mtcs, de_ctx->mpm_matcher);
     PatternMatchThreadPrepare(&det_ctx->mtcu, de_ctx->mpm_matcher);
-
+    /* prefilter引擎环境 */
     PmqSetup(&det_ctx->pmq);
-
+    /* 单模式匹配环境 */
     det_ctx->spm_thread_ctx = SpmMakeThreadCtx(de_ctx->spm_global_thread_ctx);
     if (det_ctx->spm_thread_ctx == NULL) {
         return TM_ECODE_FAILED;
     }
-
+    /* 分配空间，能够存放规则组中非prefilter的最大规则数 */
     /* sized to the max of our sgh settings. A max setting of 0 implies that all
      * sgh's have: sgh->non_pf_store_cnt == 0 */
     if (de_ctx->non_pf_store_cnt_max > 0) {
@@ -2704,10 +2704,10 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
         BUG_ON(det_ctx->non_pf_id_array == NULL);
     }
 
-    /* IP-ONLY */
+    /* 初始化IP-ONLY */
     DetectEngineIPOnlyThreadInit(de_ctx,&det_ctx->io_ctx);
 
-    /* DeState */
+    /* 分配匹配规则、事务信息内存，DeState */
     if (de_ctx->sig_array_len > 0) {
         det_ctx->match_array_len = de_ctx->sig_array_len;
         det_ctx->match_array = SCMalloc(det_ctx->match_array_len * sizeof(Signature *));
@@ -2736,7 +2736,7 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
         det_ctx->base64_decoded_len_max = de_ctx->base64_decode_max_len;
         det_ctx->base64_decoded_len = 0;
     }
-
+    /* 初始化检测类型 */
     det_ctx->inspect.buffers_size = de_ctx->buffer_type_id;
     det_ctx->inspect.buffers = SCCalloc(det_ctx->inspect.buffers_size, sizeof(InspectionBuffer));
     if (det_ctx->inspect.buffers == NULL) {
@@ -2759,7 +2759,7 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
     }
     det_ctx->multi_inspect.to_clear_idx = 0;
 
-
+    /* 分配keyword需要的内存空间 */
     DetectEngineThreadCtxInitKeywords(de_ctx, det_ctx);
     DetectEngineThreadCtxInitGlobalKeywords(det_ctx);
 #ifdef PROFILING

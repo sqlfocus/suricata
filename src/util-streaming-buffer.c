@@ -666,8 +666,8 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
 
     if (offset < sb->stream_offset)
         return -1;
-
-    if (sb->buf == NULL) {   /* 首次初始化缓存 */
+    /* 首次初始化缓存 */
+    if (sb->buf == NULL) {
         if (InitBuffer(sb) == -1)
             return -1;
     }

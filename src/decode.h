@@ -46,8 +46,8 @@ typedef enum {
     CHECKSUM_VALIDATION_KERNEL,
 } ChecksumValidationMode;
 
-enum PktSrcEnum {
-    PKT_SRC_WIRE = 1,
+enum PktSrcEnum {   /* 报文来源 */
+    PKT_SRC_WIRE = 1,       /* 网卡接收 */
     PKT_SRC_DECODER_GRE,
     PKT_SRC_DECODER_IPV4,
     PKT_SRC_DECODER_IPV6,
@@ -439,7 +439,7 @@ typedef struct Packet_
     uint8_t vlan_idx;
 
     /* flow */
-    uint8_t flowflags;
+    uint8_t flowflags;    /* FLOW_PKT_TOSERVER */
     /* coccinelle: Packet:flowflags:FLOW_PKT_ */
 
     /* Pkt Flags */
@@ -502,7 +502,7 @@ typedef struct Packet_
 
     IPV4Hdr *ip4h;
 
-    IPV6Hdr *ip6h;
+    IPV6Hdr *ip6h;          /* IPv6信息结构 */
 
     /* IPv4 and IPv6 are mutually exclusive */
     union {
@@ -546,11 +546,11 @@ typedef struct Packet_
     /* IPS action to take */
     uint8_t action;         /* 待执行动作, ACTION_DROP */
 
-    uint8_t pkt_src;        /* */
+    uint8_t pkt_src;        /* 报文来源, PKT_SRC_WIRE */
 
     /* storage: set to pointer to heap and extended via allocation if necessary */
     uint32_t pktlen;
-    uint8_t *ext_pkt;       /*  */
+    uint8_t *ext_pkt;       /* 如果从堆上分配内存，存储数据 */
 
     /* Incoming interface */
     struct LiveDevice_ *livedev;
@@ -565,7 +565,7 @@ typedef struct Packet_
 
 
     /* engine events */
-    PacketEngineEvents events;  /* 事件列表 */
+    PacketEngineEvents events;  /* 已触发的事件列表 */
 
     AppLayerDecoderEvents *app_layer_events;
 
@@ -1121,7 +1121,7 @@ void DecodeUnregisterCounters(void);
  *  so flag it for not setting stream events */
 #define PKT_STREAM_NO_EVENTS            (1<<28)
 
-/** \brief return 1 if the packet is a pseudo packet */
+/** \brief return 1 if the packet is a pseudo packet/注入报文 */
 #define PKT_IS_PSEUDOPKT(p) \
     ((p)->flags & (PKT_PSEUDO_STREAM_END|PKT_PSEUDO_DETECTLOG_FLUSH))
 
