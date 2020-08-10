@@ -562,7 +562,7 @@ static int DecodeIPV6Packet (ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, c
         ENGINE_SET_INVALID_EVENT(p, IPV6_WRONG_IP_VER);
         return -1;
     }
-
+    /* 初始化IPv6头 */
     p->ip6h = (IPV6Hdr *)pkt;
 
     if (unlikely(len < (IPV6_HEADER_LEN + IPV6_GET_PLEN(p))))
@@ -570,7 +570,7 @@ static int DecodeIPV6Packet (ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, c
         ENGINE_SET_INVALID_EVENT(p, IPV6_TRUNC_PKT);
         return -1;
     }
-
+    /* 记录IP地址 */
     SET_IPV6_SRC_ADDR(p,&p->src);
     SET_IPV6_DST_ADDR(p,&p->dst);
 
@@ -581,7 +581,7 @@ int DecodeIPV6(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, const uint8_t *
 {
     StatsIncr(tv, dtv->counter_ipv6);
 
-    /* do the actual decoding */
+    /* IPv6头部解码，do the actual decoding */
     int ret = DecodeIPV6Packet (tv, dtv, p, pkt, len);
     if (unlikely(ret < 0)) {
         CLEAR_IPV6_PACKET(p);
@@ -603,7 +603,7 @@ int DecodeIPV6(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, const uint8_t *
     /* now process the Ext headers and/or the L4 Layer */
     switch(IPV6_GET_NH(p)) {
         case IPPROTO_TCP:
-            IPV6_SET_L4PROTO (p, IPPROTO_TCP);
+            IPV6_SET_L4PROTO (p, IPPROTO_TCP);  /* 记录对应的4层协议 */
             DecodeTCP(tv, dtv, p, pkt + IPV6_HEADER_LEN, IPV6_GET_PLEN(p));
             return TM_ECODE_OK;
         case IPPROTO_UDP:

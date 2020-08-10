@@ -92,7 +92,7 @@ static void DecodeTCPOptions(Packet *p, const uint8_t *pkt, uint16_t pktlen)
                     if (olen != TCP_OPT_WS_LEN) {
                         ENGINE_SET_EVENT(p,TCP_OPT_INVALID_LEN);
                     } else {
-                        if (p->tcpvars.ws.type != 0) {
+                        if (p->tcpvayrs.ws.type != 0) {
                             ENGINE_SET_EVENT(p,TCP_OPT_DUPLICATE);
                         } else {
                             SET_OPTS(p->tcpvars.ws, tcp_opts[tcp_opt_cnt]);
@@ -216,17 +216,17 @@ static int DecodeTCPPacket(ThreadVars *tv, Packet *p, const uint8_t *pkt, uint16
         return -1;
     }
 
-    if (likely(tcp_opt_len > 0)) {
+    if (likely(tcp_opt_len > 0)) {/* 解析TCP选项 */
         DecodeTCPOptions(p, pkt + TCP_HEADER_LEN, tcp_opt_len);
     }
 
-    SET_TCP_SRC_PORT(p,&p->sp);
+    SET_TCP_SRC_PORT(p,&p->sp);   /* 记录协议号 */
     SET_TCP_DST_PORT(p,&p->dp);
 
-    p->proto = IPPROTO_TCP;
+    p->proto = IPPROTO_TCP;       /* 记录L4协议 */
 
     p->payload = (uint8_t *)pkt + hlen;
-    p->payload_len = len - hlen;
+    p->payload_len = len - hlen;  /* 更新负载 */
 
     return 0;
 }
@@ -238,7 +238,7 @@ int DecodeTCP(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
 
     if (unlikely(DecodeTCPPacket(tv, p, pkt,len) < 0)) {
         SCLogDebug("invalid TCP packet");
-        CLEAR_TCP_PACKET(p);
+        CLEAR_TCP_PACKET(p);  /* 解析TCP协议 */
         return TM_ECODE_FAILED;
     }
 
@@ -250,7 +250,7 @@ int DecodeTCP(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
         TCP_HAS_MSS(p) ? "MSS " : "", TCP_HAS_TFO(p) ? "TFO " : "");
 #endif
 
-    FlowSetupPacket(p);       /* 流处理 */
+    FlowSetupPacket(p);       /* 流处理，计算流表hash值 */
 
     return TM_ECODE_OK;
 }

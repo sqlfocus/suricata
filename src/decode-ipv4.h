@@ -173,8 +173,8 @@ typedef struct IPV4Vars_
 {
     int32_t comp_csum;     /* checksum computed over the ipv4 packet */
 
-    uint16_t opt_cnt;
-    uint16_t opts_set;
+    uint16_t opt_cnt;    /* 选项计数 */
+    uint16_t opts_set;   /* 选项ENUM或集 */
 } IPV4Vars;
 
 

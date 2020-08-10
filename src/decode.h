@@ -248,7 +248,7 @@ typedef uint16_t Port;
     ((p1) == (p2))
 
 /*Given a packet pkt offset to the start of the ip header in a packet
- *We determine the ip version. */
+ *We determine the ip version. */    /* <TK!!!>需要考虑大小端??? */
 #define IP_GET_RAW_VER(pkt) ((((pkt)[0] & 0xf0) >> 4))
 
 #define PKT_IS_IPV4(p)      (((p)->ip4h != NULL))
@@ -412,7 +412,7 @@ typedef struct Packet_
     /* Addresses, Ports and protocol
      * these are on top so we can use
      * the Packet as a hash key */
-    Address src;
+    Address src;     /* 兼容IPv6的地址 */
     Address dst;
     union {
         Port sp;
@@ -430,7 +430,7 @@ typedef struct Packet_
             uint8_t code;
         } icmp_d;
     };
-    uint8_t proto;
+    uint8_t proto;              /* L4层协议, IPPROTO_TCP */
     /* make sure we can't be attacked on when the tunneled packet
      * has the exact same tuple as the lower levels */
     uint8_t recursion_level;    /* L4解码层数，防止嵌套攻击 */
@@ -505,7 +505,7 @@ typedef struct Packet_
     IPV6Hdr *ip6h;          /* IPv6信息结构 */
 
     /* IPv4 and IPv6 are mutually exclusive */
-    union {
+    union {                 /* 记录IPv4/IPv6选项信息 */
         IPV4Vars ip4vars;
         struct {
             IPV6Vars ip6vars;
@@ -513,7 +513,7 @@ typedef struct Packet_
         };
     };
     /* Can only be one of TCP, UDP, ICMP at any given time */
-    union {
+    union {                 /* 记录TCP/UDP/ICMP等选项信息 */
         TCPVars tcpvars;
         ICMPV4Vars icmpv4vars;
         ICMPV6Vars icmpv6vars;
@@ -1165,7 +1165,7 @@ static inline void DecodeLinkLayer(ThreadVars *tv, DecodeThreadVars *dtv,
     /* call the decoder */
     switch (datalink) {
         case LINKTYPE_ETHERNET:
-            DecodeEthernet(tv, dtv, p, data, len);
+            DecodeEthernet(tv, dtv, p, data, len);  /* 以太解码入口 */
             break;
         case LINKTYPE_LINUX_SLL:
             DecodeSll(tv, dtv, p, data, len);
@@ -1189,7 +1189,7 @@ static inline void DecodeLinkLayer(ThreadVars *tv, DecodeThreadVars *dtv,
             break;
     }
 }
-
+/* L3解析入口 */
 /** \brief decode network layer
  *  \retval bool true if successful, false if unknown */
 static inline bool DecodeNetworkLayer(ThreadVars *tv, DecodeThreadVars *dtv,
@@ -1198,12 +1198,12 @@ static inline bool DecodeNetworkLayer(ThreadVars *tv, DecodeThreadVars *dtv,
     switch (proto) {
         case ETHERNET_TYPE_IP: {
             uint16_t ip_len = (len < USHRT_MAX) ? (uint16_t)len : (uint16_t)USHRT_MAX;
-            DecodeIPV4(tv, dtv, p, data, ip_len);
+            DecodeIPV4(tv, dtv, p, data, ip_len);  /* IPv4解析 */
             break;
         }
         case ETHERNET_TYPE_IPV6: {
             uint16_t ip_len = (len < USHRT_MAX) ? (uint16_t)len : (uint16_t)USHRT_MAX;
-            DecodeIPV6(tv, dtv, p, data, ip_len);
+            DecodeIPV6(tv, dtv, p, data, ip_len);  /* IPv6解析 */
             break;
         }
         case ETHERNET_TYPE_PPPOE_SESS:

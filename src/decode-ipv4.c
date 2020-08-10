@@ -317,7 +317,7 @@ static int DecodeIPV4Options(Packet *p, const uint8_t *pkt, uint16_t len, IPV4Op
 #endif
 
     /* Options length must be padded to 8byte boundary */
-    if (plen % 8) {
+    if (plen % 8) {              /* IP选项必须8字节对齐 */
         ENGINE_SET_EVENT(p,IPV4_OPT_PAD_REQUIRED);
         /* Warn - we can keep going */
     }
@@ -327,13 +327,13 @@ static int DecodeIPV4Options(Packet *p, const uint8_t *pkt, uint16_t len, IPV4Op
         p->ip4vars.opt_cnt++;
 
         /* single byte options */
-        if (*pkt == IPV4_OPT_EOL) {
+        if (*pkt == IPV4_OPT_EOL) {         /* End Of List选项，单字节 */
             /** \todo What if more data exist after EOL (possible covert channel or data leakage)? */
             SCLogDebug("IPV4OPT %" PRIu8 " len 1 @ %d/%d",
                    *pkt, (len - plen), (len - 1));
             p->ip4vars.opts_set |= IPV4_OPT_FLAG_EOL;
             break;
-        } else if (*pkt == IPV4_OPT_NOP) {
+        } else if (*pkt == IPV4_OPT_NOP) {  /* NO op选项，单字节 */
             SCLogDebug("IPV4OPT %" PRIu8 " len 1 @ %d/%d",
                    *pkt, (len - plen), (len - 1));
             pkt++;
@@ -342,7 +342,7 @@ static int DecodeIPV4Options(Packet *p, const uint8_t *pkt, uint16_t len, IPV4Op
             p->ip4vars.opts_set |= IPV4_OPT_FLAG_NOP;
 
         /* multibyte options */
-        } else {
+        } else {                            /* 其他选项，TLV结构，1/1/n字节 */
             if (unlikely(plen < 2)) {
                 /** \todo What if padding is non-zero (possible covert channel or data leakage)? */
                 /** \todo Spec seems to indicate EOL required if there is padding */
@@ -474,7 +474,7 @@ static int DecodeIPV4Packet(Packet *p, const uint8_t *pkt, uint16_t len)
         return -1;
     }
 
-    if (unlikely(IP_GET_RAW_VER(pkt) != 4)) {
+    if (unlikely(IP_GET_RAW_VER(pkt) != 4)) {   /* 获取版本号 */
         SCLogDebug("wrong ip version %d",IP_GET_RAW_VER(pkt));
         ENGINE_SET_INVALID_EVENT(p, IPV4_WRONG_IP_VER);
         return -1;
@@ -498,13 +498,13 @@ static int DecodeIPV4Packet(Packet *p, const uint8_t *pkt, uint16_t len)
     }
 
     /* set the address struct */
-    SET_IPV4_SRC_ADDR(p,&p->src);
+    SET_IPV4_SRC_ADDR(p,&p->src);     /* 记录IP地址 */
     SET_IPV4_DST_ADDR(p,&p->dst);
 
     /* save the options len */
     uint8_t ip_opt_len = IPV4_GET_HLEN(p) - IPV4_HEADER_LEN;
     if (ip_opt_len > 0) {
-        IPV4Options opts;
+        IPV4Options opts;             /* 解析IP选项 */
         memset(&opts, 0x00, sizeof(opts));
         if (DecodeIPV4Options(p, pkt + IPV4_HEADER_LEN, ip_opt_len, &opts) < 0) {
             return -1;
@@ -513,7 +513,7 @@ static int DecodeIPV4Packet(Packet *p, const uint8_t *pkt, uint16_t len)
 
     return 0;
 }
-
+/* IPv4解析入口 */
 int DecodeIPV4(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
         const uint8_t *pkt, uint16_t len)
 {

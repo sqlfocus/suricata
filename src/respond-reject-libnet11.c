@@ -313,7 +313,7 @@ int RejectSendLibnet11IPv4TCP(ThreadVars *tv, Packet *p, void *data, int dir)
 
     SetupTCP(p, &lpacket, dir);
 
-    if (BuildTCP(c, &lpacket) < 0)
+    if (BuildTCP(c, &lpacket) < 0)  /* 构造tcp rst */
         goto cleanup;
 
     if (BuildIPv4(c, &lpacket, IPPROTO_TCP) < 0)
