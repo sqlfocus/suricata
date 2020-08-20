@@ -550,7 +550,7 @@ typedef struct Packet_
 
     /* storage: set to pointer to heap and extended via allocation if necessary */
     uint32_t pktlen;
-    uint8_t *ext_pkt;       /* 如果从堆上分配内存，存储数据 */
+    uint8_t *ext_pkt;       /* 如果从堆上分配内存，存储数据；如嫁接与DPDK引擎上，则可以通过此指向mbuf */
 
     /* Incoming interface */
     struct LiveDevice_ *livedev;

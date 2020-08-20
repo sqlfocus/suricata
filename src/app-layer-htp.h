@@ -152,7 +152,7 @@ typedef struct HTPCfgDir_ {
 
 /** Need a linked list in order to keep track of these */
 typedef struct HTPCfgRec_ {
-    htp_cfg_t           *cfg;
+    htp_cfg_t           *cfg;       /* libhtp库专有配置 */
     struct HTPCfgRec_   *next;
 
     int                 uri_include_all; /**< use all info in uri (bool) */
@@ -169,7 +169,7 @@ typedef struct HTPCfgRec_ {
 
     HTPCfgDir request;
     HTPCfgDir response;
-} HTPCfgRec;
+} HTPCfgRec;         /* libhtp库配置信息 */
 
 /** Struct used to hold chunks of a body on a request */
 struct HtpBodyChunk_ {
@@ -216,7 +216,7 @@ typedef struct HtpTxUserData_ {
     uint8_t response_has_trailers;
 
     /* indicates which loggers that have logged */
-    uint32_t logged;
+    uint32_t logged;                /* 已输出的日志 */
 
     HtpBody request_body;
     HtpBody response_body;
@@ -242,7 +242,7 @@ typedef struct HtpTxUserData_ {
     uint8_t request_body_type;
 
     DetectEngineState *de_state;
-} HtpTxUserData;
+} HtpTxUserData;                   /* 记录在libhtp中，此http解析的suricata私有数据 */
 
 typedef struct HtpState_ {
     /* Connection parser structure for each connection */
@@ -257,11 +257,11 @@ typedef struct HtpState_ {
     const struct HTPCfgRec_ *cfg;
     uint16_t flags;
     uint16_t events;
-    uint16_t htp_messages_offset; /**< offset into conn->messages list */
-    uint32_t file_track_id;             /**< used to assign file track ids to files */
+    uint16_t htp_messages_offset;     /* 已处理的解析日志信息， *< offset into conn->messages list */
+    uint32_t file_track_id;           /**< used to assign file track ids to files */
     uint64_t last_request_data_stamp;
     uint64_t last_response_data_stamp;
-} HtpState;
+} HtpState;    /* HTTP解析状态结构 */
 
 /** part of the engine needs the request body (e.g. http_client_body keyword) */
 #define HTP_REQUIRE_REQUEST_BODY        (1 << 0)

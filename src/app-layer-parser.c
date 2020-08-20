@@ -154,11 +154,11 @@ typedef struct AppLayerParserCtx_ {
 
 struct AppLayerParserState_ {
     /* coccinelle: AppLayerParserState:flags:APP_LAYER_PARSER_ */
-    uint8_t flags;
+    uint8_t flags;              /* APP_LAYER_PARSER_EOF */
 
     /* Indicates the current transaction that is being inspected.
      * We have a var per direction. */
-    uint64_t inspect_id[2];
+    uint64_t inspect_id[2];     /* 当前解析的事务 */
     /* Indicates the current transaction being logged.  Unlike inspect_id,
      * we don't need a var per direction since we don't log a transaction
      * unless we have the entire transaction. */
@@ -1024,12 +1024,12 @@ int AppLayerParserGetStateProgress(uint8_t ipproto, AppProto alproto,
     }
     SCReturnInt(r);
 }
-
+/* 获取事务数 */
 uint64_t AppLayerParserGetTxCnt(const Flow *f, void *alstate)
 {
     SCEnter();
     uint64_t r = 0;
-    r = alp_ctx.ctxs[f->protomap][f->alproto].
+    r = alp_ctx.ctxs[f->protomap][f->alproto].  /* HTTP -> HTPStateGetTxCnt() */
                StateGetTxCnt(alstate);
     SCReturnCT(r, "uint64_t");
 }
@@ -1186,7 +1186,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     if (p->StateAlloc == NULL)
         goto end;
 
-    if (flags & STREAM_GAP) {
+    if (flags & STREAM_GAP) {       /* CASE: 不接受数据存在间隙 */
         if (!(p->option_flags & APP_LAYER_PARSER_OPT_ACCEPT_GAPS)) {
             SCLogDebug("app-layer parser does not accept gaps");
             if (f->alstate != NULL) {
@@ -1197,19 +1197,19 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* Get the parser state (if any) */
+    /* 如有必要分配解析状态结构, Get the parser state (if any) */
     if (pstate == NULL) {
         f->alparser = pstate = AppLayerParserStateAlloc();
         if (pstate == NULL)
             goto error;
     }
 
-    if (flags & STREAM_EOF)
+    if (flags & STREAM_EOF)         /* CASE: 流结束了，设置标识 */
         AppLayerParserStateSetFlag(pstate, APP_LAYER_PARSER_EOF);
-
+    /* 如有必要分配HTTP状态信息结构 */
     alstate = f->alstate;
     if (alstate == NULL) {
-        f->alstate = alstate = p->StateAlloc();
+        f->alstate = alstate = p->StateAlloc();  /* HtpState, HTTP -> HTPStateAlloc() */
         if (alstate == NULL)
             goto error;
         SCLogDebug("alloced new app layer state %p (name %s)",
@@ -1220,18 +1220,18 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     }
 
     p_tx_cnt = AppLayerParserGetTxCnt(f, f->alstate);
-    /* 引入协议解析器，解析输入数据 */
+    /* 引入协议解析器，解析输入数据 *//* AppLayerResult 参考 rust/src/applayer.rs */
     /* invoke the recursive parser, but only on data. We may get empty msgs on EOF */
     if (input_len > 0 || (flags & STREAM_EOF)) {
-        /* invoke the parser *//* ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
+        /* invoke the parser *//* 解析, ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
         AppLayerResult res = p->Parser[direction](f, alstate, pstate,
                 input, input_len,
                 alp_tctx->alproto_local_storage[f->protomap][alproto],
                 flags);
-        if (res.status < 0)
+        if (res.status < 0)               /* 解析错误 */
         {
             goto error;
-        } else if (res.status > 0) {
+        } else if (res.status > 0) {      /* 数据消耗完，仍需要额外数据 */
             if (f->proto == IPPROTO_TCP && f->protoctx != NULL) {
                 TcpSession *ssn = f->protoctx;
                 SCLogDebug("direction %d/%s", direction,
@@ -1241,7 +1241,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
                     /* parser told us how much data it needs on top of what it
                      * consumed. So we need tell stream engine how much we need
                      * before the next call */
-                    ssn->client.data_required = res.needed;
+                    ssn->client.data_required = res.needed;  /* 记录下次启动解析需要的数据量 */
                     SCLogDebug("setting data_required %u", ssn->client.data_required);
                 } else {
                     /* parser told us how much data it needs on top of what it
@@ -1260,7 +1260,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* set the packets to no inspection and reassembly if required */
+    /* 不需要检测的情形，后续不再数据重组; set the packets to no inspection and reassembly if required */
     if (pstate->flags & APP_LAYER_PARSER_NO_INSPECTION) {
         AppLayerParserSetEOF(pstate);
         FlowSetNoPayloadInspectionFlag(f);
@@ -1288,13 +1288,13 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* In cases like HeartBleed for TLS we need to inspect AppLayer but not Payload */
+    /* 不需要检测负载的情形，后续不再数据重组; In cases like HeartBleed for TLS we need to inspect AppLayer but not Payload */
     if (!(f->flags & FLOW_NOPAYLOAD_INSPECTION) && pstate->flags & APP_LAYER_PARSER_NO_INSPECTION_PAYLOAD) {
-        FlowSetNoPayloadInspectionFlag(f);
+        FlowSetNoPayloadInspectionFlag(f);        /* 会话设置不检测负载 */
         /* Set the no reassembly flag for both the stream in this TcpSession */
         if (f->proto == IPPROTO_TCP) {
             /* Used only if it's TCP */
-            TcpSession *ssn = f->protoctx;
+            TcpSession *ssn = f->protoctx;        /* 后续数据不再重组 */
             if (ssn != NULL) {
                 StreamTcpSetDisableRawReassemblyFlag(ssn, 0);
                 StreamTcpSetDisableRawReassemblyFlag(ssn, 1);
@@ -1302,18 +1302,18 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* get the diff in tx cnt for stats keeping */
+    /* 更新事务统计计数, get the diff in tx cnt for stats keeping */
     uint64_t cur_tx_cnt = AppLayerParserGetTxCnt(f, f->alstate);
     if (cur_tx_cnt > p_tx_cnt && tv) {
         AppLayerIncTxCounter(tv, f, cur_tx_cnt - p_tx_cnt);
     }
 
-    /* stream truncated, inform app layer */
+    /* 处理的数据量已达到配置值，后续数据不再处理; stream truncated, inform app layer */
     if (flags & STREAM_DEPTH)
         AppLayerParserStreamTruncated(f->proto, alproto, alstate, flags);
 
  end:
-    /* update app progress */
+    /* 真实处理的数据较少，调整处理数据计数, update app progress */
     if (consumed != input_len && f->proto == IPPROTO_TCP && f->protoctx != NULL) {
         TcpSession *ssn = f->protoctx;
         StreamTcpUpdateAppLayerProgress(ssn, direction, consumed);
@@ -1616,7 +1616,7 @@ void AppLayerParserStreamTruncated(uint8_t ipproto, AppProto alproto, void *alst
                                    uint8_t direction)
 {
     SCEnter();
-
+    /* 设置截断标识, 已到处理深度，后续不再处理; HTTP -> HTPStateTruncate() */
     if (alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].Truncate != NULL)
         alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].Truncate(alstate, direction);
 

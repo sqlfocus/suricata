@@ -115,9 +115,9 @@ typedef struct TcpStream_ {
     uint32_t raw_progress_rel;      /**< raw reassembly progress relative to STREAM_BASE_OFFSET */
     uint32_t log_progress_rel;      /**< streaming logger progress relative to STREAM_BASE_OFFSET */
 
-    uint32_t min_inspect_depth;     /**< min inspect size set by the app layer, to make sure enough data
+    uint32_t min_inspect_depth;     /* 应用层设定的最小检测深度，*< min inspect size set by the app layer, to make sure enough data
                                      *   remains available for inspection together with app layer buffers */
-    uint32_t data_required;         /**< data required from STREAM_APP_PROGRESS before calling app-layer again */
+    uint32_t data_required;         /* 下次解析，需要提前准备的数据量, *< data required from STREAM_APP_PROGRESS before calling app-layer again */
 
     StreamingBuffer sb;             /* 缓存的数据 */
     struct TCPSEG seg_tree;         /* 红黑树, 已缓存的数据段的序号和长度, TcpSegment, 数据在->sb中 */

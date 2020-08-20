@@ -654,7 +654,7 @@ void DecodeThreadVarsFree(ThreadVars *tv, DecodeThreadVars *dtv)
  *  \param Pointer to the Packet to modify
  *  \param Pointer to the data
  *  \param Length of the data
- */
+ *//* 设置报文内容指向堆内存，或其他形式分配的内存，如dpdk mbuf；以实现零拷贝 */
 inline int PacketSetData(Packet *p, const uint8_t *pktdata, uint32_t pktlen)
 {
     SET_PKT_LEN(p, (size_t)pktlen);

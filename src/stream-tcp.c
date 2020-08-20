@@ -5850,7 +5850,7 @@ invalid:
 
  * \param ssn TCP Session
  * \param direction direction to set the flag in: 0 toserver, 1 toclient
- */
+ *//* 更新应用层对重组数据处理量 */
 void StreamTcpUpdateAppLayerProgress(TcpSession *ssn, char direction,
         const uint32_t progress)
 {

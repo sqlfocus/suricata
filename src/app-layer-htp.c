@@ -84,9 +84,9 @@
 //#define PRINT
 
 /** Fast lookup tree (radix) for the various HTP configurations */
-static SCRadixTree *cfgtree;
+static SCRadixTree *cfgtree;    /* 以目的IP组织的libhtp的特定配置 */
 /** List of HTP configurations. */
-static HTPCfgRec cfglist;
+static HTPCfgRec cfglist;       /* libhtp库配置链表，首个为默认配置 */
 
 /** Limit to the number of libhtp messages that can be handled */
 #define HTP_MAX_MESSAGES 512
@@ -297,7 +297,7 @@ static void HTPSetEvent(HtpState *s, HtpTxUserData *htud,
         const uint8_t dir, const uint8_t e)
 {
     SCLogDebug("setting event %u", e);
-
+    /* 记录到事务独有的事件列表 */
     if (htud) {
         AppLayerDecoderEventsSetEventRaw(&htud->decoder_events, e);
         s->events++;
@@ -306,7 +306,7 @@ static void HTPSetEvent(HtpState *s, HtpTxUserData *htud,
 
     const uint64_t tx_id = (dir == STREAM_TOSERVER) ?
         HtpGetActiveRequestTxID(s) : HtpGetActiveResponseTxID(s);
-
+    /* 未指定事务，则使用当前事务 */
     htp_tx_t *tx = HTPStateGetTx(s, tx_id);
     if (tx == NULL && tx_id > 0)
         tx = HTPStateGetTx(s, tx_id - 1);
@@ -320,7 +320,7 @@ static void HTPSetEvent(HtpState *s, HtpTxUserData *htud,
     }
     SCLogDebug("couldn't set event %u", e);
 }
-
+/* 获取解析事件 */
 static AppLayerDecoderEvents *HTPGetEvents(void *tx)
 {
     SCLogDebug("get HTTP events for TX %p", tx);
@@ -336,7 +336,7 @@ static AppLayerDecoderEvents *HTPGetEvents(void *tx)
 
 /** \brief Function to allocates the HTTP state memory and also creates the HTTP
  *         connection parser to be used by the HTP library
- */
+ *//* 创建HTTP状态结构，为libhtp分配链接解析 */
 static void *HTPStateAlloc(void)
 {
     SCEnter();
@@ -431,7 +431,7 @@ void HTPStateFree(void *state)
  *
  *  \warning We cannot actually free the transactions here. It seems that
  *           HTP only accepts freeing of transactions in the response callback.
- */
+ *//* 销毁事务的回调函数 */
 static void HTPStateTransactionFree(void *state, uint64_t id)
 {
     SCEnter();
@@ -440,11 +440,11 @@ static void HTPStateTransactionFree(void *state, uint64_t id)
 
     SCLogDebug("state %p, id %"PRIu64, s, id);
 
-    htp_tx_t *tx = HTPStateGetTx(s, id);
+    htp_tx_t *tx = HTPStateGetTx(s, id);   /* 检索事务 */
     if (tx != NULL) {
         /* This will remove obsolete body chunks */
         HtpTxUserData *htud = (HtpTxUserData *) htp_tx_get_user_data(tx);
-        HtpTxUserDataFree(s, htud);
+        HtpTxUserDataFree(s, htud);        /* 释放本地维护数据 */
         htp_tx_set_user_data(tx, NULL);
 
         /* hack: even if libhtp considers the tx incomplete, we want to
@@ -458,7 +458,7 @@ static void HTPStateTransactionFree(void *state, uint64_t id)
             tx->request_progress = HTP_REQUEST_COMPLETE;
             tx->response_progress = HTP_RESPONSE_COMPLETE;
         }
-        htp_tx_destroy(tx);
+        htp_tx_destroy(tx);                /* 销毁事务 */
     }
 }
 
@@ -686,14 +686,14 @@ static int HTPHandleErrorGetId(const char *msg)
  *
  *  \param s state
  *  \param dir direction: STREAM_TOSERVER or STREAM_TOCLIENT
- */
+ *//* 处理libhtp的差错/告警日志 */
 static void HTPHandleError(HtpState *s, const uint8_t dir)
 {
     if (s == NULL || s->conn == NULL ||
         s->conn->messages == NULL) {
         return;
     }
-
+    /* 错误/告警日志过多，忽略 */
     size_t size = htp_list_size(s->conn->messages);
     size_t msg;
     if(size >= HTP_MAX_MESSAGES) {
@@ -707,7 +707,7 @@ static void HTPHandleError(HtpState *s, const uint8_t dir)
         // ignore further messages
         return;
     }
-
+    /* 处理libhtp解析日志，错误/告警 */
     for (msg = s->htp_messages_offset; msg < size; msg++) {
         htp_log_t *log = htp_list_get(s->conn->messages, msg);
         if (log == NULL)
@@ -720,15 +720,15 @@ static void HTPHandleError(HtpState *s, const uint8_t dir)
 
         SCLogDebug("message %s", log->msg);
 
-        int id = HTPHandleErrorGetId(log->msg);
+        int id = HTPHandleErrorGetId(log->msg);   /* 将错误字符串换为索引 */
         if (id == 0) {
-            id = HTPHandleWarningGetId(log->msg);
+            id = HTPHandleWarningGetId(log->msg); /* 将告警字符串换为索引 */
             if (id == 0)
                 id = HTTP_DECODER_EVENT_UNKNOWN_ERROR;
         }
 
         if (id > 0) {
-            HTPSetEvent(s, htud, dir, id);
+            HTPSetEvent(s, htud, dir, id);        /* 记录事件 */
         }
     }
     s->htp_messages_offset = (uint16_t)msg;
@@ -784,17 +784,17 @@ static inline void HTPErrorCheckTxRequestFlags(HtpState *s, htp_tx_t *tx)
                 HTTP_DECODER_EVENT_REQUEST_LINE_INVALID);
     }
 }
-
+/* 初始化libhtp库状态信息 */
 static int Setup(Flow *f, HtpState *hstate)
 {
-    /* store flow ref in state so callbacks can access it */
-    hstate->f = f;
-
+    /* 记录会话指针, store flow ref in state so callbacks can access it */
+    hstate->f = f;                /* 初始化对应的流 */
+    /* 查找libhtp库配置 */
     HTPCfgRec *htp_cfg_rec = &cfglist;
-    htp_cfg_t *htp = cfglist.cfg; /* Default to the global HTP config */
+    htp_cfg_t *htp = cfglist.cfg; /* 默认值, libhtp全局配置, Default to the global HTP config */
     void *user_data = NULL;
 
-    if (FLOW_IS_IPV4(f)) {
+    if (FLOW_IS_IPV4(f)) {        /* 根据目的IP查找libhpt特定配置 */
         SCLogDebug("Looking up HTP config for ipv4 %08x", *GET_IPV4_DST_ADDR_PTR(f));
         (void)SCRadixFindKeyIPV4BestMatch((uint8_t *)GET_IPV4_DST_ADDR_PTR(f), cfgtree, &user_data);
     }
@@ -822,21 +822,21 @@ static int Setup(Flow *f, HtpState *hstate)
         /* should never happen if HTPConfigure is properly invoked */
         goto error;
     }
-
+    /* 创建libhtp解析信息结构 */
     hstate->connp = htp_connp_create(htp);
     if (hstate->connp == NULL) {
         goto error;
     }
 
     hstate->conn = htp_connp_get_connection(hstate->connp);
-
+    /* 记录suricata的私有数据 */
     htp_connp_set_user_data(hstate->connp, (void *)hstate);
     hstate->cfg = htp_cfg_rec;
 
     SCLogDebug("New hstate->connp %p", hstate->connp);
-
+    /* 打开链接 */
     htp_connp_open(hstate->connp, NULL, f->sp, NULL, f->dp, &f->startts);
-
+    /* 根据配置设定检测深度 */
     StreamTcpReassemblySetMinInspectDepth(f->protoctx, STREAM_TOSERVER,
             htp_cfg_rec->request.inspect_min_size);
     StreamTcpReassemblySetMinInspectDepth(f->protoctx, STREAM_TOCLIENT,
@@ -858,7 +858,7 @@ error:
  *  \param  output      Pointer to the output (not used in this function)
  *
  *  \retval On success returns 1 or on failure returns -1.
- */
+ *//* 处理http request的入口 */
 static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
                                 AppLayerParserState *pstate,
                                 const uint8_t *input, uint32_t input_len,
@@ -871,7 +871,7 @@ static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
     /* On the first invocation, create the connection parser structure to
      * be used by HTP library.  This is looked up via IP in the radix
      * tree.  Failing that, the default HTP config is used.
-     */
+     *//* 初次调用，初始化libhtp链接状态信息 */
     if (NULL == hstate->conn) {
         if (Setup(f, hstate) != 0) {
             SCReturnStruct(APP_LAYER_ERROR);
@@ -880,7 +880,7 @@ static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
     DEBUG_VALIDATE_BUG_ON(hstate->connp == NULL);
 
     htp_time_t ts = { f->lastts.tv_sec, f->lastts.tv_usec };
-    /* pass the new data to the htp parser */
+    /* 将数据传递给libhtp库, pass the new data to the htp parser */
     if (input_len > 0) {
         const int r = htp_connp_req_data(hstate->connp, &ts, input, input_len);
         switch (r) {
@@ -890,10 +890,10 @@ static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
             default:
                 break;
         }
-        HTPHandleError(hstate, STREAM_TOSERVER);
+        HTPHandleError(hstate, STREAM_TOSERVER);  /* 处理libhtp解析事件（错误/告警） */
     }
 
-    /* if the TCP connection is closed, then close the HTTP connection */
+    /* 如果TCP链路关闭，则管理libhtp的链接; if the TCP connection is closed, then close the HTTP connection */
     if (AppLayerParserStateIssetFlag(pstate, APP_LAYER_PARSER_EOF) &&
         !(hstate->flags & HTP_FLAG_STATE_CLOSED_TS))
     {
@@ -903,11 +903,11 @@ static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
     }
 
     SCLogDebug("hstate->connp %p", hstate->connp);
-
+    /* 返回 */
     if (ret < 0) {
-        SCReturnStruct(APP_LAYER_ERROR);
+        SCReturnStruct(APP_LAYER_ERROR);  /* 错误: {-1,0,0} */
     }
-    SCReturnStruct(APP_LAYER_OK);
+    SCReturnStruct(APP_LAYER_OK);         /* 正确: {0,0,0} */
 }
 
 /**
@@ -922,7 +922,7 @@ static AppLayerResult HTPHandleRequestData(Flow *f, void *htp_state,
  *  \param  output      Pointer to the output (not used in this function)
  *
  *  \retval On success returns 1 or on failure returns -1
- */
+ *//* 处理http response的入口 */
 static AppLayerResult HTPHandleResponseData(Flow *f, void *htp_state,
                                  AppLayerParserState *pstate,
                                  const uint8_t *input, uint32_t input_len,
@@ -935,14 +935,14 @@ static AppLayerResult HTPHandleResponseData(Flow *f, void *htp_state,
     /* On the first invocation, create the connection parser structure to
      * be used by HTP library.  This is looked up via IP in the radix
      * tree.  Failing that, the default HTP config is used.
-     */
+     *//* 初始化libhtp库状态信息 */
     if (NULL == hstate->conn) {
         if (Setup(f, hstate) != 0) {
             SCReturnStruct(APP_LAYER_ERROR);
         }
     }
     DEBUG_VALIDATE_BUG_ON(hstate->connp == NULL);
-
+    /* 数据传递到libhtp库 */
     htp_time_t ts = { f->lastts.tv_sec, f->lastts.tv_usec };
     if (input_len > 0) {
         const int r = htp_connp_res_data(hstate->connp, &ts, input, input_len);
@@ -953,10 +953,10 @@ static AppLayerResult HTPHandleResponseData(Flow *f, void *htp_state,
             default:
                 break;
         }
-        HTPHandleError(hstate, STREAM_TOCLIENT);
+        HTPHandleError(hstate, STREAM_TOCLIENT);  /* 解析事件处理，错误/告警 */
     }
 
-    /* if we the TCP connection is closed, then close the HTTP connection */
+    /* TCP流结束，关闭libhtp链接；if we the TCP connection is closed, then close the HTTP connection */
     if (AppLayerParserStateIssetFlag(pstate, APP_LAYER_PARSER_EOF) &&
         !(hstate->flags & HTP_FLAG_STATE_CLOSED_TC))
     {
@@ -965,11 +965,11 @@ static AppLayerResult HTPHandleResponseData(Flow *f, void *htp_state,
     }
 
     SCLogDebug("hstate->connp %p", hstate->connp);
-
+    /* 返回 */
     if (ret < 0) {
-        SCReturnStruct(APP_LAYER_ERROR);
+        SCReturnStruct(APP_LAYER_ERROR);  /* 错误返回: {-1,0,0} */
     }
-    SCReturnStruct(APP_LAYER_OK);
+    SCReturnStruct(APP_LAYER_OK);         /* 正确返回: {0,0,0} */
 }
 
 /**
@@ -2965,7 +2965,7 @@ void AppLayerHtpPrintStats(void)
  *  \param state state ptr
  *  \param direction flow direction
  *  \retval files files ptr
- */
+ *//* 获取HTTP传输的文件列表 */
 static FileContainer *HTPStateGetFiles(void *state, uint8_t direction)
 {
     if (state == NULL)
@@ -2979,15 +2979,15 @@ static FileContainer *HTPStateGetFiles(void *state, uint8_t direction)
         SCReturnPtr(http_state->files_ts, "FileContainer");
     }
 }
-
+/* 获取HTTP在libhtp库中的处理状态 */
 static int HTPStateGetAlstateProgress(void *tx, uint8_t direction)
 {
     if (direction & STREAM_TOSERVER)
-        return ((htp_tx_t *)tx)->request_progress;
+        return ((htp_tx_t *)tx)->request_progress;  /* HTP_REQUEST_COMPLETE */
     else
-        return ((htp_tx_t *)tx)->response_progress;
+        return ((htp_tx_t *)tx)->response_progress; /* HTP_RESPONSE_COMPLETE */
 }
-
+/* 获取事务数 */
 static uint64_t HTPStateGetTxCnt(void *alstate)
 {
     HtpState *http_state = (HtpState *)alstate;
@@ -3000,7 +3000,7 @@ static uint64_t HTPStateGetTxCnt(void *alstate)
         return 0ULL;
     }
 }
-
+/* 根据事务ID获取链接对应的事务 */
 static void *HTPStateGetTx(void *alstate, uint64_t tx_id)
 {
     HtpState *http_state = (HtpState *)alstate;
@@ -3018,7 +3018,7 @@ static void HTPStateSetTxLogged(void *alstate, void *vtx, LoggerId bits)
     if (tx_ud)
         tx_ud->logged = bits;
 }
-
+/* 获取已输出的日志方式(位组合) */
 static LoggerId HTPStateGetTxLogged(void *alstate, void *vtx)
 {
     htp_tx_t *tx = (htp_tx_t *)vtx;
@@ -3028,7 +3028,7 @@ static LoggerId HTPStateGetTxLogged(void *alstate, void *vtx)
 
     return 0;
 }
-
+/* 获取libhtp库解析结束的标识enum变量 */
 static int HTPStateGetAlstateProgressCompletionStatus(uint8_t direction)
 {
     return (direction & STREAM_TOSERVER) ? HTP_REQUEST_COMPLETE : HTP_RESPONSE_COMPLETE;
@@ -3049,7 +3049,7 @@ static int HTPStateGetEventInfo(const char *event_name,
 
     return 0;
 }
-
+/* 根据ID获取事件描述信息 */
 static int HTPStateGetEventInfoById(int event_id, const char **event_name,
                                     AppLayerEventType *event_type)
 {
@@ -3065,7 +3065,7 @@ static int HTPStateGetEventInfoById(int event_id, const char **event_name,
 
     return 0;
 }
-
+/* 设置文件标识, FILE_STATE_TRUNCATED */
 static void HTPStateTruncate(void *state, uint8_t direction)
 {
     FileContainer *fc = HTPStateGetFiles(state, direction);
@@ -3080,7 +3080,7 @@ static DetectEngineState *HTPGetTxDetectState(void *vtx)
     HtpTxUserData *tx_ud = htp_tx_get_user_data(tx);
     return tx_ud ? tx_ud->de_state : NULL;
 }
-
+/* 在基于事务的suricata自定义数据中，添加检测引擎状态 */
 static int HTPSetTxDetectState(void *vtx, DetectEngineState *s)
 {
     htp_tx_t *tx = (htp_tx_t *)vtx;
@@ -3109,7 +3109,7 @@ static uint64_t HTPGetTxDetectFlags(void *vtx, uint8_t dir)
     }
     return 0;
 }
-
+/* 设置检测引擎标志 */
 static void HTPSetTxDetectFlags(void *vtx, uint8_t dir, uint64_t detect_flags)
 {
     htp_tx_t *tx = (htp_tx_t *)vtx;
@@ -3199,32 +3199,32 @@ void RegisterHTPParsers(void)
     }
                         /* 添加http对应的解析操控函数 */
     if (AppLayerParserConfParserEnabled("tcp", proto_name)) { 
-        AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);
-        AppLayerParserRegisterTxFreeFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTransactionFree);
-        AppLayerParserRegisterGetFilesFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetFiles);
-        AppLayerParserRegisterGetStateProgressFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetAlstateProgress);
-        AppLayerParserRegisterGetTxCnt(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTxCnt);
-        AppLayerParserRegisterGetTx(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTx);
-        AppLayerParserRegisterLoggerFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTxLogged,
+        AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);  /* 管理http解析状态 */
+        AppLayerParserRegisterTxFreeFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTransactionFree);      /* 释放事务 */
+        AppLayerParserRegisterGetFilesFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetFiles);           /* 获取数据流中的文件列表 */
+        AppLayerParserRegisterGetStateProgressFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetAlstateProgress);  /* 获取libhtp库处理状态 */
+        AppLayerParserRegisterGetTxCnt(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTxCnt);               /* 获取事务数 */
+        AppLayerParserRegisterGetTx(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTx);                     /* 获取事务 */
+        AppLayerParserRegisterLoggerFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetTxLogged,          /* 获取已输出的日志位组合 */
                                           HTPStateSetTxLogged);
-        AppLayerParserRegisterGetStateProgressCompletionStatus(ALPROTO_HTTP,
+        AppLayerParserRegisterGetStateProgressCompletionStatus(ALPROTO_HTTP,                       /* 获取libhtp库解析完毕标识 */
                                                                HTPStateGetAlstateProgressCompletionStatus);
-        AppLayerParserRegisterGetEventsFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPGetEvents);
+        AppLayerParserRegisterGetEventsFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPGetEvents);              /* 获取解析事件 */
         AppLayerParserRegisterGetEventInfo(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetEventInfo);
-        AppLayerParserRegisterGetEventInfoById(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetEventInfoById);
+        AppLayerParserRegisterGetEventInfoById(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetEventInfoById);        /* 获取事件描述信息 */
 
-        AppLayerParserRegisterTruncateFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTruncate);
-        AppLayerParserRegisterDetectStateFuncs(IPPROTO_TCP, ALPROTO_HTTP,
+        AppLayerParserRegisterTruncateFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTruncate);           /* 设置文件标识, FILE_STATE_TRUNCATED */
+        AppLayerParserRegisterDetectStateFuncs(IPPROTO_TCP, ALPROTO_HTTP,                          /* 添加检测引擎状态 */
                                                HTPGetTxDetectState, HTPSetTxDetectState);
-        AppLayerParserRegisterDetectFlagsFuncs(IPPROTO_TCP, ALPROTO_HTTP,
+        AppLayerParserRegisterDetectFlagsFuncs(IPPROTO_TCP, ALPROTO_HTTP,                          /* 设置检测引擎标志, 如 HTP_STREAM_DEPTH_SET */
                                                HTPGetTxDetectFlags, HTPSetTxDetectFlags);
 
-        AppLayerParserRegisterSetStreamDepthFlag(IPPROTO_TCP, ALPROTO_HTTP,
+        AppLayerParserRegisterSetStreamDepthFlag(IPPROTO_TCP, ALPROTO_HTTP,                        /* 设置检测引擎标志, HTP_STREAM_DEPTH_SET */
                                                  AppLayerHtpSetStreamDepthFlag);
 
-        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOSERVER,
+        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOSERVER,                   /* 将request重组数据填喂到libhtp的入口 */
                                      HTPHandleRequestData);
-        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOCLIENT,
+        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOCLIENT,                   /* 将response重组数据填喂到libhpt的入口 */
                                      HTPHandleResponseData);
         SC_ATOMIC_INIT(htp_config_flags);
         AppLayerParserRegisterParserAcceptableDataDirection(IPPROTO_TCP,

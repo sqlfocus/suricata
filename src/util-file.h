@@ -98,8 +98,8 @@ typedef struct File_ {
 } File;
 
 typedef struct FileContainer_ {
-    File *head;
-    File *tail;
+    File *head;     /* 单链表头 */
+    File *tail;     /* 单链表尾 */
 } FileContainer;
 
 FileContainer *FileContainerAlloc(void);
