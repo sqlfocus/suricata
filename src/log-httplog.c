@@ -610,7 +610,7 @@ OutputInitResult LogHttpLogInitCtx(ConfNode *conf)
 
     SCLogDebug("HTTP log output initialized");
 
-    /* enable the logger for the app layer */
+    /* 使能日志，enable the logger for the app layer */
     AppLayerParserRegisterLogger(IPPROTO_TCP, ALPROTO_HTTP);
 
     result.ctx = output_ctx;

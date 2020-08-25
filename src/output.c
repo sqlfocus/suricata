@@ -95,9 +95,9 @@ typedef struct RootLogger_ {
 
 /* List of registered root loggers. These are registered at start up and
  * are independent of configuration. Later we will build a list of active
- * loggers based on configuration. *//* 注册的输出模块，代表本程序支持的全量 */
-static TAILQ_HEAD(, RootLogger_) registered_loggers = /* 后续根据配置文件初始化 */
-    TAILQ_HEAD_INITIALIZER(registered_loggers);       /* active_loggers */
+ * loggers based on configuration. *//* 注册的底层输出方式，代表本程序支持的全量 */
+static TAILQ_HEAD(, RootLogger_) registered_loggers = /* 后续根据配置文件初始化 active_loggers */
+    TAILQ_HEAD_INITIALIZER(registered_loggers);       /* 向上对接 output_modules, 向下对接系统文件等 */
 
 /* List of active root loggers. This means that at least one logger is enabled
  * for each root logger type in the config. *//* 最终配置文件激活的输出模块 */
@@ -112,8 +112,8 @@ typedef struct LoggerThreadStoreNode_ {
 typedef TAILQ_HEAD(LoggerThreadStore_, LoggerThreadStoreNode_) LoggerThreadStore;
 
 /**
- * The list of all registered (known) output modules.
- *//* 输出模块列表 */
+ * The list of all registered (known) output modules. //上对接应用，下对接底层输出模块, registered_loggers
+ *//* 非root权限的功能性输出模块列表, 由 OutputRegisterLoggers() 注册 */
 OutputModuleList output_modules = TAILQ_HEAD_INITIALIZER(output_modules);
 
 /**
@@ -936,7 +936,7 @@ TmEcode OutputLoggerLog(ThreadVars *tv, Packet *p, void *thread_data)
 
     return TM_ECODE_OK;
 }
-
+/* 日志输出的线程环境初始化 */
 TmEcode OutputLoggerThreadInit(ThreadVars *tv, const void *initdata, void **data)
 {
     LoggerThreadStore *thread_store = SCCalloc(1, sizeof(*thread_store));
@@ -950,7 +950,7 @@ TmEcode OutputLoggerThreadInit(ThreadVars *tv, const void *initdata, void **data
     TAILQ_FOREACH(logger, &active_loggers, entries) {
 
         void *child_thread_data = NULL;
-        if (logger->ThreadInit != NULL) {
+        if (logger->ThreadInit != NULL) {    /* 报文输出方式 -> OutputPacketLogThreadInit() */
             if (logger->ThreadInit(tv, initdata, &child_thread_data) == TM_ECODE_OK) {
                 LoggerThreadStoreNode *thread_store_node =
                     SCCalloc(1, sizeof(*thread_store_node));
@@ -1091,21 +1091,21 @@ void OutputRegisterLoggers(void)
 
     LuaLogRegister();
     /* fast log */
-    AlertFastLogRegister();
+    AlertFastLogRegister();   /* "fast" -- packet log */
     /* debug log */
-    AlertDebugLogRegister();
+    AlertDebugLogRegister();  /* "alert-debug" -- packet log */
     /* prelue log */
-    AlertPreludeRegister();
+    AlertPreludeRegister();   /* "alert-prelude" -- packet log */
     /* syslog log */
-    AlertSyslogRegister();
-    JsonDropLogRegister();
+    AlertSyslogRegister();    /* "syslog" -- packet log */
+    JsonDropLogRegister();    /* "eve-log.drop"/"drop-json-log" -- packet log */
     /* json log */
-    OutputJsonRegister();
+    OutputJsonRegister();     /* "eve-log" */
     /* email logs */
-    JsonSmtpLogRegister();
+    JsonSmtpLogRegister();    /* "smtp-json-log"/"eve-log.smtp" -- tx log */
     /* http log */
-    LogHttpLogRegister();
-    JsonHttpLogRegister();
+    LogHttpLogRegister();     /* "http-log" -- tx log */
+    JsonHttpLogRegister();    /* "http-json-log"/"eve-log.http" -- tx log */
     /* tls log */
     LogTlsLogRegister();
     JsonTlsLogRegister();
@@ -1113,21 +1113,21 @@ void OutputRegisterLoggers(void)
     /* ssh */
     JsonSshLogRegister();
     /* pcap log */
-    PcapLogRegister();
+    PcapLogRegister();        /* "pcap-log" -- packet log */
     /* file log */
-    JsonFileLogRegister();
-    OutputFilestoreRegister();
+    JsonFileLogRegister();    /* "eve-log.files" -- file log */
+    OutputFilestoreRegister();/* "file-store" -- filedata log */
     /* dns */
     JsonDnsLogRegister();
     /* tcp streaming data */
-    LogTcpDataLogRegister();
+    LogTcpDataLogRegister();  /* "tcp-data"/"http-body-data" -- streaming log */
     /* log stats */
     LogStatsLogRegister();
 
     JsonAlertLogRegister();
     JsonAnomalyLogRegister();
     /* flow/netflow */
-    JsonFlowLogRegister();
+    JsonFlowLogRegister();    /* "flow-json-log"/"eve-log.flow" -- flow log */
     JsonNetFlowLogRegister();
     /* json stats */
     JsonStatsLogRegister();

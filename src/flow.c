@@ -1094,7 +1094,7 @@ uint8_t FlowGetDisruptionFlags(const Flow *f, uint8_t flags)
     if (f->proto != IPPROTO_TCP) {
         return flags;
     }
-    if (f->protoctx == NULL) {
+    if (f->protoctx == NULL) {     /* TCP -> TcpSession */
         return flags;
     }
 

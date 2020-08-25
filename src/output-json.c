@@ -1509,7 +1509,7 @@ OutputInitResult OutputJsonInitCtx(ConfNode *conf)
 
     output_ctx->data = json_ctx;
     output_ctx->DeInit = OutputJsonDeInitCtx;
-
+    /* 解析“eve-log”配置 */
     if (conf) {
         const char *output_s = ConfNodeLookupChildValue(conf, "filetype");
 
@@ -1518,7 +1518,7 @@ OutputInitResult OutputJsonInitCtx(ConfNode *conf)
             output_s = ConfNodeLookupChildValue(conf, "type");
         }
 
-        if (output_s != NULL) {
+        if (output_s != NULL) {            /* 确定输出类型 */
             if (strcmp(output_s, "file") == 0 ||
                 strcmp(output_s, "regular") == 0) {
                 json_ctx->json_out = LOGFILE_TYPE_FILE;
@@ -1545,7 +1545,7 @@ OutputInitResult OutputJsonInitCtx(ConfNode *conf)
         }
 
         const char *prefix = ConfNodeLookupChildValue(conf, "prefix");
-        if (prefix != NULL)
+        if (prefix != NULL)                /* 获取日志前缀 */
         {
             SCLogInfo("Using prefix '%s' for JSON messages", prefix);
             json_ctx->file_ctx->prefix = SCStrdup(prefix);
@@ -1561,7 +1561,7 @@ OutputInitResult OutputJsonInitCtx(ConfNode *conf)
         if (json_ctx->json_out == LOGFILE_TYPE_FILE ||
             json_ctx->json_out == LOGFILE_TYPE_UNIX_DGRAM ||
             json_ctx->json_out == LOGFILE_TYPE_UNIX_STREAM)
-        {
+        {                                  /* 打开日志文件 */
             if (SCConfLogOpenGeneric(conf, json_ctx->file_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
                 LogFileFreeCtx(json_ctx->file_ctx);
                 SCFree(json_ctx);
@@ -1665,7 +1665,7 @@ OutputInitResult OutputJsonInitCtx(ConfNode *conf)
 
         /* Do we have a global eve xff configuration? */
         const ConfNode *xff = ConfNodeLookupChild(conf, "xff");
-        if (xff != NULL) {
+        if (xff != NULL) {                 /* 解析HTTP X-Forwarded-For配置 */
             json_ctx->xff_cfg = SCCalloc(1, sizeof(HttpXFFCfg));
             if (likely(json_ctx->xff_cfg != NULL)) {
                 HttpXFFGetCfg(conf, json_ctx->xff_cfg);

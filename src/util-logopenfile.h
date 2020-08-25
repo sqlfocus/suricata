@@ -82,7 +82,7 @@ typedef struct LogFileCtx_ {
     uint32_t filemode;
 
     /** Suricata sensor name */
-    char *sensor_name;
+    char *sensor_name;           /* 来自suricata.yaml的配置"sensor-name" */
 
     /** Handle auto-connecting / reconnecting sockets */
     int is_sock;
@@ -98,7 +98,7 @@ typedef struct LogFileCtx_ {
 
     /**< Used by some alert loggers like the unified ones that append
      * the date onto the end of files. */
-    char *prefix;
+    char *prefix;                /* 如eve-log自定义的日志前缀 */
     size_t prefix_len;
 
     /** Generic size_limit and size_current

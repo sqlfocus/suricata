@@ -93,19 +93,19 @@ int AlertFastLogCondition(ThreadVars *tv, const Packet *p)
 static inline void AlertFastLogOutputAlert(AlertFastLogThread *aft, char *buffer,
                                            int alert_size)
 {
-    /* Output the alert string and count alerts. Only need to lock here. */
+    /* fast -> SCLogFileWrite(); Output the alert string and count alerts. Only need to lock here. */
     aft->file_ctx->Write(buffer, alert_size, aft->file_ctx);
 }
-
+/* fast告警输出函数 */
 int AlertFastLogger(ThreadVars *tv, void *data, const Packet *p)
 {
     AlertFastLogThread *aft = (AlertFastLogThread *)data;
     int i;
     char timebuf[64];
     int decoder_event = 0;
-
+    /* 构建时间戳字符串 */
     CreateTimeString(&p->ts, timebuf, sizeof(timebuf));
-
+    /* 构建IP地址字符串 */
     char srcip[46], dstip[46];
     if (PKT_IS_IPV4(p)) {
         PrintInet(AF_INET, (const void *)GET_IPV4_SRC_ADDR_PTR(p), srcip, sizeof(srcip));
@@ -124,11 +124,11 @@ int AlertFastLogger(ThreadVars *tv, void *data, const Packet *p)
      * single alerts.
      */
     char alert_buffer[MAX_FASTLOG_BUFFER_SIZE];
-
+    /* 构建告警日志 */
     char proto[16] = "";
     if (SCProtoNameValid(IP_GET_IPPROTO(p)) == TRUE) {
         strlcpy(proto, known_proto[IP_GET_IPPROTO(p)], sizeof(proto));
-    } else {
+    } else {                                  /* L3协议 */
         snprintf(proto, sizeof(proto), "PROTO:%03" PRIu32, IP_GET_IPPROTO(p));
     }
     uint16_t src_port_or_icmp = p->sp;
@@ -137,7 +137,7 @@ int AlertFastLogger(ThreadVars *tv, void *data, const Packet *p)
         src_port_or_icmp = p->icmp_s.type;
         dst_port_or_icmp = p->icmp_s.code;
     }
-    for (i = 0; i < p->alerts.cnt; i++) {
+    for (i = 0; i < p->alerts.cnt; i++) {     /* 逐条构建告警日志字符串 */
         const PacketAlert *pa = &p->alerts.alerts[i];
         if (unlikely(pa->s == NULL)) {
             continue;
@@ -194,7 +194,7 @@ TmEcode AlertFastLogThreadInit(ThreadVars *t, const void *initdata, void **data)
         SCFree(aft);
         return TM_ECODE_FAILED;
     }
-    /** Use the Ouptut Context (file pointer and mutex) */
+    /* 指向对应的输出上下文, * Use the Ouptut Context (file pointer and mutex) */
     aft->file_ctx = ((OutputCtx *)initdata)->data;
 
     *data = (void *)aft;
@@ -228,12 +228,12 @@ OutputInitResult AlertFastLogInitCtx(ConfNode *conf)
         SCLogDebug("AlertFastLogInitCtx2: Could not create new LogFileCtx");
         return result;
     }
-    /* 默认文件"fast.log" */
+    /* 打开日志文件, 默认文件"fast.log" */
     if (SCConfLogOpenGeneric(conf, logfile_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
         LogFileFreeCtx(logfile_ctx);
         return result;
     }
-    /* 分配环境结构 */
+    /* 分配环境结构，存储日志文件相关环境信息 */
     OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
     if (unlikely(output_ctx == NULL)) {
         LogFileFreeCtx(logfile_ctx);

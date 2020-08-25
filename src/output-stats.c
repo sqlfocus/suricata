@@ -52,7 +52,7 @@ typedef struct OutputStatsLogger_ {
     ThreadExitPrintStatsFunc ThreadExitPrintStats;
 } OutputStatsLogger;
 
-static OutputStatsLogger *list = NULL;
+static OutputStatsLogger *list = NULL;   /* 注册统计输出列表 */
 
 int OutputRegisterStatsLogger(const char *name, StatsLogger LogFunc,
     OutputCtx *output_ctx, ThreadInitFunc ThreadInit,
@@ -202,7 +202,7 @@ void TmModuleStatsLoggerRegister (void)
     tmm_modules[TMM_STATSLOGGER].ThreadDeinit = OutputStatsLogThreadDeinit;
     tmm_modules[TMM_STATSLOGGER].cap_flags = 0;
 }
-
+/* 判断是否注册统计日志 */
 int OutputStatsLoggersRegistered(void)
 {
     if (list != NULL)

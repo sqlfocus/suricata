@@ -93,17 +93,17 @@ typedef struct StatsGlobalContext_ {
 
 static void *stats_thread_data = NULL;
 static StatsGlobalContext *stats_ctx = NULL;    /* 统计相关环境 */
-static time_t stats_start_time;
+static time_t stats_start_time;                 /* 统计输出的起始时间 */
 /** refresh interval in seconds */
-static uint32_t stats_tts = STATS_MGMTT_TTS;
+static uint32_t stats_tts = STATS_MGMTT_TTS;    /* 统计输出间隔 */
 /** is the stats counter enabled? */
-static char stats_enabled = TRUE;
+static char stats_enabled = TRUE;               /* 是否是能统计输出 */
 
 /**< add decoder events as stats? enabled by default */
-bool stats_decoder_events = true;
+bool stats_decoder_events = true;               /* 是否将解码事件输出 */
 const char *stats_decoder_events_prefix = "decoder.event";
 /**< add stream events as stats? disabled by default */
-bool stats_stream_events = false;
+bool stats_stream_events = false;               /* 是否将流事件输出 */
 
 static int StatsOutput(ThreadVars *tv);
 static int StatsThreadRegister(const char *thread_name, StatsPublicThreadContext *);
@@ -261,11 +261,11 @@ static void StatsInitCtxPreOutput(void)
 
         int b;
         int ret = ConfGetChildValueBool(stats, "decoder-events", &b);
-        if (ret) {
+        if (ret) {    /* 是否统计解码事件 */
             stats_decoder_events = (b == 1);
         }
         ret = ConfGetChildValueBool(stats, "stream-events", &b);
-        if (ret) {
+        if (ret) {    /* 是否统计流事件 */
             stats_stream_events = (b == 1);
         }
 
@@ -282,7 +282,7 @@ static void StatsInitCtxPostOutput(void)
 {
     SCEnter();
     /* Store the engine start time */
-    time(&stats_start_time);
+    time(&stats_start_time);         /* 存储统计输出的起始时间 */
 
     /* init the lock used by StatsThreadStore */
     if (SCMutexInit(&stats_ctx->sts_lock, NULL) != 0) {

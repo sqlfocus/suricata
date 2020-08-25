@@ -673,7 +673,7 @@ static OutputInitResult OutputHttpLogInitSub(ConfNode *conf, OutputCtx *parent_c
     http_ctx->file_ctx = ojc->file_ctx;
     http_ctx->flags = LOG_HTTP_DEFAULT;
     http_ctx->cfg = ojc->cfg;
-
+    /* 解析日志定制化的配置，包含的HTTP头 */
     if (conf) {
         const char *extended = ConfNodeLookupChildValue(conf, "extended");
 
@@ -692,7 +692,7 @@ static OutputInitResult OutputHttpLogInitSub(ConfNode *conf, OutputCtx *parent_c
                 {
                     HttpField f;
                     for (f = HTTP_FIELD_ACCEPT; f < HTTP_FIELD_SIZE; f++)
-                    {
+                    {   /* 支持的http头属性 */
                         if ((strcmp(http_fields[f].config_field,
                                    field->val) == 0) ||
                             (strcasecmp(http_fields[f].htp_field,
@@ -704,7 +704,7 @@ static OutputInitResult OutputHttpLogInitSub(ConfNode *conf, OutputCtx *parent_c
                     }
                 }
             }
-        }
+        }               /* 支持的流方向，request/response */
         const char *all_headers = ConfNodeLookupChildValue(
                 conf, "dump-all-headers");
         if (all_headers != NULL) {
@@ -718,7 +718,7 @@ static OutputInitResult OutputHttpLogInitSub(ConfNode *conf, OutputCtx *parent_c
             }
         }
     }
-
+    /* 解析X-Forward-For配置 */
     if (conf != NULL && ConfNodeLookupChild(conf, "xff") != NULL) {
         http_ctx->xff_cfg = SCCalloc(1, sizeof(HttpXFFCfg));
         if (http_ctx->xff_cfg != NULL) {

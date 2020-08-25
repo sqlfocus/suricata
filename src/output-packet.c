@@ -56,7 +56,7 @@ typedef struct OutputPacketLogger_ {
     ThreadExitPrintStatsFunc ThreadExitPrintStats;
 } OutputPacketLogger;
 
-static OutputPacketLogger *list = NULL;
+static OutputPacketLogger *list = NULL;    /* 使用此方式的上层模块列表 */
 
 int OutputRegisterPacketLogger(LoggerId logger_id, const char *name,
     PacketLogger LogFunc, PacketLogCondition ConditionFunc,
@@ -90,7 +90,7 @@ int OutputRegisterPacketLogger(LoggerId logger_id, const char *name,
     SCLogDebug("OutputRegisterPacketLogger happy");
     return 0;
 }
-
+/* 报文类型日志，线程输出的入口函数 */
 static TmEcode OutputPacketLog(ThreadVars *tv, Packet *p, void *thread_data)
 {
     DEBUG_VALIDATE_BUG_ON(thread_data == NULL);
@@ -107,10 +107,10 @@ static TmEcode OutputPacketLog(ThreadVars *tv, Packet *p, void *thread_data)
     DEBUG_VALIDATE_BUG_ON(logger == NULL && store != NULL);
     DEBUG_VALIDATE_BUG_ON(logger != NULL && store == NULL);
     DEBUG_VALIDATE_BUG_ON(logger == NULL && store == NULL);
-
+    /* 顺次遍历，输出 */
     while (logger && store) {
         DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL || logger->ConditionFunc == NULL);
-
+        /* fast -> AlertFastLogCondition()/AlertFastLogger() */
         if ((logger->ConditionFunc(tv, (const Packet *)p)) == TRUE) {
             PACKET_PROFILING_LOGGER_START(p, logger->logger_id);
             logger->LogFunc(tv, store->thread_data, (const Packet *)p);
@@ -142,18 +142,18 @@ static TmEcode OutputPacketLogThreadInit(ThreadVars *tv, const void *initdata, v
     SCLogDebug("OutputPacketLogThreadInit happy (*data %p)", *data);
 
     OutputPacketLogger *logger = list;
-    while (logger) {
+    while (logger) {           /* 在线程中，初始化此日志方式的所有输出模块 */
         if (logger->ThreadInit) {
-            void *retptr = NULL;
+            void *retptr = NULL;            /* fast -> AlertFastLogThreadInit() */
             if (logger->ThreadInit(tv, (void *)logger->output_ctx, &retptr) == TM_ECODE_OK) {
                 OutputLoggerThreadStore *ts = SCMalloc(sizeof(*ts));
 /* todo */      BUG_ON(ts == NULL);
                 memset(ts, 0x00, sizeof(*ts));
 
                 /* store thread handle */
-                ts->thread_data = retptr;
+                ts->thread_data = retptr;   /* fast -> AlertFastLogThread */
 
-                if (td->store == NULL) {
+                if (td->store == NULL) {    /* 加入本方式的线程链表 */
                     td->store = ts;
                 } else {
                     OutputLoggerThreadStore *tmp = td->store;

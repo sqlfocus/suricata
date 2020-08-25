@@ -198,7 +198,7 @@ end:
 
 /**
  * \brief Function to return XFF configuration from a configuration node.
- */
+ *//* 解析 HTTP X-Forwarded-For 配置信息 */
 void HttpXFFGetCfg(ConfNode *conf, HttpXFFCfg *result)
 {
     BUG_ON(result == NULL);

@@ -97,8 +97,8 @@ typedef struct OutputFreeList_ {
     OutputCtx *output_ctx;
 
     TAILQ_ENTRY(OutputFreeList_) entries;
-} OutputFreeList;
-static TAILQ_HEAD(, OutputFreeList_) output_free_list =
+} OutputFreeList;                            /* 记录已经解析的输出配置，及输出环境 */
+static TAILQ_HEAD(, OutputFreeList_) output_free_list = /* 释放资源时被使用 */
     TAILQ_HEAD_INITIALIZER(output_free_list);
 
 /**
@@ -474,8 +474,8 @@ static void RunOutputFreeList(void)
     }
 }
 
-static int file_logger_count = 0;
-static int filedata_logger_count = 0;
+static int file_logger_count = 0;          /* 仅针对 OutputModule->TxLogFunc */
+static int filedata_logger_count = 0;      /* 应用协议的输出方式的位数组 */
 static LoggerId logger_bits[ALPROTO_MAX];  /* "1<<LoggerID" 的位掩码或 */
 
 int RunModeOutputFileEnabled(void)
@@ -587,7 +587,7 @@ static void SetupOutput(const char *name, OutputModule *module, OutputCtx *outpu
                 module->ThreadInit, module->ThreadDeinit,
                 module->ThreadExitPrintStats);
         /* Not used with wild card loggers */
-        if (module->alproto != ALPROTO_UNKNOWN) {
+        if (module->alproto != ALPROTO_UNKNOWN) {  /* logger_bits[] 仅关注tx logger */
             logger_bits[module->alproto] |= (1<<module->logger_id);
         }
     } else if (module->FiledataLogFunc) {
@@ -621,7 +621,7 @@ static void RunModeInitializeEveOutput(ConfNode *conf, OutputCtx *parent_ctx)
     if (types == NULL) {
         return;
     }
-
+    /* 遍历 eve-log.types */
     ConfNode *type = NULL;
     TAILQ_FOREACH(type, &types->head, next) {
         SCLogConfig("enabling 'eve-log' module '%s'", type->val);
@@ -631,7 +631,7 @@ static void RunModeInitializeEveOutput(ConfNode *conf, OutputCtx *parent_ctx)
         snprintf(subname, sizeof(subname), "eve-log.%s", type->val);
 
         ConfNode *sub_output_config = ConfNodeLookupChild(type, type->val);
-        if (sub_output_config != NULL) {
+        if (sub_output_config != NULL) {    /* 查看子类型是否使能 */
             const char *enabled = ConfNodeLookupChildValue(
                 sub_output_config, "enabled");
             if (enabled != NULL && !ConfValIsTrue(enabled)) {
@@ -643,7 +643,7 @@ static void RunModeInitializeEveOutput(ConfNode *conf, OutputCtx *parent_ctx)
         OutputModule *sub_module;
         TAILQ_FOREACH(sub_module, &output_modules, entries) {
             if (strcmp(subname, sub_module->conf_name) == 0) {
-                sub_count++;
+                sub_count++;                /* 匹配已注册的模块, 如 eve-log.http */
 
                 if (sub_module->parent_name == NULL ||
                         strcmp(sub_module->parent_name, "eve-log") != 0) {
@@ -656,12 +656,12 @@ static void RunModeInitializeEveOutput(ConfNode *conf, OutputCtx *parent_ctx)
                 }
 
                 /* pass on parent output_ctx */
-                OutputInitResult result =
+                OutputInitResult result =   /* eve-log.http -> OutputHttpLogInitSub() */
                     sub_module->InitSubFunc(sub_output_config, parent_ctx);
                 if (!result.ok || result.ctx == NULL) {
                     continue;
                 }
-
+                                            /* 添加到 output_free_list, 并加入对应类型的日志链表, 如tx logger */
                 AddOutputToFreeList(sub_module, result.ctx);
                 SetupOutput(sub_module->name, sub_module,
                         result.ctx);
@@ -715,7 +715,7 @@ static void RunModeInitializeLuaOutput(ConfNode *conf, OutputCtx *parent_ctx)
  *//* 初始化输出模块 */
 void RunModeInitializeOutputs(void)
 {
-    ConfNode *outputs = ConfGetNode("outputs");
+    ConfNode *outputs = ConfGetNode("outputs");  /* 获取输出配置节点 */
     if (outputs == NULL) {
         /* No "outputs" section in the configuration. */
         return;
@@ -792,7 +792,7 @@ void RunModeInitializeOutputs(void)
         int count = 0;
         TAILQ_FOREACH(module, &output_modules, entries) {
             if (strcmp(module->conf_name, output->val) != 0) {
-                continue;                   /* 仅仅通过名字匹配 */
+                continue;                   /* 仅仅通过名字匹配, 如fast */
             }
 
             count++;
@@ -800,7 +800,7 @@ void RunModeInitializeOutputs(void)
             OutputCtx *output_ctx = NULL;
             if (module->InitFunc != NULL) { /* 初始化输出环境, 如 "fast" -> AlertFastLogInitCtx() */
                 OutputInitResult r = module->InitFunc(output_config);
-                if (!r.ok) {
+                if (!r.ok) {                /* "eve-log" -> OutputJsonInitCtx() *//* "eve-log.http" -> OutputHttpLogInitSub() */
                     FatalErrorOnInit(SC_ERR_INVALID_ARGUMENT,
                         "output module \"%s\": setup failed", output->val);
                     continue;
@@ -814,14 +814,14 @@ void RunModeInitializeOutputs(void)
             }
 
             // TODO if module == parent, find it's children
-            if (strcmp(output->val, "eve-log") == 0) {
+            if (strcmp(output->val, "eve-log") == 0) {     /* "eve-log"特殊处理, 遍历其 types 字段，解析具体功能性输出模块 */
                 RunModeInitializeEveOutput(output_config, output_ctx);
 
                 /* add 'eve-log' to free list as it's the owner of the
                  * main output ctx from which the sub-modules share the
                  * LogFileCtx */
                 AddOutputToFreeList(module, output_ctx);
-            } else if (strcmp(output->val, "lua") == 0) {
+            } else if (strcmp(output->val, "lua") == 0) {  /* “lua”特殊处理 */
                 SCLogDebug("handle lua");
                 if (output_ctx == NULL)
                     continue;
@@ -896,7 +896,7 @@ void RunModeInitializeOutputs(void)
             AppLayerParserRegisterLoggerBits(IPPROTO_UDP, a, logger_bits[a]);
 
     }
-    OutputSetupActiveLoggers();     /* 底层输出实现注册到激活链表 */
+    OutputSetupActiveLoggers();     /* 底层输出实现注册到激活链表, active_loggers */
 }
 
 float threading_detect_ratio = 1;

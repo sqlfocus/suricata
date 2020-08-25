@@ -184,7 +184,7 @@ tryagain:
  */
 static int SCLogFileWrite(const char *buffer, int buffer_len, LogFileCtx *log_ctx)
 {
-    SCMutexLock(&log_ctx->fp_mutex);
+    SCMutexLock(&log_ctx->fp_mutex);   /* 线程锁 */
     int ret = 0;
 
 #ifdef BUILD_WITH_UNIXSOCKET
@@ -195,7 +195,7 @@ static int SCLogFileWrite(const char *buffer, int buffer_len, LogFileCtx *log_ct
     {
 
         /* Check for rotation. */
-        if (log_ctx->rotation_flag) {
+        if (log_ctx->rotation_flag) {  /* 回滚标识 */
             log_ctx->rotation_flag = 0;
             SCConfLogReopen(log_ctx);
         }
@@ -208,7 +208,7 @@ static int SCLogFileWrite(const char *buffer, int buffer_len, LogFileCtx *log_ct
             }
         }
 
-        if (log_ctx->fp) {
+        if (log_ctx->fp) {             /* 输出到文件 */
             clearerr(log_ctx->fp);
             ret = fwrite(buffer, buffer_len, 1, log_ctx->fp);
             fflush(log_ctx->fp);
@@ -328,10 +328,10 @@ SCConfLogOpenGeneric(ConfNode *conf,
 
     // Resolve the given config
     filename = ConfNodeLookupChildValue(conf, "filename");
-    if (filename == NULL)
+    if (filename == NULL)                /* 获取日志文件名 */
         filename = default_filename;
 
-    log_dir = ConfigGetLogDirectory();
+    log_dir = ConfigGetLogDirectory();   /* 获取日志文件目录 */
 
     if (PathIsAbsolute(filename)) {
         snprintf(log_path, PATH_MAX, "%s", filename);
@@ -339,7 +339,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
         snprintf(log_path, PATH_MAX, "%s/%s", log_dir, filename);
     }
 
-    /* Rotate log file based on time */
+    /* Rotate log file based on time */  /* 获取文件回绕间隔 */
     const char *rotate_int = ConfNodeLookupChildValue(conf, "rotate-interval");
     if (rotate_int != NULL) {
         time_t now = time(NULL);
@@ -370,7 +370,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
     }
 
     filetype = ConfNodeLookupChildValue(conf, "filetype");
-    if (filetype == NULL)
+    if (filetype == NULL)                /* 获取文件内容类型, 如“unix_stream”/"regular" */
         filetype = DEFAULT_LOG_FILETYPE;
 
     const char *filemode = ConfNodeLookupChildValue(conf, "filemode");
@@ -382,7 +382,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
     }
 
     const char *append = ConfNodeLookupChildValue(conf, "append");
-    if (append == NULL)
+    if (append == NULL)                  /* 文件更新模式是否为append，默认yes */
         append = DEFAULT_LOG_MODE_APPEND;
 
     /* JSON flags */
@@ -391,7 +391,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
 
     ConfNode *json_flags = ConfNodeLookupChild(conf, "json");
 
-    if (json_flags != 0) {
+    if (json_flags != 0) {               /* json配置 */
         const char *preserve_order = ConfNodeLookupChildValue(json_flags,
                                                               "preserve-order");
         if (preserve_order != NULL && ConfValIsFalse(preserve_order))
@@ -414,7 +414,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
 
     // Now, what have we been asked to open?
     if (strcasecmp(filetype, "unix_stream") == 0) {
-#ifdef BUILD_WITH_UNIXSOCKET
+#ifdef BUILD_WITH_UNIXSOCKET             /* 依据类型, 打开文件 */
         /* Don't bail. May be able to connect later. */
         log_ctx->is_sock = 1;
         log_ctx->sock_type = SOCK_STREAM;
@@ -458,7 +458,7 @@ SCConfLogOpenGeneric(ConfNode *conf,
     }
     log_ctx->filename = SCStrdup(log_path);
     if (unlikely(log_ctx->filename == NULL)) {
-        SCLogError(SC_ERR_MEM_ALLOC,
+        SCLogError(SC_ERR_MEM_ALLOC,    /* 记录文件名 */
             "Failed to allocate memory for filename");
         return -1;
     }

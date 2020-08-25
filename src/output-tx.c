@@ -160,7 +160,7 @@ static void OutputTxLogList0(ThreadVars *tv,
         DEBUG_VALIDATE_BUG_ON(logger != NULL && store == NULL);
     }
 }
-
+/* tx logger方式的日志输出入口 */
 static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
 {
     DEBUG_VALIDATE_BUG_ON(thread_data == NULL);
@@ -172,7 +172,7 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
     Flow * const f = p->flow;
     const uint8_t ipproto = f->proto;
     const AppProto alproto = f->alproto;
-
+    /* 检测是否需要日志：对应流的应用是否已注册日志输出，是否有对应的日志模块 */
     if (list[alproto] == NULL && list[ALPROTO_UNKNOWN] == NULL) {
         /* No child loggers registered. */
         return TM_ECODE_OK;
@@ -183,7 +183,7 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
     const LoggerId logger_expectation = AppLayerParserProtocolGetLoggerBits(p->proto, alproto);
     if (logger_expectation == 0)
         goto end;
-
+    /* 获取 HtpState, libhtp的状态信息结构 */
     void *alstate = f->alstate;
     if (alstate == NULL) {
         SCLogDebug("no alstate");
@@ -192,16 +192,16 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
 
     const uint8_t ts_disrupt_flags = FlowGetDisruptionFlags(f, STREAM_TOSERVER);
     const uint8_t tc_disrupt_flags = FlowGetDisruptionFlags(f, STREAM_TOCLIENT);
-    const uint64_t total_txs = AppLayerParserGetTxCnt(f, alstate);
-    uint64_t tx_id = AppLayerParserGetTransactionLogId(f->alparser);
+    const uint64_t total_txs = AppLayerParserGetTxCnt(f, alstate);   /* 事务数 */
+    uint64_t tx_id = AppLayerParserGetTransactionLogId(f->alparser); /* 已经日志过的事务ID */
     uint64_t max_id = tx_id;
     int logged = 0;
     int gap = 0;
 
     AppLayerGetTxIteratorFunc IterFunc = AppLayerGetTxIterator(ipproto, alproto);
-    AppLayerGetTxIterState state;
+    AppLayerGetTxIterState state;                                    /* 获取事务的迭代函数, 默认 AppLayerDefaultGetTxIterator() */
     memset(&state, 0, sizeof(state));
-
+    /* 遍历事务，生成日志 */
     while (1) {
         AppLayerGetTxIterTuple ires = IterFunc(ipproto, alproto, alstate, tx_id, total_txs, &state);
         if (ires.tx_ptr == NULL)
@@ -214,7 +214,7 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
             if (list[alproto] == NULL)
                 goto next_tx;
         }
-
+        /* 获取已完成的对应的日志类型ID，判断是否继续日志 */
         LoggerId tx_logged = AppLayerParserGetTxLogged(f, alstate, tx);
         const LoggerId tx_logged_old = tx_logged;
         SCLogDebug("logger: expect %08x, have %08x", logger_expectation, tx_logged);
@@ -222,7 +222,7 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
             /* tx already fully logged */
             goto next_tx;
         }
-
+                                                      /* 获取当前事务的状态 */
         int tx_progress_ts = AppLayerParserGetStateProgress(p->proto, alproto,
                 tx, ts_disrupt_flags);
         int tx_progress_tc = AppLayerParserGetStateProgress(p->proto, alproto,
@@ -236,7 +236,7 @@ static TmEcode OutputTxLog(ThreadVars *tv, Packet *p, void *thread_data)
         DEBUG_VALIDATE_BUG_ON(logger == NULL && store != NULL);
         DEBUG_VALIDATE_BUG_ON(logger != NULL && store == NULL);
         DEBUG_VALIDATE_BUG_ON(logger == NULL && store == NULL);
-
+        /* 构造输出日志 */
         while (logger && store) {
             DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL);
             DEBUG_VALIDATE_BUG_ON(logger->alproto != alproto);

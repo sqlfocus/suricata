@@ -25,7 +25,7 @@
     --RegisterAllModules()         注册、初始化线程模块, tmm_modules[]
       --TmModuleReceivePcapRegister()
       --TmModuleDecodePcapRegister()    pcap收包/解析 TMM_RECEIVEPCAP/TMM_DECODEPCAP
-      --TmModuleLoggerRegister()        输出模块
+      --TmModuleLoggerRegister()        注册输出模块
     --TmModuleRunInit()
     --InitSignalHandler()          注册信号处理函数
     --PreRunInit()
@@ -334,3 +334,36 @@ tcp协议上的应用层协议检测时，需要做数据重组
               --PacketAlertHandle()
               --TagHandlePacket()
               --FlowSetHasAlertsFlag()
+
+
+* 事件日志输出模块
+--SuricataMain()
+  --RegisterAllModules()
+    --TmModuleLoggerRegister()       注册输出方式和模块
+      --OutputRegisterRootLoggers()    底层输出方式, registered_loggers
+      --OutputRegisterLoggers()        上层应用的输出模块, output_modules
+    --TmModuleStatsLoggerRegister()    tmm_modules[TMM_STATSLOGGER]
+  --PreRunPostPrivsDropInit()    
+    --RunModeInitializeOutputs()     激活日志模块
+      --OutputModule->InitFunc()       fast -> AlertFastLogInitCtx()
+      --AddOutputToFreeList()          加入 output_free_list
+      --SetupOutput()                  按类型加入列表，如packet/tx/file/streaming logger, 初始化 logger_bits[]
+      --AppLayerParserRegisterLoggerBits()   更新 alp_ctx.ctxs[][].logger_bits
+      --OutputSetupActiveLoggers()
+        --RootLogger->ActiveCntFunc()  加入 active_loggers
+
+
+--TmThreadsSlotPktAcqLoop()          PCAP入口函数，线程级别初始化
+  --TmSlot->SlotThreadInit()
+  -->FlowWorkerThreadInit()          初始化 TMM_FLOWWORKER 运行环境
+    --RootLogger->ThreadInit()       日志输出初始化, 报文输出方式 = OutputLoggerThreadInit()
+    
+    
+--FlowWorker()
+  --OutputLoggerLog()
+    --RootLogger->LogFunc()          遍历 active_loggers, 输出日志
+    ==OutputPacketLog()
+    ==OutputTxLog()
+    ==OutputFiledataLog()
+    ==OutputFileLog()
+    ==OutputStreamingLog()
