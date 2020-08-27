@@ -1122,7 +1122,7 @@ void OutputRegisterLoggers(void)
     /* tcp streaming data */
     LogTcpDataLogRegister();  /* "tcp-data"/"http-body-data" -- streaming log */
     /* log stats */
-    LogStatsLogRegister();
+    LogStatsLogRegister();    /* "stats" -- stats log; 非json输出 */
 
     JsonAlertLogRegister();
     JsonAnomalyLogRegister();

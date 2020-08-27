@@ -255,7 +255,7 @@ static OutputInitResult LogStatsLogInitCtx(ConfNode *conf)
             statslog_ctx->flags |= LOG_STATS_THREADS;
         }
         if (nulls != NULL && ConfValIsTrue(nulls)) {
-            statslog_ctx->flags |= LOG_STATS_NULLS;
+            statslog_ctx->flags |= LOG_STATS_NULLS;  /* 不输出无值统计 */
         }
         SCLogDebug("statslog_ctx->flags %08x", statslog_ctx->flags);
     }
