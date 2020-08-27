@@ -117,7 +117,7 @@ void PacketFree(Packet *p)
  */
 void PacketDecodeFinalize(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 {
-    if (p->flags & PKT_IS_INVALID) {
+    if (p->flags & PKT_IS_INVALID) {  /* 线程本地异常计数 */
         StatsIncr(tv, dtv->counter_invalid);
     }
 }
@@ -474,7 +474,7 @@ void DecodeUnregisterCounters(void)
     }
     SCMutexUnlock(&g_counter_table_mutex);
 }
-
+/* 注册统计计数量 */
 void DecodeRegisterPerfCounters(DecodeThreadVars *dtv, ThreadVars *tv)
 {
     /* register counters */

@@ -517,7 +517,7 @@ static int DecodeIPV4Packet(Packet *p, const uint8_t *pkt, uint16_t len)
 int DecodeIPV4(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
         const uint8_t *pkt, uint16_t len)
 {
-    StatsIncr(tv, dtv->counter_ipv4);
+    StatsIncr(tv, dtv->counter_ipv4);    /* IPv4计数 */
 
     SCLogDebug("pkt %p len %"PRIu16"", pkt, len);
 

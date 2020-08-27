@@ -69,7 +69,7 @@ typedef struct TmSlot_ {
     /* data storage */
     const void *slot_initdata;
     /* store the thread module id */
-    int tm_id;
+    int tm_id;                     /* 指向对应的模块索引, 如 TMM_DECODEPCAP */
 
 } TmSlot;
 

@@ -884,8 +884,8 @@ void RegisterAllModules(void)
     TmModuleRespondRejectRegister();
 
     /* log api */
-    TmModuleLoggerRegister();           /* 注册输出日志模块 */
-    TmModuleStatsLoggerRegister();
+    TmModuleLoggerRegister();           /* 注册日志输出模块 */
+    TmModuleStatsLoggerRegister();      /* 注册统计输出模块 */
 
     TmModuleDebugList();
     /* nflog */

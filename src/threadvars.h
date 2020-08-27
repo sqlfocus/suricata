@@ -64,8 +64,8 @@ typedef struct ThreadVars_ {
     void *(*tm_func)(void *);  /* 线程主函数, "pktacqloop" -> TmThreadsSlotPktAcqLoop() */
 
     char name[16];
-    char *printable_name;
-    char *thread_group_name;
+    char *printable_name;      /* 如 "W01-eth0" */
+    char *thread_group_name;   /* 如 "Detect" */
 
     uint8_t thread_setup_flags;
 
@@ -118,13 +118,13 @@ typedef struct ThreadVars_ {
     /* counters */
 
     /** private counter store: counter updates modify this */
-    StatsPrivateThreadContext perf_private_ctx;
+    StatsPrivateThreadContext perf_private_ctx;  /* 维护本线程的报文计数统计等，代理了 perf_public_ctx 的链表为数组，提升性能 */
 
     /** pointer to the next thread */
     struct ThreadVars_ *next;
 
     /** public counter store: counter syncs update this */
-    StatsPublicThreadContext perf_public_ctx;
+    StatsPublicThreadContext perf_public_ctx;    /* 维护本线程注册的计数量 */
 
     /* mutex and condition used by management threads */
 

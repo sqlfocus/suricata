@@ -52,7 +52,7 @@
 /**
  * \brief Different kinds of qualifier that can be used to modify the behaviour
  *        of the counter to be registered
- */
+ *//* 统计量的类型，对应不同的操作行为 */
 enum {
     STATS_TYPE_NORMAL = 1,
     STATS_TYPE_AVERAGE = 2,
@@ -67,9 +67,9 @@ enum {
  */
 typedef struct StatsThreadStore_ {
     /** thread name used in output */
-    const char *name;
+    const char *name;                 /* 线程名 */
 
-    StatsPublicThreadContext *ctx;
+    StatsPublicThreadContext *ctx;    /* 指向线程的 ThreadVars->perf_public_ctx */
 
     StatsPublicThreadContext **head;
     uint32_t size;
@@ -82,40 +82,40 @@ typedef struct StatsThreadStore_ {
  */
 typedef struct StatsGlobalContext_ {
     /** list of thread stores: one per thread plus one global */
-    StatsThreadStore *sts;
+    StatsThreadStore *sts;         /* 链表 */
     SCMutex sts_lock;
     int sts_cnt;
 
-    HashTable *counters_id_hash;
+    HashTable *counters_id_hash;   /* 统计量hash表 */
 
-    StatsPublicThreadContext global_counter_ctx;
+    StatsPublicThreadContext global_counter_ctx;/* 全局统计量 */
 } StatsGlobalContext;
 
-static void *stats_thread_data = NULL;
+static void *stats_thread_data = NULL;          /* 统计输出日志方式列表, OutputLoggerThreadData */
 static StatsGlobalContext *stats_ctx = NULL;    /* 统计相关环境 */
 static time_t stats_start_time;                 /* 统计输出的起始时间 */
 /** refresh interval in seconds */
 static uint32_t stats_tts = STATS_MGMTT_TTS;    /* 统计输出间隔 */
 /** is the stats counter enabled? */
-static char stats_enabled = TRUE;               /* 是否是能统计输出 */
+static char stats_enabled = TRUE;               /* 是否使能统计输出 */
 
 /**< add decoder events as stats? enabled by default */
-bool stats_decoder_events = true;               /* 是否将解码事件输出 */
+bool stats_decoder_events = true;               /* 是否统计解码事件 */
 const char *stats_decoder_events_prefix = "decoder.event";
 /**< add stream events as stats? disabled by default */
-bool stats_stream_events = false;               /* 是否将流事件输出 */
+bool stats_stream_events = false;               /* 是否统计流事件 */
 
 static int StatsOutput(ThreadVars *tv);
 static int StatsThreadRegister(const char *thread_name, StatsPublicThreadContext *);
 void StatsReleaseCounters(StatsCounter *head);
 
-/** stats table is filled each interval and passed to the
- *  loggers. Initialized at first use. */
+/* 统计汇总表，被日志输出使用 * stats table is filled each interval and passed to the
+ * 首次使用时初始化 loggers. Initialized at first use. */
 static StatsTable stats_table = { NULL, NULL, 0, 0, 0, {0 , 0}};
 static SCMutex stats_table_mutex = SCMUTEX_INITIALIZER;
 static int stats_loggers_active = 1;
 
-static uint16_t counters_global_id = 0;
+static uint16_t counters_global_id = 0;         /* 统计量个数 */
 
 bool StatsEnabled(void)
 {
@@ -165,7 +165,7 @@ void StatsAddUI64(ThreadVars *tv, uint16_t id, uint64_t x)
  *
  * \param id  Index of the counter in the counter array
  * \param pca Counter array that holds the local counters for this TM
- */
+ *//* 本线程自身变量，累计计数 */
 void StatsIncr(ThreadVars *tv, uint16_t id)
 {
     StatsPrivateThreadContext *pca = &tv->perf_private_ctx;
@@ -176,7 +176,7 @@ void StatsIncr(ThreadVars *tv, uint16_t id)
 #ifdef DEBUG
     BUG_ON ((id < 1) || (id > pca->size));
 #endif
-    pca->head[id].value++;
+    pca->head[id].value++;        /* 在本线程独有部分累计 */
     pca->head[id].updates++;
     return;
 }
@@ -187,7 +187,7 @@ void StatsIncr(ThreadVars *tv, uint16_t id)
  * \param id  Index of the local counter in the counter array
  * \param pca Pointer to the StatsPrivateThreadContext
  * \param x   The value to set for the counter
- */
+ *//* 设置计数值 */
 void StatsSetUI64(ThreadVars *tv, uint16_t id, uint64_t x)
 {
     StatsPrivateThreadContext *pca = &tv->perf_private_ctx;
@@ -212,11 +212,11 @@ void StatsSetUI64(ThreadVars *tv, uint16_t id, uint64_t x)
 }
 
 static ConfNode *GetConfig(void) {
-    ConfNode *stats = ConfGetNode("stats");
+    ConfNode *stats = ConfGetNode("stats");   /* 先获取"stats"节点 */
     if (stats != NULL)
         return stats;
 
-    ConfNode *root = ConfGetNode("outputs");
+    ConfNode *root = ConfGetNode("outputs");  /* 没有则获取"outputs.stats"节点 */
     ConfNode *node = NULL;
     if (root != NULL) {
         TAILQ_FOREACH(node, &root->head, next) {
@@ -234,11 +234,11 @@ static ConfNode *GetConfig(void) {
 static void StatsInitCtxPreOutput(void)
 {
     SCEnter();
-    ConfNode *stats = GetConfig();
+    ConfNode *stats = GetConfig();   /* 获取统计配置 */
     if (stats != NULL) {
         const char *enabled = ConfNodeLookupChildValue(stats, "enabled");
         if (enabled != NULL && ConfValIsFalse(enabled)) {
-            stats_enabled = FALSE;
+            stats_enabled = FALSE;   /* 是否使能？ */
             SCLogDebug("Stats module has been disabled");
             SCReturn;
         }
@@ -251,7 +251,7 @@ static void StatsInitCtxPreOutput(void)
         }
 
         const char *interval = ConfNodeLookupChildValue(stats, "interval");
-        if (interval != NULL)
+        if (interval != NULL)        /* 输出统计信息的间隔 */
             if (StringParseUint32(&stats_tts, 10, 0, interval) < 0) {
                 SCLogWarning(SC_ERR_INVALID_VALUE, "Invalid value for "
                              "interval: \"%s\". Resetting to %d.", interval,
@@ -272,7 +272,7 @@ static void StatsInitCtxPreOutput(void)
         const char *prefix = NULL;
         if (ConfGet("stats.decoder-events-prefix", &prefix) != 1) {
             prefix = "decoder.event";
-        }
+        }             /* 指定解码事件的前缀 */
         stats_decoder_events_prefix = prefix;
     }
     SCReturn;
@@ -282,7 +282,7 @@ static void StatsInitCtxPostOutput(void)
 {
     SCEnter();
     /* Store the engine start time */
-    time(&stats_start_time);         /* 存储统计输出的起始时间 */
+    time(&stats_start_time);        /* 存储统计输出的起始时间 */
 
     /* init the lock used by StatsThreadStore */
     if (SCMutexInit(&stats_ctx->sts_lock, NULL) != 0) {
@@ -291,7 +291,7 @@ static void StatsInitCtxPostOutput(void)
     }
 
     if (stats_enabled && !OutputStatsLoggersRegistered()) {
-        stats_loggers_active = 0;
+        stats_loggers_active = 0;   /* 没有输出方式，则关闭使能标志 */
 
         /* if the unix command socket is enabled we do the background
          * stats sync just in case someone runs 'dump-counters' */
@@ -362,7 +362,7 @@ static void StatsReleaseCtx(void)
  * \param arg thread var
  *
  * \retval NULL This is the value that is always returned
- */
+ *//* 输出统计量 */
 static void *StatsMgmtThread(void *arg)
 {
     ThreadVars *tv_local = (ThreadVars *)arg;
@@ -385,7 +385,7 @@ static void *StatsMgmtThread(void *arg)
         TmThreadsSetFlag(tv_local, THV_CLOSED | THV_RUNNING_DONE);
         return NULL;
     }
-
+    /* 调用 OutputStatsLogThreadInit(), 初始化统计日志输出列表, stats_thread_data */
     TmModule *tm = &tmm_modules[TMM_STATSLOGGER];
     BUG_ON(tm->ThreadInit == NULL);
     int r = tm->ThreadInit(tv_local, NULL, &stats_thread_data);
@@ -396,7 +396,7 @@ static void *StatsMgmtThread(void *arg)
         return NULL;
     }
     SCLogDebug("stats_thread_data %p", &stats_thread_data);
-
+    /* 主循环 */
     TmThreadsSetFlag(tv_local, THV_INIT_DONE);
     while (1) {
         if (TmThreadsCheckFlag(tv_local, THV_PAUSE)) {
@@ -404,7 +404,7 @@ static void *StatsMgmtThread(void *arg)
             TmThreadTestThreadUnPaused(tv_local);
             TmThreadsUnsetFlag(tv_local, THV_PAUSED);
         }
-
+        /* 统计输出间隔，8s */
         struct timeval cur_timev;
         gettimeofday(&cur_timev, NULL);
         struct timespec cond_time = FROM_TIMEVAL(cur_timev);
@@ -415,7 +415,7 @@ static void *StatsMgmtThread(void *arg)
         SCCtrlMutexLock(tv_local->ctrl_mutex);
         SCCtrlCondTimedwait(tv_local->ctrl_cond, tv_local->ctrl_mutex, &cond_time);
         SCCtrlMutexUnlock(tv_local->ctrl_mutex);
-
+        /* 统计输出 */
         SCMutexLock(&stats_table_mutex);
         StatsOutput(tv_local);
         SCMutexUnlock(&stats_table_mutex);
@@ -445,7 +445,7 @@ static void *StatsMgmtThread(void *arg)
  * \param arg is NULL always
  *
  * \retval NULL This is the value that is always returned
- */
+ *//* 在各个线程设定标识，以输出统计量 */
 static void *StatsWakeupThread(void *arg)
 {
     ThreadVars *tv_local = (ThreadVars *)arg;
@@ -468,7 +468,7 @@ static void *StatsWakeupThread(void *arg)
         TmThreadsSetFlag(tv_local, THV_CLOSED | THV_RUNNING_DONE);
         return NULL;
     }
-
+    /* 线程主循环 */
     TmThreadsSetFlag(tv_local, THV_INIT_DONE);
     while (1) {
         if (TmThreadsCheckFlag(tv_local, THV_PAUSE)) {
@@ -476,7 +476,7 @@ static void *StatsWakeupThread(void *arg)
             TmThreadTestThreadUnPaused(tv_local);
             TmThreadsUnsetFlag(tv_local, THV_PAUSED);
         }
-
+        /* 每隔 STATS_WUT_TTS=3s 启动一次 */
         struct timeval cur_timev;
         gettimeofday(&cur_timev, NULL);
         struct timespec cond_time = FROM_TIMEVAL(cur_timev);
@@ -487,7 +487,7 @@ static void *StatsWakeupThread(void *arg)
         SCCtrlMutexLock(tv_local->ctrl_mutex);
         SCCtrlCondTimedwait(tv_local->ctrl_cond, tv_local->ctrl_mutex, &cond_time);
         SCCtrlMutexUnlock(tv_local->ctrl_mutex);
-
+        /* 遍历报文处理线程数组, TVT_PPT */
         SCMutexLock(&tv_root_lock);
         ThreadVars *tv = tv_root[TVT_PPT];
         while (tv != NULL) {
@@ -497,17 +497,17 @@ static void *StatsWakeupThread(void *arg)
             }
 
             /* assuming the assignment of an int to be atomic, and even if it's
-             * not, it should be okay */
+             * not, it should be okay */ /* 设置标志 */
             tv->perf_public_ctx.perf_flag = 1;
 
-            if (tv->inq != NULL) {
+            if (tv->inq != NULL) {       /* 发送告知信号 */
                 PacketQueue *q = tv->inq->pq;
                 SCCondSignal(&q->cond_q);
             }
 
             tv = tv->next;
         }
-
+        /* 遍历管理线程 */
         /* mgt threads for flow manager */
         tv = tv_root[TVT_MGMT];
         while (tv != NULL) {
@@ -560,7 +560,7 @@ static void StatsReleaseCounter(StatsCounter *pc)
  * \retval the counter id for the newly registered counter, or the already
  *         present counter on success
  * \retval 0 on failure
- */
+ *//* 注册统计量，返回值对应的索引ID */
 static uint16_t StatsRegisterQualifiedCounter(const char *name, const char *tm_name,
                                               StatsPublicThreadContext *pctx,
                                               int type_q, uint64_t (*Func)(void))
@@ -574,7 +574,7 @@ static uint16_t StatsRegisterQualifiedCounter(const char *name, const char *tm_n
         SCLogDebug("Counter name, StatsPublicThreadContext NULL");
         return 0;
     }
-
+    /* 遍历 StatsPublicThreadContext->head 链表，查看是否已经注册 */
     temp = prev = *head;
     while (temp != NULL) {
         prev = temp;
@@ -586,18 +586,18 @@ static uint16_t StatsRegisterQualifiedCounter(const char *name, const char *tm_n
         temp = temp->next;
     }
 
-    /* We already have a counter registered by this name */
+    /* CASE: 已注册, 直接返回ID; We already have a counter registered by this name */
     if (temp != NULL)
         return(temp->id);
 
-    /* if we reach this point we don't have a counter registered by this name */
+    /* CASE: 未注册, 分配内存并注册; if we reach this point we don't have a counter registered by this name */
     if ( (pc = SCMalloc(sizeof(StatsCounter))) == NULL)
         return 0;
     memset(pc, 0, sizeof(StatsCounter));
 
     /* assign a unique id to this StatsCounter.  The id is local to this
      * thread context.  Please note that the id start from 1, and not 0 */
-    pc->id = ++(pctx->curr_id);
+    pc->id = ++(pctx->curr_id);   /* 初始化, 初始ID=1，NOT 0 */
     pc->name = name;
     pc->type = type_q;
     pc->Func = Func;
@@ -623,36 +623,36 @@ static void StatsCopyCounterValue(StatsLocalCounter *pcae)
 {
     StatsCounter *pc = pcae->pc;
 
-    pc->value = pcae->value;
+    pc->value = pcae->value;      /* 直接copy */
     pc->updates = pcae->updates;
     return;
 }
 
 /**
  * \brief The output interface for the Stats API
- */
+ *//* 统计输出主函数 */
 static int StatsOutput(ThreadVars *tv)
 {
     const StatsThreadStore *sts = NULL;
     const StatsCounter *pc = NULL;
     void *td = stats_thread_data;
-
+    /* 无统计量，直接返回 */
     if (counters_global_id == 0)
         return -1;
-
+    /* 首次运行，初始化归并结果缓存 */
     if (stats_table.nstats == 0) {
         StatsThreadRegister("Global", &stats_ctx->global_counter_ctx);
-
+                                              /* 将全局统计量加入 stats_ctx 统计表 */
         uint32_t nstats = counters_global_id;
 
-        stats_table.nstats = nstats;
+        stats_table.nstats = nstats;          /* 初始化 stats_table->stats */
         stats_table.stats = SCCalloc(stats_table.nstats, sizeof(StatsRecord));
         if (stats_table.stats == NULL) {
             stats_table.nstats = 0;
             SCLogError(SC_ERR_MEM_ALLOC, "could not alloc memory for stats");
             return -1;
         }
-
+                                              /* 初始化 stats_table->tstats */
         stats_table.ntstats = stats_ctx->sts_cnt;
         uint32_t array_size = stats_table.nstats * sizeof(StatsRecord);
         stats_table.tstats = SCCalloc(stats_table.ntstats, array_size);
@@ -661,7 +661,7 @@ static int StatsOutput(ThreadVars *tv)
             SCLogError(SC_ERR_MEM_ALLOC, "could not alloc memory for stats");
             return -1;
         }
-
+                                              /* 设定起始时间 */
         stats_table.start_time = stats_start_time;
     }
 
@@ -681,7 +681,7 @@ static int StatsOutput(ThreadVars *tv)
 
     int thread = stats_ctx->sts_cnt - 1;
     StatsRecord *table = stats_table.stats;
-
+    /* 遍历所有统计线程  */
     /* Loop through the thread counter stores. The global counters
      * are in a separate store inside this list. */
     sts = stats_ctx->sts;
@@ -700,7 +700,7 @@ static int StatsOutput(ThreadVars *tv)
 
         SCMutexLock(&sts->ctx->m);
         pc = sts->ctx->head;
-        while (pc != NULL) {
+        while (pc != NULL) {     /* 从线程拷贝数值 */
             SCLogDebug("Counter %s (%u:%u) value %"PRIu64,
                     pc->name, pc->id, pc->gid, pc->value);
 
@@ -730,7 +730,7 @@ static int StatsOutput(ThreadVars *tv)
             if (e->type == 0)
                 continue;
 
-            switch (e->type) {
+            switch (e->type) {   /* 合并线程数据到临时归并结果 */
                 case STATS_TYPE_MAXIMUM:
                     if (e->value > merge_table[c].value)
                         merge_table[c].value = e->value;
@@ -752,7 +752,7 @@ static int StatsOutput(ThreadVars *tv)
             struct CountersMergeTable *e = &thread_table[c];
             /* thread only sets type if it has a counter
              * of this type. */
-            if (e->type == 0)
+            if (e->type == 0)    /* 更新全局结构中，本线程的数据 */
                 continue;
 
             uint32_t offset = (thread * stats_table.nstats) + c;
@@ -778,7 +778,7 @@ static int StatsOutput(ThreadVars *tv)
         sts = sts->next;
         thread--;
     }
-
+    /* 将临时归并数据，放置到全局数据表中 */
     /* transfer 'merge table' to final stats table */
     for (uint16_t x = 0; x < max_id; x++) {
         /* xfer previous value to pvalue and reset value */
@@ -803,7 +803,7 @@ static int StatsOutput(ThreadVars *tv)
         }
     }
 
-    /* invoke logger(s) */
+    /* 通过日志方式输出, invoke logger(s) */
     if (stats_loggers_active) {
         OutputStatsLog(tv, td, &stats_table);
     }
@@ -858,14 +858,14 @@ static void StatsLogSummary(void)
 /**
  * \brief Initializes the perf counter api.  Things are hard coded currently.
  *        More work to be done when we implement multiple interfaces
- */
+ *//* 初始化统计环境 */
 void StatsInit(void)
 {
     BUG_ON(stats_ctx != NULL);
     if ( (stats_ctx = SCMalloc(sizeof(StatsGlobalContext))) == NULL) {
         SCLogError(SC_ERR_FATAL, "Fatal error encountered in StatsInitCtx. Exiting...");
         exit(EXIT_FAILURE);
-    }
+    }/* 分配统计环境变量 */
     memset(stats_ctx, 0, sizeof(StatsGlobalContext));
 
     StatsPublicThreadContextInit(&stats_ctx->global_counter_ctx);
@@ -873,12 +873,12 @@ void StatsInit(void)
 
 void StatsSetupPostConfigPreOutput(void)
 {
-    StatsInitCtxPreOutput();
+    StatsInitCtxPreOutput();   /* 解析统计输出配置 */
 }
 
 void StatsSetupPostConfigPostOutput(void)
 {
-    StatsInitCtxPostOutput();
+    StatsInitCtxPostOutput();  /* 保存统计时间 */
 }
 
 
@@ -899,7 +899,7 @@ void StatsSpawnThreads(void)
     ThreadVars *tv_wakeup = NULL;
     ThreadVars *tv_mgmt = NULL;
 
-    /* spawn the stats wakeup thread */
+    /* 创建线程1，每隔3s唤醒一次统计输出，spawn the stats wakeup thread */
     tv_wakeup = TmThreadCreateMgmtThread(thread_name_counter_wakeup,
                                          StatsWakeupThread, 1);
     if (tv_wakeup == NULL) {
@@ -914,7 +914,7 @@ void StatsSpawnThreads(void)
         exit(EXIT_FAILURE);
     }
 
-    /* spawn the stats mgmt thread */
+    /* 创建线程2，spawn the stats mgmt thread */
     tv_mgmt = TmThreadCreateMgmtThread(thread_name_counter_stats,
                                        StatsMgmtThread, 1);
     if (tv_mgmt == NULL) {
@@ -941,7 +941,7 @@ void StatsSpawnThreads(void)
  *
  * \retval id Counter id for the newly registered counter, or the already
  *            present counter
- */
+ *//* 注册通用统计计数量 */
 uint16_t StatsRegisterCounter(const char *name, struct ThreadVars_ *tv)
 {
     uint16_t id = StatsRegisterQualifiedCounter(name,
@@ -1083,7 +1083,7 @@ static int StatsThreadRegister(const char *thread_name, StatsPublicThreadContext
         SCLogDebug("supplied argument(s) to StatsThreadRegister NULL");
         return 0;
     }
-
+    /* 将统计量加入全局hash表 stats_ctx->counters_id_hash,  依据 CountersIdType->string 做比较 */
     SCMutexLock(&stats_ctx->sts_lock);
     if (stats_ctx->counters_id_hash == NULL) {
         stats_ctx->counters_id_hash = HashTableInit(256, CountersIdHashFunc,
@@ -1106,7 +1106,7 @@ static int StatsThreadRegister(const char *thread_name, StatsPublicThreadContext
         pc = pc->next;
     }
 
-
+    /* 加入 stats_ctx->sts 链表 */
     StatsThreadStore *temp = NULL;
     if ( (temp = SCMalloc(sizeof(StatsThreadStore))) == NULL) {
         SCMutexUnlock(&stats_ctx->sts_lock);
@@ -1196,11 +1196,11 @@ static int StatsGetAllCountersArray(StatsPublicThreadContext *pctx, StatsPrivate
     return StatsGetCounterArrayRange(1, pctx->curr_id, pctx, private);
 }
 
-
+/* 把每个线程注册的统计变量，汇总到全局 stats_ctx */
 int StatsSetupPrivate(ThreadVars *tv)
-{
+{   /* 初始化线程的私有部分 */
     StatsGetAllCountersArray(&(tv)->perf_public_ctx, &(tv)->perf_private_ctx);
-
+    /* 注册到全局 */
     StatsThreadRegister(tv->printable_name ? tv->printable_name : tv->name,
         &(tv)->perf_public_ctx);
     return 0;
@@ -1214,7 +1214,7 @@ int StatsSetupPrivate(ThreadVars *tv)
  *
  * \retval  1 on success
  * \retval -1 on error
- */
+ *//* 将线程私有统计，copy到公共部分；原私有部分并不清零 */
 int StatsUpdateCounterArray(StatsPrivateThreadContext *pca, StatsPublicThreadContext *pctx)
 {
 

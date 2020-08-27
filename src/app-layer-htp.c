@@ -1154,7 +1154,7 @@ static int HTTPParseContentTypeHeader(uint8_t *name, size_t name_len,
  *
  *  If the request contains a multipart message, this function will
  *  set the HTP_BOUNDARY_SET in the transaction.
- */
+ *//* 对于multipart模式，提取boundary */
 static int HtpRequestBodySetupMultipart(htp_tx_data_t *d, HtpTxUserData *htud)
 {
     htp_header_t *h = (htp_header_t *)htp_table_get_c(d->tx->request_headers,
@@ -1833,7 +1833,7 @@ end:
  * \brief Function callback to append chunks for Requests
  * \param d pointer to the htp_tx_data_t structure (a chunk from htp lib)
  * \retval int HTP_OK if all goes well
- */
+ *//* 请求数据的回调函数 */
 static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
 {
     SCEnter();
@@ -1849,7 +1849,7 @@ static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
     PrintRawDataFp(stdout, (uint8_t *)d->data, d->len);
     printf("HTPBODY END: \n");
 #endif
-
+    /* libhtp的信息数据 */
     HtpState *hstate = htp_connp_get_user_data(d->tx->connp);
     if (hstate == NULL) {
         SCReturnInt(HTP_ERROR);
@@ -1857,7 +1857,7 @@ static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
 
     SCLogDebug("New request body data available at %p -> %p -> %p, bodylen "
                "%"PRIu32"", hstate, d, d->data, (uint32_t)d->len);
-
+    /* 提取suricata的用户侧数据 */
     HtpTxUserData *tx_ud = (HtpTxUserData *) htp_tx_get_user_data(d->tx);
     if (tx_ud == NULL) {
         tx_ud = HTPMalloc(sizeof(HtpTxUserData));
@@ -1869,19 +1869,19 @@ static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
         /* Set the user data for handling body chunks on this transaction */
         htp_tx_set_user_data(d->tx, tx_ud);
     }
-    if (!tx_ud->response_body_init) {
+    if (!tx_ud->response_body_init) {    /* 初始化时，判断body数据的类型 */
         tx_ud->response_body_init = 1;
 
-        if (d->tx->request_method_number == HTP_M_POST) {
+        if (d->tx->request_method_number == HTP_M_POST) {       /* POST */
             SCLogDebug("POST");
             int r = HtpRequestBodySetupMultipart(d, tx_ud);
-            if (r == 1) {
+            if (r == 1) {        /* 带有multipart属性头 */
                 tx_ud->request_body_type = HTP_BODY_REQUEST_MULTIPART;
-            } else if (r == 0) {
+            } else if (r == 0) { /* 无multipart属性头 */
                 tx_ud->request_body_type = HTP_BODY_REQUEST_POST;
                 SCLogDebug("not multipart");
             }
-        } else if (d->tx->request_method_number == HTP_M_PUT) {
+        } else if (d->tx->request_method_number == HTP_M_PUT) { /* PUT */
             if (HtpRequestBodySetupPUT(d, tx_ud) == 0) {
                 tx_ud->request_body_type = HTP_BODY_REQUEST_PUT;
             }
@@ -2876,7 +2876,7 @@ static void HTPConfigParseParameters(HTPCfgRec *cfg_prec, ConfNode *s,
 
     return;
 }
-
+/* 注册libhtp库的回调函数 */
 void HTPConfigure(void)
 {
     SCEnter();
@@ -2894,11 +2894,11 @@ void HTPConfigure(void)
         exit(EXIT_FAILURE);
     }
     SCLogDebug("LIBHTP default config: %p", cfglist.cfg);
-    HTPConfigSetDefaultsPhase1(&cfglist);
+    HTPConfigSetDefaultsPhase1(&cfglist);       /* 默认配置初始化，包括各阶段回调函数 */
     if (ConfGetNode("app-layer.protocols.http.libhtp") == NULL) {
         HTPConfigParseParameters(&cfglist, ConfGetNode("libhtp.default-config"),
                                  cfgtree);
-    } else {
+    } else {                                    /* 利用配置文件初始化 */
         HTPConfigParseParameters(&cfglist, ConfGetNode("app-layer.protocols.http.libhtp.default-config"), cfgtree);
     }
     HTPConfigSetDefaultsPhase2("default", &cfglist);
@@ -2917,7 +2917,7 @@ void HTPConfigure(void)
     SCLogDebug("LIBHTP Configuring %p", server_config);
 
     ConfNode *si;
-    /* Server Nodes */
+    /* 解析server节点配置，Server Nodes */
     TAILQ_FOREACH(si, &server_config->head, next) {
         /* Need the named node, not the index */
         ConfNode *s = TAILQ_FIRST(&si->head);

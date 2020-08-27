@@ -233,12 +233,12 @@ json_t *StatsToJSON(const StatsTable *st, uint8_t flags)
             if (strrchr(name, '.') != NULL) {
                 shortname = &name[strrchr(name, '.') - name + 1];
             }
-            json_t *js_type = OutputStats2Json(js_stats, name);
+            json_t *js_type = OutputStats2Json(js_stats, name); /* 输出总量 */
             if (js_type != NULL) {
                 json_object_set_new(js_type, shortname,
                     json_integer(st->stats[u].value));
 
-                if (flags & JSON_STATS_DELTAS) {
+                if (flags & JSON_STATS_DELTAS) {                /* 输出差量 */
                     char deltaname[strlen(shortname) + strlen(delta_suffix) + 1];
                     snprintf(deltaname, sizeof(deltaname), "%s%s", shortname,
                         delta_suffix);
@@ -251,7 +251,7 @@ json_t *StatsToJSON(const StatsTable *st, uint8_t flags)
 
     /* per thread stats - stored in a "threads" object. */
     if (st->tstats != NULL && (flags & JSON_STATS_THREADS)) {
-        /* for each thread (store) */
+        /* for each thread (store) */                           /* 输出每线程数据 */
         json_t *threads = json_object();
         if (unlikely(threads == NULL)) {
             json_decref(js_stats);
@@ -288,7 +288,7 @@ json_t *StatsToJSON(const StatsTable *st, uint8_t flags)
     }
     return js_stats;
 }
-
+/* 统计数据的日志输出 */
 static int JsonStatsLogger(ThreadVars *tv, void *thread_data, const StatsTable *st)
 {
     SCEnter();
@@ -304,7 +304,7 @@ static int JsonStatsLogger(ThreadVars *tv, void *thread_data, const StatsTable *
     CreateIsoTimeString(&tval, timebuf, sizeof(timebuf));
     json_object_set_new(js, "timestamp", json_string(timebuf));
     json_object_set_new(js, "event_type", json_string("stats"));
-
+    /* 构建统计数据的json内存 */
     json_t *js_stats = StatsToJSON(st, aft->statslog_ctx->flags);
     if (js_stats == NULL) {
         json_decref(js);
@@ -312,7 +312,7 @@ static int JsonStatsLogger(ThreadVars *tv, void *thread_data, const StatsTable *
     }
 
     json_object_set_new(js, "stats", js_stats);
-
+    /* 输出到文件 */
     OutputJSONBuffer(js, aft->statslog_ctx->file_ctx, &aft->buffer);
     MemBufferReset(aft->buffer);
 

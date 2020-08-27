@@ -25,7 +25,7 @@
     --RegisterAllModules()         注册、初始化线程模块, tmm_modules[]
       --TmModuleReceivePcapRegister()
       --TmModuleDecodePcapRegister()    pcap收包/解析 TMM_RECEIVEPCAP/TMM_DECODEPCAP
-      --TmModuleLoggerRegister()        注册输出模块
+      --TmModuleLoggerRegister()          注册输出模块
     --TmModuleRunInit()
     --InitSignalHandler()          注册信号处理函数
     --PreRunInit()
@@ -43,6 +43,7 @@
     --RunMode->RunModeFunc()       运行模式初始化, RunModeIdsPcapWorkers()
     --FlowManagerThreadSpawn()
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
+    --StatsSpawnThreads()          启动统计线程
   --SuricataMainLoop()
     --DetectEngineReload()         主循环，处理SIGUSR2信号，重新加载规则引擎
 
@@ -189,7 +190,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
   --PacketPoolInit()               初始化报文池
   --TmSlot->SlotThreadInit()       初始化PIPELINE处理函数环境
     --ReceivePcapThreadInit()
-    --DecodePcapThreadInit()
+    --DecodePcapThreadIni()
     --FlowWorkerThreadInit()       初始化 TMM_FLOWWORKER 运行环境
       --DecodeThreadVarsAlloc()       协议识别环境
       --StreamTcpThreadInit()         流汇聚环境
@@ -256,6 +257,12 @@ SCLogConfig *sc_log_config         日志配置信息结构
 * 流管理线程
 线程主函数"management" <==> ThreadVars->tm_func = TmThreadsManagement()
 处理链"FlowManager" <==> tmm_modules[TMM_FLOWMANAGER]->Management = FlowManager()
+    
+--FlowManagerThreadSpawn()
+  --TmThreadCreateMgmtThreadByName()
+    --TmThreadCreate()             确定入口函数, TmThreadsManagement()
+    --TmSlotSetFuncAppend()        确定槽函数, FlowManager()
+
     
 --TmThreadsManagement()
   --FlowManagerThreadInit()
@@ -342,7 +349,7 @@ tcp协议上的应用层协议检测时，需要做数据重组
     --TmModuleLoggerRegister()       注册输出方式和模块
       --OutputRegisterRootLoggers()    底层输出方式, registered_loggers
       --OutputRegisterLoggers()        上层应用的输出模块, output_modules
-    --TmModuleStatsLoggerRegister()    tmm_modules[TMM_STATSLOGGER]
+    --TmModuleStatsLoggerRegister()    统计输出, tmm_modules[TMM_STATSLOGGER]
   --PreRunPostPrivsDropInit()    
     --RunModeInitializeOutputs()     激活日志模块
       --OutputModule->InitFunc()       fast -> AlertFastLogInitCtx()
@@ -367,3 +374,96 @@ tcp协议上的应用层协议检测时，需要做数据重组
     ==OutputFiledataLog()
     ==OutputFileLog()
     ==OutputStreamingLog()
+
+
+* 统计计数
+suricata支持丰富的计数种类，包括协议类型计数、异常解析计数等
+
+--SuricataMain()
+  --PostConfLoadedSetup()
+    --RegisterAllModules()
+      --TmModuleLoggerRegister()
+        --OutputRegisterLoggers()
+          --JsonStatsLogRegister()      注册 统计输出方式, JsonStatsLogger(), 对应"stats-json"/"eve-log.stats"
+      --TmModuleStatsLoggerRegister()   注册 TMM_STATSLOGGER 统计输出模块
+    --PreRunInit()
+      --StatsInit()                     统计环境初始化
+  --PreRunPostPrivsDropInit()
+    --StatsSetupPostConfigPreOutput()   解析统计输出配置
+    --RunModeInitializeOutputs()
+    --StatsSetupPostConfigPostOutput()  记录启动时间, 并检测是否能够输出统计
+  --RunModeDispatch()
+    --StatsSpawnThreads()               启动统计输出线程
+      --TmThreadCreateMgmtThread()        线程1: 设定统计量输出标志, StatsWakeupThread()
+                                          线程2: 输出统计量到文件, StatsMgmtThread()
+
+    
+--TmThreadsSlotPktAcqLoop()     PCAP线程入口
+  --PacketPoolInit()
+  --TmSlot->SlotThreadInit()         PIPELINE函数初始化
+  ==ReceivePcapThreadInit()          注册底层收包统计量, PcapThreadVars->capture_kernel_packets
+    --StatsRegisterCounter()
+  ==DecodePcapThreadInit()
+    --DecodeRegisterPerfCounters()   注册统计计数量的ID, DecodeThreadVars->counter_pkts
+      --StatsRegisterCounter()       注册到 ThreadVars->perf_public_ctx->head[]
+        --StatsRegisterQualifiedCounter()
+      --StatsRegisterAvgCounter()
+      --StatsRegisterMaxCounter()
+  ==FlowWorkerThreadInit()
+    --StreamTcpThreadInit()          注册到流汇聚统计量, FlowWorkerThreadData->stream_thread_ptr
+      --StatsRegisterCounter()
+    --DetectEngineThreadCtxInit()
+      --StatsRegisterCounter()       注册Detect统计量, FlowWorkerThreadData->detect_thread->counter_alerts
+    --AppLayerRegisterThreadCounters() 注册支持的应用协议计数量, applayer_counters[]
+  --StatsSetupPrivate()              将线程统计量加入到全局列表
+    --StatsGetAllCountersArray()
+      --StatsGetCounterArrayRange()     初始化 ThreadVars->perf_private_ctx
+    --StatsThreadRegister()             加入 stats_ctx
+--TmThreadsManagement()         流管理线程入口
+  --FlowManagerThreadInit()
+    --StatsRegisterCounter()         注册流管理统计量, FlowManagerThreadData->flow_mgr_cnt_clo
+
+
+    
+--DecodePcap()                  统计
+  --DecodeUpdatePacketCounters()     报文bps/pps计数
+  --DecodeLinkLayer()
+    --DecodeEthernet()
+      --StatsIncr()                  二层头计数
+      --DecodeNetworkLayer()
+        --DecodeIPV4()
+          --StatsIncr()              三层计数
+          --DecodeTCP()
+            --StatsIncr()            四层计数
+  --PacketDecodeFinalize()
+    --StatsIncr()                    异常报文计数
+
+
+
+--StatsWakeupThread()           线程, 设定统计量标志, 每隔3s一次
+  --遍历 tv_root[TVT_PPT]
+    --设置 ThreadVars->perf_public_ctx.perf_flag
+    --SCCondSignal(ThreadVars->inq->pq->cond_q)
+  --遍历 tv_root[TVT_MGMT]
+    --设置 ThreadVars->perf_public_ctx.perf_flag
+
+
+--ReceivePcapLoop()             PCAP报文处理
+  --StatsSyncCountersIfSignalled()/StatsSyncCounters()
+    --StatsUpdateCounterArray()    将私有部分同步到公有部分，冷热同步
+      --StatsCopyCounterValue()
+      --清理 ThreadVars->perf_public_ctx.perf_flag
+    
+    
+--StatsMgmtThread()             线程, 输出统计量到文件
+  --TmModule->ThreadInit()         初始化 TMM_STATSLOGGER, 初始化日志方式列表 stats_thread_data
+  ==OutputStatsLogThreadInit()
+  --StatsOutput()
+    --OutputStatsLog()             通过注册的日志方式输出
+      --遍历线程数据，归并
+      --数据新旧切换
+      --OutputStatsLogger->LogFunc()
+      ==JsonStatsLogger()
+
+
+    

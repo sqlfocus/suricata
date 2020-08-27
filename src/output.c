@@ -1130,7 +1130,7 @@ void OutputRegisterLoggers(void)
     JsonFlowLogRegister();    /* "flow-json-log"/"eve-log.flow" -- flow log */
     JsonNetFlowLogRegister();
     /* json stats */
-    JsonStatsLogRegister();
+    JsonStatsLogRegister();   /* "stats-json"/"eve-log.stats" -- stats log */
 
     /* DNP3. */
     JsonDNP3LogRegister();

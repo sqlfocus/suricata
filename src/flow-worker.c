@@ -53,14 +53,14 @@ typedef struct FlowWorkerThreadData_ {
 
     union {
         StreamTcpThread *stream_thread;
-        void *stream_thread_ptr; /* */
+        void *stream_thread_ptr; /* 流汇聚信息结构 */
     };
 
     SC_ATOMIC_DECLARE(DetectEngineThreadCtxPtr, detect_thread);
                                  /* 检测线程信息结构 */
     void *output_thread;         /* 支持日志输出, LoggerThreadStore, Output thread data. */
 
-    uint16_t local_bypass_pkts;  /* 计数器 */
+    uint16_t local_bypass_pkts;  /* 计数量ID */
     uint16_t local_bypass_bytes;
     uint16_t both_bypass_pkts;
     uint16_t both_bypass_bytes;
@@ -104,7 +104,7 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
 
     SC_ATOMIC_INITPTR(fw->detect_thread);
     SC_ATOMIC_SET(fw->detect_thread, NULL);
-
+    /* 注册计数量 */
     fw->local_bypass_pkts = StatsRegisterCounter("flow_bypassed.local_pkts", tv);
     fw->local_bypass_bytes = StatsRegisterCounter("flow_bypassed.local_bytes", tv);
     fw->both_bypass_pkts = StatsRegisterCounter("flow_bypassed.local_capture_pkts", tv);
@@ -137,9 +137,9 @@ static TmEcode FlowWorkerThreadInit(ThreadVars *tv, const void *initdata, void *
         FlowWorkerThreadDeinit(tv, fw);
         return TM_ECODE_FAILED;
     }
-
-    DecodeRegisterPerfCounters(fw->dtv, tv);
-    AppLayerRegisterThreadCounters(tv);
+    /* 注册统计量 */
+    DecodeRegisterPerfCounters(fw->dtv, tv);  /* 在 DecodePcapThreadInit() 中已经注册过, 此处仅仅是获取对应的统计量ID */
+    AppLayerRegisterThreadCounters(tv);       /* 注册支持的应用协议计数统计量 */
 
     /* 构建流汇聚队列，setup pq for stream end pkts */
     memset(&fw->pq, 0, sizeof(PacketQueueNoLock));

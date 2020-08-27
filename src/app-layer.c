@@ -80,7 +80,7 @@ typedef struct AppLayerCounters_ {
     uint16_t counter_id;
     uint16_t counter_tx_id;
 } AppLayerCounters;
-
+/* 应用层协议计数统计量 */
 /* counter names. Only used at init. */
 AppLayerCounterNames applayer_counter_names[FLOW_PROTO_APPLAYER_MAX][ALPROTO_MAX];
 /* counter id's. Used that runtime. */
@@ -944,7 +944,7 @@ void AppLayerRegisterThreadCounters(ThreadVars *tv)
 
     for (ipproto = 0; ipproto < IPPROTOS_MAX; ipproto++) {
         uint8_t ipproto_map = FlowGetProtoMapping(ipprotos[ipproto]);
-
+        /* 为支持的应用协议注册计数 */
         for (alproto = 0; alproto < ALPROTO_MAX; alproto++) {
             if (alprotos[alproto] == 1) {
                 applayer_counters[ipproto_map][alproto].counter_id =

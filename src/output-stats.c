@@ -52,7 +52,7 @@ typedef struct OutputStatsLogger_ {
     ThreadExitPrintStatsFunc ThreadExitPrintStats;
 } OutputStatsLogger;
 
-static OutputStatsLogger *list = NULL;   /* 注册统计输出列表 */
+static OutputStatsLogger *list = NULL;   /* 注册统计输出方式列表 */
 
 int OutputRegisterStatsLogger(const char *name, StatsLogger LogFunc,
     OutputCtx *output_ctx, ThreadInitFunc ThreadInit,
@@ -99,7 +99,7 @@ TmEcode OutputStatsLog(ThreadVars *tv, void *thread_data, StatsTable *st)
 
     while (logger && store) {
         DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL);
-
+        /* JsonStatsLogger() */
         logger->LogFunc(tv, store->thread_data, st);
 
         logger = logger->next;

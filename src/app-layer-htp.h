@@ -233,7 +233,7 @@ typedef struct HtpTxUserData_ {
     /** Holds the boundary identification string if any (used on
      *  multipart/form-data only)
      */
-    uint8_t *boundary;
+    uint8_t *boundary;              /* multipart属性头的boundary字段 */
     uint8_t boundary_len;
 
     uint8_t tsflags;

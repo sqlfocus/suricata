@@ -283,7 +283,7 @@ static TmEcode ReceivePcapLoop(ThreadVars *tv, void *data, void *slot)
             SCLogError(SC_ERR_PCAP_DISPATCH, "Pcap callback PcapCallbackLoop failed");
             SCReturnInt(TM_ECODE_FAILED);
         }
-
+        /* 本线程同步数据 */
         StatsSyncCountersIfSignalled(tv);
     }
 
@@ -480,7 +480,7 @@ static TmEcode ReceivePcapThreadInit(ThreadVars *tv, const void *initdata, void 
     ptv->datalink = pcap_datalink(ptv->pcap_handle);
 
     pcapconfig->DerefFunc(pcapconfig); /* 释放配置信息, PcapDerefConfig() */
-
+    /* 注册底层收包统计量 */
     ptv->capture_kernel_packets = StatsRegisterCounter("capture.kernel_packets",
             ptv->tv);
     ptv->capture_kernel_drops = StatsRegisterCounter("capture.kernel_drops",
@@ -545,11 +545,11 @@ static TmEcode DecodePcap(ThreadVars *tv, Packet *p, void *data)
 
     BUG_ON(PKT_IS_PSEUDOPKT(p));
 
-    /* update counters */
+    /* 更新线程本地计数, update counters */
     DecodeUpdatePacketCounters(tv, dtv, p);
     /* L1-L4解码，并计算hash值 */
     DecodeLinkLayer(tv, dtv, p->datalink, p, GET_PKT_DATA(p), GET_PKT_LEN(p));
-
+    /* 解析结束后，更新线程本地异常计数 */
     PacketDecodeFinalize(tv, dtv, p);
 
     SCReturnInt(TM_ECODE_OK);
@@ -562,7 +562,7 @@ static TmEcode DecodePcapThreadInit(ThreadVars *tv, const void *initdata, void *
     DecodeThreadVars *dtv = DecodeThreadVarsAlloc(tv);
     if (dtv == NULL)      /* 分配并初始化解析线程环境 */
         SCReturnInt(TM_ECODE_FAILED);
-
+                          /* 注册统计计数量的ID */
     DecodeRegisterPerfCounters(dtv, tv);
 
     *data = (void *)dtv;

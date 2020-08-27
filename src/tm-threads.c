@@ -286,7 +286,7 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
         }
     }
 
-    StatsSetupPrivate(tv);
+    StatsSetupPrivate(tv);                    /* 建立统计变量，线程的私有部分 */
 
     TmThreadsSetFlag(tv, THV_INIT_DONE);      /* 设置初始化完成标识 */
     /* 主循环 */

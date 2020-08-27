@@ -554,14 +554,14 @@ static void AddOutputToFreeList(OutputModule *module, OutputCtx *output_ctx)
 /** \brief Turn output into thread module */
 static void SetupOutput(const char *name, OutputModule *module, OutputCtx *output_ctx)
 {
-    /* flow logger doesn't run in the packet path */
+    /* 流日志输出列表, flow logger doesn't run in the packet path */
     if (module->FlowLogFunc) {
         OutputRegisterFlowLogger(module->name, module->FlowLogFunc,
             output_ctx, module->ThreadInit, module->ThreadDeinit,
             module->ThreadExitPrintStats);
         return;
     }
-    /* stats logger doesn't run in the packet path */
+    /* 统计输出列表,  stats logger doesn't run in the packet path */
     if (module->StatsLogFunc) {
         OutputRegisterStatsLogger(module->name, module->StatsLogFunc,
             output_ctx,module->ThreadInit, module->ThreadDeinit,

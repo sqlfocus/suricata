@@ -627,7 +627,7 @@ typedef struct DecodeThreadVars_
     AppLayerThreadCtx *app_tctx;
 
     /** stats/counters */
-    uint16_t counter_pkts;
+    uint16_t counter_pkts;       /* 索引ID, 对应 StatsLocalCounter->id */
     uint16_t counter_bytes;
     uint16_t counter_avg_pkt_size;
     uint16_t counter_max_pkt_size;

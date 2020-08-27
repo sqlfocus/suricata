@@ -29,13 +29,13 @@
 typedef struct StatsRecord_ {
     const char *name;
     const char *tm_name;
-    uint64_t value;         /**< total value */
-    uint64_t pvalue;        /**< prev value (may be higher for memuse counters) */
+    uint64_t value;         /* 当前值 *< total value */
+    uint64_t pvalue;        /* 历史值 *< prev value (may be higher for memuse counters) */
 } StatsRecord;
 
 typedef struct StatsTable_ {
-    StatsRecord *stats;     /**< array of global stats, indexed by counters gid */
-    StatsRecord *tstats;    /**< array of arrays with per thread stats */
+    StatsRecord *stats;     /* 所有统计量数组, *< array of global stats, indexed by counters gid */
+    StatsRecord *tstats;    /* 以线程为单元的统计量数组, *< array of arrays with per thread stats */
     uint32_t nstats;        /**< size in records of 'stats' */
     uint32_t ntstats;       /**< number of threads for which tstats stores stats */
     time_t start_time;

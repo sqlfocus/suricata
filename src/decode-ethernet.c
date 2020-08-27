@@ -41,7 +41,7 @@
 int DecodeEthernet(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
                    const uint8_t *pkt, uint32_t len)
 {
-    StatsIncr(tv, dtv->counter_eth);
+    StatsIncr(tv, dtv->counter_eth);   /* 二层类型计数 */
 
     if (unlikely(len < ETHERNET_HEADER_LEN)) {
         ENGINE_SET_INVALID_EVENT(p, ETHERNET_PKT_TOO_SMALL);

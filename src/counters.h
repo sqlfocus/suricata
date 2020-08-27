@@ -32,41 +32,41 @@ struct ThreadVars_;
  * \brief Container to hold the counter variable
  */
 typedef struct StatsCounter_ {
-    int type;
+    int type;           /* STATS_TYPE_NORMAL */
 
     /* local id for this counter in this thread */
-    uint16_t id;
+    uint16_t id;        /* StatsPublicThreadContext->head链表中的索引 */
 
     /* global id, used in output */
-    uint16_t gid;
+    uint16_t gid;       /* 对应 counters_global_id 递增时的值，用于输出 */
 
     /* counter value(s): copies from the 'private' counter */
-    uint64_t value;     /**< sum of updates/increments, or 'set' value */
-    uint64_t updates;   /**< number of updates (for avg) */
+    uint64_t value;     /* 计数值, *< sum of updates/increments, or 'set' value */
+    uint64_t updates;   /* 被更新的次数, *< number of updates (for avg) */
 
     /* when using type STATS_TYPE_Q_FUNC this function is called once
      * to get the counter value, regardless of how many threads there are. */
     uint64_t (*Func)(void);
 
     /* name of the counter */
-    const char *name;
+    const char *name;   /* 如 "decoder.pkts" */
 
     /* the next perfcounter for this tv's tm instance */
     struct StatsCounter_ *next;
-} StatsCounter;
+} StatsCounter;    /* 各线程共享的统计量 */
 
 /**
  * \brief Stats Context for a ThreadVars instance
  */
 typedef struct StatsPublicThreadContext_ {
     /* flag set by the wakeup thread, to inform the client threads to sync */
-    uint32_t perf_flag;
+    uint32_t perf_flag;   /* 在 StatsWakeupThread() 线程设置 */
 
     /* pointer to the head of a list of counters assigned under this context */
-    StatsCounter *head;
+    StatsCounter *head;   /* 注册的计数量 */
 
     /* holds the total no of counters already assigned for this perf context */
-    uint16_t curr_id;
+    uint16_t curr_id;     /* 已注册的计数量个数, head链表的元素个数 */
 
     /* mutex to prevent simultaneous access during update_counter/output_stat */
     SCMutex m;
@@ -78,16 +78,16 @@ typedef struct StatsPublicThreadContext_ {
  */
 typedef struct StatsLocalCounter_ {
     /* pointer to the counter that corresponds to this local counter */
-    StatsCounter *pc;
+    StatsCounter *pc;  /* 指向所有线程共用部分 */
 
     /* local counter id of the above counter */
-    uint16_t id;
+    uint16_t id;       /* StatsPrivateThreadContext->head[]的索引 */
 
     /* total value of the adds/increments, or exact value in case of 'set' */
-    uint64_t value;
+    uint64_t value;    /* 计数值 */
 
     /* no of times the local counter has been updated */
-    uint64_t updates;
+    uint64_t updates;  /* 本计数被更新的次数 */
 } StatsLocalCounter;
 
 /**
@@ -95,13 +95,13 @@ typedef struct StatsLocalCounter_ {
  */
 typedef struct StatsPrivateThreadContext_ {
     /* points to the array holding local counters */
-    StatsLocalCounter *head;
+    StatsLocalCounter *head;  /* 数组, 索引为 StatsLocalCounter->id */
 
     /* size of head array in elements */
     uint32_t size;
 
     int initialized;
-} StatsPrivateThreadContext;
+} StatsPrivateThreadContext;  /* 线程私有的计数结构，为高性能考虑 */
 
 /* the initialization functions */
 void StatsInit(void);
