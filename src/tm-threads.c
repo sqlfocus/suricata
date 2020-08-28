@@ -125,7 +125,7 @@ TmEcode TmThreadsSlotVarRun(ThreadVars *tv, Packet *p, TmSlot *slot)
         }
 
         /* handle new packets */
-        while (tv->decode_pq.top != NULL) {
+        while (tv->decode_pq.top != NULL) {      /* 处理过程中产生的报文，如碎片重组 */
             Packet *extra_p = PacketDequeueNoLock(&tv->decode_pq);
             if (unlikely(extra_p == NULL))
                 continue;

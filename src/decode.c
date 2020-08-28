@@ -353,19 +353,19 @@ Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, u
 {
     SCEnter();
 
-    /* get us a packet */
+    /* 分配新报文, get us a packet */
     Packet *p = PacketGetFromQueueOrAlloc();
     if (unlikely(p == NULL)) {
         SCReturnPtr(NULL, "Packet");
     }
 
-    /* set the root ptr to the lowest layer */
+    /* 关联父报文, set the root ptr to the lowest layer */
     if (parent->root != NULL)
         p->root = parent->root;
     else
         p->root = parent;
 
-    /* copy packet and set lenght, proto */
+    /* 利用父报文初始化某些变量, copy packet and set lenght, proto */
     if (pkt && len) {
         PacketCopyData(p, pkt, len);
     }
@@ -375,7 +375,7 @@ Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, u
     p->datalink = DLT_RAW;
     p->tenant_id = parent->tenant_id;
     /* tell new packet it's part of a tunnel */
-    SET_TUNNEL_PKT(p);
+    SET_TUNNEL_PKT(p);       /* 也设置了 PKT_TUNNEL 标志 */
     p->vlan_id[0] = parent->vlan_id[0];
     p->vlan_id[1] = parent->vlan_id[1];
     p->vlan_idx = parent->vlan_idx;
@@ -387,7 +387,7 @@ Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, u
 /**
  *  \brief inform defrag "parent" that a pseudo packet is
  *         now associated to it.
- */
+ *//* 触发分片重组的报文，打 PKT_TUNNEL 标签 */
 void PacketDefragPktSetupParent(Packet *parent)
 {
     /* tell parent packet it's part of a tunnel */

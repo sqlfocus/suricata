@@ -532,11 +532,11 @@ int DecodeIPV4(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
     /* IP碎片重组；If a fragment, pass off for re-assembly. */
     if (unlikely(IPV4_GET_IPOFFSET(p) > 0 || IPV4_GET_MF(p) == 1)) {
         Packet *rp = Defrag(tv, dtv, p);
-        if (rp != NULL) {
+        if (rp != NULL) {     /* 重组成功的报文入队 */
             PacketEnqueueNoLock(&tv->decode_pq, rp);
         }
         p->flags |= PKT_IS_FRAGMENT;
-        return TM_ECODE_OK;
+        return TM_ECODE_OK;   /* 当前报文不再处理, 直接返回 */
     }
 
     /* do hdr test, process hdr rules */

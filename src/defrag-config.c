@@ -30,9 +30,9 @@
 #include "util-misc.h"
 #include "defrag-config.h"
 
-static SCRadixTree *defrag_tree = NULL;   /* IP碎片重组配置信息树 */
+static SCRadixTree *defrag_tree = NULL;   /* 特定IP范围的重组超时 */
 
-static int default_timeout = 0;
+static int default_timeout = 0;           /* 默认碎片重组超时 */
 
 static void DefragPolicyFreeUserData(void *data)
 {
@@ -41,7 +41,7 @@ static void DefragPolicyFreeUserData(void *data)
 
     return;
 }
-
+/* 特定IP范围（掩码形式的元素），设置其重组超时 */
 static void DefragPolicyAddHostInfo(char *host_ip_range, uint64_t timeout)
 {
     uint64_t *user_data = NULL;
@@ -51,7 +51,7 @@ static void DefragPolicyAddHostInfo(char *host_ip_range, uint64_t timeout)
         exit(EXIT_FAILURE);
     }
 
-    *user_data = timeout;
+    *user_data = timeout;        /* radix用户数据为重组超时 */
 
     if (strchr(host_ip_range, ':') != NULL) {
         SCLogDebug("adding ipv6 host %s", host_ip_range);
@@ -59,7 +59,7 @@ static void DefragPolicyAddHostInfo(char *host_ip_range, uint64_t timeout)
             SCLogWarning(SC_ERR_INVALID_VALUE,
                         "failed to add ipv6 host %s", host_ip_range);
         }
-    } else {
+    } else {                     /* "192.168.1.0/24"加入defrag_tree */
         SCLogDebug("adding ipv4 host %s", host_ip_range);
         if (SCRadixAddKeyIPV4String(host_ip_range, defrag_tree, (void *)user_data) == NULL) {
             SCLogWarning(SC_ERR_INVALID_VALUE,
@@ -102,21 +102,21 @@ int DefragPolicyGetHostTimeout(Packet *p)
 
     return timeout;
 }
-
+/* 解析defrag.host-config的下一级节点的配置信息 */
 static void DefragParseParameters(ConfNode *n)
 {
     ConfNode *si;
     uint64_t timeout = 0;
-
+    /* 定制特定IP的特定超时 */
     TAILQ_FOREACH(si, &n->head, next) {
-        if (strcasecmp("timeout", si->name) == 0) {
+        if (strcasecmp("timeout", si->name) == 0) {  /* 超时 */
             SCLogDebug("timeout value  %s", si->val);
             if (ParseSizeStringU64(si->val, &timeout) < 0) {
                 SCLogError(SC_ERR_SIZE_PARSE, "Error parsing timeout "
                         "from conf file");
             }
         }
-        if (strcasecmp("address", si->name) == 0) {
+        if (strcasecmp("address", si->name) == 0) {  /* 地址 */
             ConfNode *pval;
             TAILQ_FOREACH(pval, &si->head, next) {
                 DefragPolicyAddHostInfo(pval->val, timeout);
@@ -130,18 +130,18 @@ void DefragSetDefaultTimeout(intmax_t timeout)
     default_timeout = timeout;
     SCLogDebug("default timeout %d", default_timeout);
 }
-
+/* 从配置文件读取特定IP段的碎片重组超时 */
 void DefragPolicyLoadFromConfig(void)
 {
     SCEnter();
-
+    /* 创建radix树 */
     defrag_tree = SCRadixCreateRadixTree(DefragPolicyFreeUserData, NULL);
     if (defrag_tree == NULL) {
         SCLogError(SC_ERR_MEM_ALLOC,
             "Can't alloc memory for the defrag config tree.");
         exit(EXIT_FAILURE);
     }
-
+    /* 读取 defrag.host-config 配置 */
     ConfNode *server_config = ConfGetNode("defrag.host-config");
     if (server_config == NULL) {
         SCLogDebug("failed to read host config");
@@ -150,9 +150,9 @@ void DefragPolicyLoadFromConfig(void)
 
     SCLogDebug("configuring host config %p", server_config);
     ConfNode *sc;
-
+    /* 读取配置文件，初始化 defrag_tree */
     TAILQ_FOREACH(sc, &server_config->head, next) {
-        ConfNode *p = NULL;  /* 读取配置文件，初始化 defrag_tree */
+        ConfNode *p = NULL;
 
         TAILQ_FOREACH(p, &sc->head, next) {
             SCLogDebug("parsing configuration for %s", p->name);

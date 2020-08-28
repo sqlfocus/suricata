@@ -26,15 +26,15 @@
 #include "util-hash-lookup3.h"
 
 /** defrag tracker hash table */
-DefragTrackerHashRow *defragtracker_hash;
-DefragConfig defrag_config;
+DefragTrackerHashRow *defragtracker_hash;  /* 碎片流hash表，数据流程快速查找 */
+DefragConfig defrag_config;                /* 碎片流hash表配置 */
 SC_ATOMIC_DECLARE(uint64_t,defrag_memuse);
 SC_ATOMIC_DECLARE(unsigned int,defragtracker_counter);
-SC_ATOMIC_DECLARE(unsigned int,defragtracker_prune_idx);
+SC_ATOMIC_DECLARE(unsigned int,defragtracker_prune_idx);  /* 用于触发式的释放碎片流，记录hash表遍历位置 */
 
 static DefragTracker *DefragTrackerGetUsedDefragTracker(void);
 
-/** queue with spare tracker */
+/** queue with spare tracker *//* 碎片流元素空闲链表, 和 defragtracker_hash 互动 */
 static DefragTrackerQueue defragtracker_spare_q;
 
 /**
@@ -143,7 +143,7 @@ static void DefragTrackerInit(DefragTracker *dt, Packet *p)
     dt->host_timeout = DefragPolicyGetHostTimeout(p);
     dt->remove = 0;                    /* 考虑特定拼装超时延迟 */
     dt->seen_last = 0;
-
+    /* 增加碎片流引用计数，免得被回收释放 */
     (void) DefragTrackerIncrUsecnt(dt);
 }
 
@@ -163,11 +163,11 @@ void DefragTrackerClearMemory(DefragTracker *dt)
 #define DEFRAG_DEFAULT_PREALLOC 1000
 
 /** \brief initialize the configuration
- *  \warning Not thread safe */
+ *  \warning Not thread safe *//* 碎片流跟踪环境初始化 */
 void DefragInitConfig(char quiet)
 {
     SCLogDebug("initializing defrag engine...");
-
+    /* 碎片流hash表配置初始化 */
     memset(&defrag_config,  0, sizeof(defrag_config));
     //SC_ATOMIC_INIT(flow_flags);
     SC_ATOMIC_INIT(defragtracker_counter);
@@ -176,14 +176,14 @@ void DefragInitConfig(char quiet)
     SC_ATOMIC_INIT(defrag_config.memcap);
     DefragTrackerQueueInit(&defragtracker_spare_q);
 
-    /* set defaults */
+    /* set defaults */            /* 默认值 */
     defrag_config.hash_rand   = (uint32_t)RandomGet();
     defrag_config.hash_size   = DEFRAG_DEFAULT_HASHSIZE;
     defrag_config.prealloc    = DEFRAG_DEFAULT_PREALLOC;
     SC_ATOMIC_SET(defrag_config.memcap, DEFRAG_DEFAULT_MEMCAP);
 
     /* Check if we have memcap and hash_size defined at config */
-    const char *conf_val;
+    const char *conf_val;         /* 读取配置信息 */
     uint32_t configval = 0;
 
     uint64_t defrag_memcap;
@@ -223,7 +223,7 @@ void DefragInitConfig(char quiet)
                "%"PRIu32", prealloc: %"PRIu32, SC_ATOMIC_GET(defrag_config.memcap),
                defrag_config.hash_size, defrag_config.prealloc);
 
-    /* alloc hash memory */
+    /* 初始化hash数组, defragtracker_hash, alloc hash memory */
     uint64_t hash_size = defrag_config.hash_size * sizeof(DefragTrackerHashRow);
     if (!(DEFRAG_CHECK_MEMCAP(hash_size))) {
         SCLogError(SC_ERR_DEFRAG_INIT, "allocating defrag hash failed: "
@@ -253,7 +253,7 @@ void DefragInitConfig(char quiet)
                   SC_ATOMIC_GET(defrag_memuse), defrag_config.hash_size,
                   (uintmax_t)sizeof(DefragTrackerHashRow));
     }
-
+    /* 预分配碎片流hash表元素, 放入队列 defragtracker_spare_q */
     if ((ConfGet("defrag.prealloc", &conf_val)) == 1)
     {
         if (ConfValIsTrue(conf_val)) {
@@ -475,8 +475,8 @@ static DefragTracker *DefragTrackerGetNew(Packet *p)
     DefragTracker *dt = NULL;
 
     /* get a tracker from the spare queue */
-    dt = DefragTrackerDequeue(&defragtracker_spare_q);  /* 从缓存池拿 */
-    if (dt == NULL) {
+    dt = DefragTrackerDequeue(&defragtracker_spare_q);
+    if (dt == NULL) {         /* CASE: 从预分配队列获取 */
         /* If we reached the max memcap, we get a used tracker */
         if (!(DEFRAG_CHECK_MEMCAP(sizeof(DefragTracker)))) {
             /* declare state of emergency */
@@ -488,7 +488,7 @@ static DefragTracker *DefragTrackerGetNew(Packet *p)
                  * we check a 1000 times a second. */
             //    FlowWakeupFlowManagerThread();
             //}
-
+                              /* CASE: 内存超过预期, 触发式回收 Frag, DefragTracker */
             dt = DefragTrackerGetUsedDefragTracker();
             if (dt == NULL) {
                 return NULL;
@@ -498,7 +498,7 @@ static DefragTracker *DefragTrackerGetNew(Packet *p)
         } else {
             /* now see if we can alloc a new tracker */
             dt = DefragTrackerAlloc();
-            if (dt == NULL) {
+            if (dt == NULL) { /* CASE: 内存未超预期，动态分配 */
                 return NULL;
             }
 
@@ -522,19 +522,19 @@ static DefragTracker *DefragTrackerGetNew(Packet *p)
  * the tracker we need. If it isn't, walk the list until the right tracker is found.
  *
  * returns a *LOCKED* tracker or NULL
- */
+ *//* 查找碎片流hash表 */
 DefragTracker *DefragGetTrackerFromHash (Packet *p)
 {
     DefragTracker *dt = NULL;
 
     /* get the key to our bucket */
     uint32_t key = DefragHashGetKey(p);   /* 获取五元组哈希值 */
-    /* get our hash bucket and lock it */ /* 从碎片哈希表获取桶索引 */
+    /* get our hash bucket and lock it */ /* 从碎片流哈希表获取桶索引 */
     DefragTrackerHashRow *hb = &defragtracker_hash[key];
     DRLOCK_LOCK(hb);
 
     /* see if the bucket already has a tracker */
-    if (hb->head == NULL) {               /* 如果桶空，则创建新元素 */
+    if (hb->head == NULL) {               /* 如果桶空，则创建新碎片流 */
         dt = DefragTrackerGetNew(p);
         if (dt == NULL) {
             DRLOCK_UNLOCK(hb);
@@ -563,7 +563,7 @@ DefragTracker *DefragGetTrackerFromHash (Packet *p)
             pdt = dt;
             dt = dt->hnext;
 
-            if (dt == NULL) {
+            if (dt == NULL) {             /* CASE: 未找到匹配 */
                 dt = pdt->hnext = DefragTrackerGetNew(p);
                 if (dt == NULL) {
                     DRLOCK_UNLOCK(hb);
@@ -581,11 +581,11 @@ DefragTracker *DefragGetTrackerFromHash (Packet *p)
                 DRLOCK_UNLOCK(hb);
                 return dt;
             }
-
+                                          /* CASE: 找到匹配 */
             if (DefragTrackerCompare(dt, p) != 0) {
                 /* we found our tracker, lets put it on top of the
                  * hash list -- this rewards active trackers */
-                if (dt->hnext) {
+                if (dt->hnext) {          /* 移动到链表头，相当于hit激活 */
                     dt->hnext->hprev = dt->hprev;
                 }
                 if (dt->hprev) {
@@ -701,7 +701,7 @@ static DefragTracker *DefragTrackerGetUsedDefragTracker(void)
     uint32_t idx = SC_ATOMIC_GET(defragtracker_prune_idx) % defrag_config.hash_size;
     uint32_t cnt = defrag_config.hash_size;
 
-    while (cnt--) {
+    while (cnt--) {                     /* 顺次遍历的方式, defragtracker_prune_idx 记录上次遍历点 */
         if (++idx >= defrag_config.hash_size)
             idx = 0;
 
@@ -724,7 +724,7 @@ static DefragTracker *DefragTrackerGetUsedDefragTracker(void)
         /** never prune a tracker that is used by a packets
          *  we are currently processing in one of the threads */
         if (SC_ATOMIC_GET(dt->use_cnt) > 0) {
-            DRLOCK_UNLOCK(hb);
+            DRLOCK_UNLOCK(hb);          /* 通过碎片流的引用计数决定是否空闲 */
             SCMutexUnlock(&dt->lock);
             continue;
         }
@@ -743,10 +743,10 @@ static DefragTracker *DefragTrackerGetUsedDefragTracker(void)
         dt->hprev = NULL;
         DRLOCK_UNLOCK(hb);
 
-        DefragTrackerClearMemory(dt);
+        DefragTrackerClearMemory(dt);   /* 释放空闲的 Frag 到 defrag_context->frag_pool */
 
         SCMutexUnlock(&dt->lock);
-
+                                        /* 更新回收起始位置 */
         (void) SC_ATOMIC_ADD(defragtracker_prune_idx, (defrag_config.hash_size - cnt));
         return dt;
     }

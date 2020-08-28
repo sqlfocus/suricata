@@ -97,7 +97,7 @@ enum defrag_policies {
 static int default_policy = DEFRAG_POLICY_BSD;
 
 /** The global DefragContext so all threads operate from the same
- * context. */
+ * context. *//* 碎片描述环境，包括碎片缓存池、超时时限等 */
 static DefragContext *defrag_context;
 
 RB_GENERATE(IP_FRAGMENTS, Frag_, rb, DefragRbFragCompare);
@@ -170,7 +170,7 @@ DefragTrackerFreeFrags(DefragTracker *tracker)
  *
  * \retval On success a return an initialized DefragContext, otherwise
  *     NULL will be returned.
- */
+ *//* 创建重组环境 */
 static DefragContext *
 DefragContextNew(void)
 {
@@ -180,13 +180,13 @@ DefragContextNew(void)
     if (unlikely(dc == NULL))
         return NULL;
 
-    /* Initialize the pool of trackers. */
+    /* 最多跟踪的碎片重组的数量， Initialize the pool of trackers. */
     intmax_t tracker_pool_size;
     if (!ConfGetInt("defrag.trackers", &tracker_pool_size) || tracker_pool_size == 0) {
         tracker_pool_size = DEFAULT_DEFRAG_HASH_SIZE;
     }
 
-    /* Initialize the pool of frags. */
+    /* 最多跟踪的碎片报文数，Initialize the pool of frags. */
     intmax_t frag_pool_size;
     if (!ConfGetInt("defrag.max-frags", &frag_pool_size) || frag_pool_size == 0) {
         frag_pool_size = DEFAULT_DEFRAG_POOL_SIZE;
@@ -195,18 +195,18 @@ DefragContextNew(void)
     dc->frag_pool = PoolInit(frag_pool_size, frag_pool_prealloc,
         sizeof(Frag),
         NULL, DefragFragInit, dc, NULL, NULL);
-    if (dc->frag_pool == NULL) {
+    if (dc->frag_pool == NULL) {       /* 初始化碎片缓存池 */
         SCLogError(SC_ERR_MEM_ALLOC,
             "Defrag: Failed to initialize fragment pool.");
         exit(EXIT_FAILURE);
     }
     if (SCMutexInit(&dc->frag_pool_lock, NULL) != 0) {
-        SCLogError(SC_ERR_MUTEX,
+        SCLogError(SC_ERR_MUTEX,       /* 碎片池多线程共享 */
             "Defrag: Failed to initialize frag pool mutex.");
         exit(EXIT_FAILURE);
     }
 
-    /* Set the default timeout. */
+    /* 读取碎片重组默认超时时限, Set the default timeout. */
     intmax_t timeout;
     if (!ConfGetInt("defrag.timeout", &timeout)) {
         dc->timeout = TIMEOUT_DEFAULT;
@@ -249,18 +249,18 @@ DefragContextDestroy(DefragContext *dc)
  * Attempt to re-assemble a packet.
  *
  * \param tracker The defragmentation tracker to reassemble from.
- */
-static Packet *
+ *//* 已看到最后一分片，尝试报文重组; <TK!!!>如果最后分片先到 */
+static Packet *      /* 后续每个分片都会触发此函数 */
 Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
 {
     Packet *rp = NULL;
 
-    /* Should not be here unless we have seen the last fragment. */
+    /* CHECK: 必须看到最后分片, Should not be here unless we have seen the last fragment. */
     if (!tracker->seen_last) {
         return NULL;
     }
 
-    /* Check that we have the first fragment and its of a valid size. */
+    /* CHECK: 是否可以重组的简单检测, Check that we have the first fragment and its of a valid size. */
     Frag *first = RB_MIN(IP_FRAGMENTS, &tracker->fragment_tree);
     if (first == NULL) {
         goto done;
@@ -272,7 +272,7 @@ Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
         goto error_remove_tracker;
     }
 
-    /* Check that we have all the data. Relies on the fact that
+    /* CHECK: 查看数据是否已集齐, Check that we have all the data. Relies on the fact that
      * fragments are inserted if frag_offset order. */
     Frag *frag = NULL;
     size_t len = 0;
@@ -286,16 +286,16 @@ Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
             len += frag->data_len;
         }
     }
-
+    /* 重组 */
     /* Allocate a Packet for the reassembled packet.  On failure we
      * SCFree all the resources held by this tracker. */
     rp = PacketDefragPktSetup(p, NULL, 0, IPV4_GET_IPPROTO(p));
-    if (rp == NULL) {
+    if (rp == NULL) {                   /* 分配新报文 */
         SCLogError(SC_ERR_MEM_ALLOC, "Failed to allocate packet for "
                    "fragmentation re-assembly, dumping fragments.");
         goto error_remove_tracker;
     }
-    PKT_SET_SRC(rp, PKT_SRC_DEFRAG);
+    PKT_SET_SRC(rp, PKT_SRC_DEFRAG);    /* 设置来源, 报文重组 */
     rp->flags |= PKT_REBUILT_FRAGMENT;
     rp->recursion_level = p->recursion_level;
 
@@ -303,7 +303,7 @@ Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
     int fragmentable_len = 0;
     int hlen = 0;
     int ip_hdr_offset = 0;
-
+                                        /* 遍历红黑树，拷贝内存 */
     RB_FOREACH(frag, IP_FRAGMENTS, &tracker->fragment_tree) {
         SCLogDebug("frag %p, data_len %u, offset %u, pcap_cnt %"PRIu64,
                 frag, frag->data_len, frag->offset, frag->pcap_cnt);
@@ -347,7 +347,7 @@ Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
             break;
         }
     }
-
+    /* 重新构造校验和等 */
     SCLogDebug("ip_hdr_offset %u, hlen %u, fragmentable_len %u",
             ip_hdr_offset, hlen, fragmentable_len);
 
@@ -358,7 +358,7 @@ Defrag4Reassemble(ThreadVars *tv, DefragTracker *tracker, Packet *p)
     rp->ip4h->ip_csum = FixChecksum(rp->ip4h->ip_csum,
         old, rp->ip4h->ip_len + rp->ip4h->ip_off);
     SET_PKT_LEN(rp, ip_hdr_offset + hlen + fragmentable_len);
-
+    /* 设置碎片流释放标志，释放碎片结构 */
     tracker->remove = 1;
     DefragTrackerFreeFrags(tracker);
 done:
@@ -530,7 +530,7 @@ int DefragRbFragCompare(struct Frag_ *a, struct Frag_ *b) {
  * Insert a new IPv4/IPv6 fragment into a tracker.
  *
  * \todo Allocate packet buffers from a pool.
- */
+ *//* 碎片重组流程 */
 static Packet *
 DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, Packet *p)
 {
@@ -571,7 +571,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
 #ifdef DEBUG
     uint64_t pcap_cnt = p->pcap_cnt;
 #endif
-
+    /* 初始化关键信息，如数据偏移等 */
     if (tracker->af == AF_INET) {
         more_frags = IPV4_GET_MF(p);
         frag_offset = IPV4_GET_IPOFFSET(p) << 3;
@@ -629,29 +629,29 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         return NULL;
     }
 
-    /* Update timeout. */
+    /* 每次新分片到达，更新其超时时间, Update timeout. */
     tracker->timeout.tv_sec = p->ts.tv_sec + tracker->host_timeout;
     tracker->timeout.tv_usec = p->ts.tv_usec;
 
     Frag *prev = NULL, *next = NULL;
     int overlap = 0;
     ltrim = 0;
-
+    /* 检索碎片红黑树，计算插入位置（去重叠后） */
     if (!RB_EMPTY(&tracker->fragment_tree)) {
-        Frag key = {
+        Frag key = {         /* Frag->offset 作为key */
             .offset = frag_offset - 1,
         };
         next = RB_NFIND(IP_FRAGMENTS, &tracker->fragment_tree, &key);
-        if (next == NULL) {
+        if (next == NULL) {  /* 检索红黑树，找到遍历点 */
             prev = RB_MIN(IP_FRAGMENTS, &tracker->fragment_tree);
-            next = IP_FRAGMENTS_RB_NEXT(prev);
+            next = IP_FRAGMENTS_RB_NEXT(prev);  /* 无匹配偏移, 从头遍历 */
         } else {
-            prev = IP_FRAGMENTS_RB_PREV(next);
+            prev = IP_FRAGMENTS_RB_PREV(next);  /* 匹配, 从前一个遍历 */
             if (prev == NULL) {
                 prev = next;
                 next = IP_FRAGMENTS_RB_NEXT(prev);
             }
-        }
+        }                    /* 根据策略查看数据重叠，计算需要保存的数据 */
         while (prev != NULL) {
             if (prev->skip) {
                 goto next;
@@ -800,19 +800,19 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 break;
             }
 
-        next:
+        next:                /* 遍历红黑树的下一个 */
             prev = next;
             if (next != NULL) {
                 next = IP_FRAGMENTS_RB_NEXT(next);
             }
             continue;
 
-        insert:
+        insert:              /* 插入 */
             /* If existing fragment has been trimmed up completely
              * (complete overlap), remove it now instead of holding
              * onto it. */
-            if (prev->skip || prev->ltrim >= prev->data_len) {
-                RB_REMOVE(IP_FRAGMENTS, &tracker->fragment_tree, prev);
+            if (prev->skip || prev->ltrim >= prev->data_len) { /* 前一分片被完全替代, 从红黑树删除 */
+                RB_REMOVE(IP_FRAGMENTS, &tracker->fragment_tree, prev); /* 并释放回碎片缓存池 */
                 DefragFragReset(prev);
                 SCMutexLock(&defrag_context->frag_pool_lock);
                 PoolReturn(defrag_context->frag_pool, prev);
@@ -828,7 +828,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         goto done;
     }
 
-    /* Allocate fragment and insert. */
+    /* 分配Frag, 存储分片, Allocate fragment and insert. */
     SCMutexLock(&defrag_context->frag_pool_lock);
     Frag *new = PoolGet(defrag_context->frag_pool);
     SCMutexUnlock(&defrag_context->frag_pool_lock);
@@ -840,7 +840,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         }
         goto done;
     }
-    new->pkt = SCMalloc(GET_PKT_LEN(p));
+    new->pkt = SCMalloc(GET_PKT_LEN(p));  /* <TK!!!>有一次内存分配，存储原报文的数据部分 */
     if (new->pkt == NULL) {
         SCMutexLock(&defrag_context->frag_pool_lock);
         PoolReturn(defrag_context->frag_pool, new);
@@ -853,7 +853,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         goto done;
     }
     memcpy(new->pkt, GET_PKT_DATA(p) + ltrim, GET_PKT_LEN(p) - ltrim);
-    new->len = GET_PKT_LEN(p) - ltrim;
+    new->len = GET_PKT_LEN(p) - ltrim;    /* 仅拷贝需要的部分 */
     /* in case of unfragmentable exthdrs, update the 'next hdr' field
      * in the raw buffer so the reassembled packet will point to the
      * correct next header after stripping the frag header */
@@ -865,7 +865,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
         }
     }
 
-    new->hlen = hlen;
+    new->hlen = hlen;                     /* 初始化 Frag 结构 */
     new->offset = frag_offset + ltrim;
     new->data_offset = data_offset;
     new->data_len = data_len - ltrim;
@@ -875,14 +875,14 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
 #ifdef DEBUG
     new->pcap_cnt = pcap_cnt;
 #endif
-
+    /* 插入红黑树 */
     IP_FRAGMENTS_RB_INSERT(&tracker->fragment_tree, new);
 
     if (!more_frags) {
         tracker->seen_last = 1;
     }
-
-    if (tracker->seen_last) { /* 已经拿到最后的分片，则重组整个报文 */
+    /* 已看到最后一分片，尝试重组报文 */
+    if (tracker->seen_last) {
         if (tracker->af == AF_INET) {
             r = Defrag4Reassemble(tv, tracker, p);           /* 重组报文 */
             if (r != NULL && tv != NULL && dtv != NULL) {
@@ -895,7 +895,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                     TmqhOutputPacketpool(tv, r);
                     r = NULL;
                 } else {
-                    PacketDefragPktSetupParent(p);
+                    PacketDefragPktSetupParent(p);           /* 设置触发重组的报文, PKT_TUNNEL */
                 }
             }
         }
@@ -920,7 +920,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
 
 
 done:
-    if (overlap) {
+    if (overlap) {            /* 记录碎片重叠事件 */
         if (af == AF_INET) {
             ENGINE_SET_EVENT(p, IPV4_FRAG_OVERLAP);
         }
@@ -1004,7 +1004,7 @@ DefragGetOsPolicy(Packet *p)
  *  \retval NULL or a *LOCKED* tracker */
 static DefragTracker *
 DefragGetTracker(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
-{
+{   /* 查找碎片流hash表 */
     return DefragGetTrackerFromHash(p);
 }
 
@@ -1045,7 +1045,7 @@ Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
     }
 
     if (tv != NULL && dtv != NULL) {
-        if (af == AF_INET) {
+        if (af == AF_INET) {  /* 增加碎片计数 */
             StatsIncr(tv, dtv->counter_defrag_ipv4_fragments);
         }
         else if (af == AF_INET6) {
@@ -1055,7 +1055,7 @@ Defrag(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p)
 
     /* return a locked tracker or NULL */
     tracker = DefragGetTracker(tv, dtv, p);
-    if (tracker == NULL)      /* 查找/新建碎片跟踪结构 */
+    if (tracker == NULL)      /* 查找/新建碎片流 */
         return NULL;
                               /* 碎片重组 */
     Packet *rp = DefragInsertFrag(tv, dtv, tracker, p);
@@ -1070,21 +1070,21 @@ DefragInit(void)
     intmax_t tracker_pool_size;
     if (!ConfGetInt("defrag.trackers", &tracker_pool_size)) {
         tracker_pool_size = DEFAULT_DEFRAG_HASH_SIZE;
-    }
+    }                                     /* 初始化碎片流的数量上限 */
 
     /* Load the defrag-per-host lookup. */
-    DefragPolicyLoadFromConfig();         /* 解析配置 */
+    DefragPolicyLoadFromConfig();         /* 解析特定IP的重组超时, 放入 defrag_tree */
 
     /* Allocate the DefragContext. */
-    defrag_context = DefragContextNew();  /* 初始化重组环境 */
+    defrag_context = DefragContextNew();  /* 初始化碎片池, defrag_context */
     if (defrag_context == NULL) {
         SCLogError(SC_ERR_MEM_ALLOC,
             "Failed to allocate memory for the Defrag module.");
         exit(EXIT_FAILURE);
     }
-
+                                          /* 设定默认重组超时 */
     DefragSetDefaultTimeout(defrag_context->timeout);
-    DefragInitConfig(FALSE);              /* 配置初始化 */
+    DefragInitConfig(FALSE);              /* 初始化碎片流hash表, defragtracker_hash */
 }
 
 void DefragDestroy(void)

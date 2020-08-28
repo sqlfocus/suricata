@@ -8,7 +8,7 @@
   --ParseCommandLine()
     --ParseCommandLinePcapLive()   解析命令行-i，赋值运行模式 RUNMODE_PCAP_DEV
   --LoadYamlConfig()
-  --SCLogLoadConfig()              初始化日志输出
+  --SCLogLoadConfig()              初始化调试输出
     --SCLogInitLogModule()
   --PostConfLoadedSetup()
     --MpmTableSetup()              注册多模匹配算法, mpm_table[MPM_HS]
@@ -52,13 +52,13 @@ SCInstance suricata        全局环境数据
 RunModes runmodes[]        引擎支持的运行模式
 
     
-* 日志环境初始化
+* 调试输出初始化
 SCLogConfig *sc_log_config         日志配置信息结构
     
 --SuricataMain()
   --InitGlobal()               解析配置文件前，初始化日志输出为CONSOLE
     --SCLogInitLogModule()
-  --SCLogLoadConfig()          解析配置文件后，重新初始化日志
+  --SCLogLoadConfig()          解析配置文件后，重新初始化调试输出模块
     --ConfGetNode()                读取"logging.outputs"配置
     --SCLogInitLogModule()
     
@@ -384,6 +384,7 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
     --RegisterAllModules()
       --TmModuleLoggerRegister()
         --OutputRegisterLoggers()
+          --LogStatsLogRegister()       对应"stats"
           --JsonStatsLogRegister()      注册 统计输出方式, JsonStatsLogger(), 对应"stats-json"/"eve-log.stats"
       --TmModuleStatsLoggerRegister()   注册 TMM_STATSLOGGER 统计输出模块
     --PreRunInit()

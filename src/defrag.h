@@ -32,17 +32,17 @@
  * we ever need more than one.
  */
 typedef struct DefragContext_ {
-    Pool *frag_pool; /**< Pool of fragments. */
+    Pool *frag_pool;         /* 跟踪报文碎片的缓存池, Frag, *< Pool of fragments. */
     SCMutex frag_pool_lock;
 
-    time_t timeout; /**< Default timeout. */
+    time_t timeout;          /* 碎片重组链的超时时限, 默认60<TK!!!特定IP段 defrag_tree>,  *< Default timeout. */
 } DefragContext;
 
 /**
  * Storage for an individual fragment.
  */
 typedef struct Frag_ {
-    uint16_t offset;            /**< The offset of this fragment, already
+    uint16_t offset;            /* 分片偏移, 作为红黑树中的键 *< The offset of this fragment, already
                                  *   multiplied by 8. */
 
     uint16_t len;               /**< The length of this fragment. */
@@ -60,10 +60,10 @@ typedef struct Frag_ {
     uint16_t data_offset;       /**< Offset to the packet data. */
     uint16_t data_len;          /**< Length of data. */
 
-    uint16_t ltrim;             /**< Number of leading bytes to trim when
+    uint16_t ltrim;             /* 重组时，需要掠过的起始字节数, *< Number of leading bytes to trim when
                                  * re-assembling the packet. */
 
-    uint8_t *pkt;               /**< The actual packet. */
+    uint8_t *pkt;               /* 实际的数据, <TK!!!>此处存在Malloc() + 内存拷贝, *< The actual packet. */
 
 #ifdef DEBUG
     uint64_t pcap_cnt;          /**< pcap_cnt of original packet */
@@ -92,23 +92,23 @@ typedef struct DefragTracker_ {
 
     uint8_t proto; /**< IP protocol for this tracker. */
 
-    uint8_t policy; /**< Reassembly policy this tracker will use. */
+    uint8_t policy;      /* 重组策略偏好, DEFRAG_POLICY_BSD, *< Reassembly policy this tracker will use. */
 
     uint8_t af; /**< Address family for this tracker, AF_INET or
                  * AF_INET6. */
 
-    uint8_t seen_last; /**< Has this tracker seen the last fragment? */
+    uint8_t seen_last;   /* 是否已经看到最后一个分片，*< Has this tracker seen the last fragment? */
 
-    uint8_t remove; /**< remove */
+    uint8_t remove;      /* =1, 已完成碎片重组, 待释放 *< remove */
 
     Address src_addr; /**< Source address for this tracker. */
     Address dst_addr; /**< Destination address for this tracker. */
 
-    struct timeval timeout; /**< When this tracker will timeout. */
-    uint32_t host_timeout;  /**< Host timeout, statically assigned from the yaml */
+    struct timeval timeout; /* 每分片到来后，其等待新分片的超时时间, *< When this tracker will timeout. */
+    uint32_t host_timeout;  /* 超时时限, *< Host timeout, statically assigned from the yaml */
 
     /** use cnt, reference counter */
-    SC_ATOMIC_DECLARE(unsigned int, use_cnt);
+    SC_ATOMIC_DECLARE(unsigned int, use_cnt);  /* 引用计数，=0时可被回收 */
 
     struct IP_FRAGMENTS fragment_tree;
 
