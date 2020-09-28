@@ -176,7 +176,7 @@ static void BuildCpuset(const char *name, ConfNode *node, cpu_set_t *cpu)
 /**
  * \brief Extract cpu affinity configuration from current config file
  */
-
+/* 获取CPU亲昵配置, 初始化 thread_affinity[] */
 void AffinitySetupLoadFromConfig()
 {
 #if !defined __CYGWIN__ && !defined OS_WIN32 && !defined __OpenBSD__ && !defined sun
@@ -207,7 +207,7 @@ void AffinitySetupLoadFromConfig()
             setname = "worker-cpu-set";
 
         ThreadsAffinityType *taf = GetAffinityTypeFromName(setname);
-        ConfNode *node = NULL;
+        ConfNode *node = NULL;     /* 选择配置项 */
         ConfNode *nprio = NULL;
 
         if (taf == NULL) {
@@ -217,7 +217,7 @@ void AffinitySetupLoadFromConfig()
             SCLogConfig("Found affinity definition for \"%s\"", setname);
         }
 
-        CPU_ZERO(&taf->cpu_set);
+        CPU_ZERO(&taf->cpu_set);   /* 读取CPU配置 */
         node = ConfNodeLookupChild(affinity->head.tqh_first, "cpu");
         if (node == NULL) {
             SCLogInfo("unable to find 'cpu'");
@@ -229,7 +229,7 @@ void AffinitySetupLoadFromConfig()
         CPU_ZERO(&taf->medprio_cpu);
         CPU_ZERO(&taf->hiprio_cpu);
         nprio = ConfNodeLookupChild(affinity->head.tqh_first, "prio");
-        if (nprio != NULL) {
+        if (nprio != NULL) {       /* 读取CPU级别 */
             node = ConfNodeLookupChild(nprio, "low");
             if (node == NULL) {
                 SCLogDebug("unable to find 'low' prio using default value");
@@ -266,7 +266,7 @@ void AffinitySetupLoadFromConfig()
                         node->val, setname);
             }
         }
-
+                                   /* 读取CPU配置模式, 排他式/均衡式 */
         node = ConfNodeLookupChild(affinity->head.tqh_first, "mode");
         if (node != NULL) {
             if (!strcmp(node->val, "exclusive")) {
@@ -278,7 +278,7 @@ void AffinitySetupLoadFromConfig()
                 exit(EXIT_FAILURE);
             }
         }
-
+                                   /* 明确使用CPU数量 */
         node = ConfNodeLookupChild(affinity->head.tqh_first, "threads");
         if (node != NULL) {
             if (StringParseUint32(&taf->nb_threads, 10, 0, (const char *)node->val) < 0) {

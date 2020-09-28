@@ -274,11 +274,11 @@ void RunModeListRunmodes(void)
 }
 
 /**
- *//* 选择运行模式 */
+ *//* 选择运行模式，创建处理线程 */
 void RunModeDispatch(int runmode, const char *custom_mode)
 {
     char *local_custom_mode = NULL;
-
+    /* 读取配置文件, 获取运行模型的定制模式, 如autofp/workers等 */
     if (custom_mode == NULL) {
         const char *val = NULL;
         if (ConfGet("runmode", &val) != 1) {
@@ -287,7 +287,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
             custom_mode = val;
         }
     }
-
+    /* 命令行未指定、配置文件也未配置, 则使用默认模式 */
     if (custom_mode == NULL || strcmp(custom_mode, "auto") == 0) {
         switch (runmode) {
             case RUNMODE_PCAP_DEV:
@@ -350,7 +350,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
             custom_mode = local_custom_mode;
         }
     }
-
+    /* 从注册列表选择对运行模式的结构 */
     RunMode *mode = RunModeGetCustomMode(runmode, custom_mode);
     if (mode == NULL) {                      /* 获取运行模式配置, RUNMODE_PCAP_DEV */
         SCLogError(SC_ERR_RUNMODE, "The custom type \"%s\" doesn't exist "
@@ -371,7 +371,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
     }
 
     if (strcasecmp(active_runmode, "autofp") == 0) {
-        TmqhFlowPrintAutofpHandler();
+        TmqhFlowPrintAutofpHandler();        /* 打印autofp模式下, 分流策略, tmqh_table[TMQH_FLOW] */
     }
 
     mode->RunModeFunc();                 /* 模式初始化函数, RunModeIdsPcapAutoFp()/RunModeIdsPcapWorkers() */
@@ -380,7 +380,7 @@ void RunModeDispatch(int runmode, const char *custom_mode)
         SCFree(local_custom_mode);
 
     /* Check if the alloted queues have at least 1 reader and writer */
-    TmValidateQueueState();
+    TmValidateQueueState();              /* 检查线程间队列是否完备: 至少单写单读 */
 
     if (runmode != RUNMODE_UNIX_SOCKET) {
         /* spawn management threads */

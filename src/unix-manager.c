@@ -1053,7 +1053,7 @@ int UnixManagerInit(void)
         }
     }
 
-    /* Init Unix socket */
+    /* 注册支持的命令行, Init Unix socket */
     UnixManagerRegisterCommand("shutdown", UnixManagerShutdownCommand, NULL, 0);
     UnixManagerRegisterCommand("command-list", UnixManagerListCommand, &command, 0);
     UnixManagerRegisterCommand("help", UnixManagerListCommand, &command, 0);
@@ -1107,7 +1107,7 @@ static TmEcode UnixManagerThreadDeinit(ThreadVars *t, void *data)
     SCFree(data);
     return TM_ECODE_OK;
 }
-
+/* unix命令行 */
 static TmEcode UnixManager(ThreadVars *th_v, void *thread_data)
 {
     int ret;
@@ -1182,7 +1182,7 @@ void UnixManagerThreadSpawnNonRunmode(void)
     /* Spawn the unix socket manager thread */
     int unix_socket = ConfUnixSocketIsEnable();
     if (unix_socket == 1) {
-        if (UnixManagerInit() == 0) {
+        if (UnixManagerInit() == 0) {    /* 注册支持的命令行 */
             UnixManagerRegisterCommand("iface-stat", LiveDeviceIfaceStat, NULL,
                     UNIX_CMD_TAKE_ARGS);
             UnixManagerRegisterCommand("iface-list", LiveDeviceIfaceList, NULL, 0);

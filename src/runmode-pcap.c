@@ -68,7 +68,7 @@ static void PcapDerefConfig(void *conf)
         SCFree(pfp);
     }
 }
-
+/* 从.yml文件获取pcap配置 */
 static void *ParsePcapConfig(const char *iface)
 {
     const char *threadsstr = NULL;
@@ -123,7 +123,7 @@ static void *ParsePcapConfig(const char *iface)
         SCLogInfo("Unable to find pcap config using default value");
         return aconf;
     }
-                                         /* 获取“pcap:eth0”配置 */
+                                         /* 获取“pcap:xxx(如eth0)”配置 */
     if_root = ConfFindDeviceConfig(pcap_node, iface);
                                          /* 获取“pcap:default”配置 */
     if_default = ConfFindDeviceConfig(pcap_node, "default");
@@ -142,7 +142,7 @@ static void *ParsePcapConfig(const char *iface)
     }
 
     if (ConfGetChildValueWithDefault(if_root, if_default, "threads", &threadsstr) != 1) {
-        aconf->threads = 1;              /* 获取线程数，无则=1 */
+        aconf->threads = 1;              /* 获取接口监听线程数，无则=1 */
     } else {
         if (threadsstr != NULL) {
             if (StringParseInt32(&aconf->threads, 10, 0, (const char *)threadsstr) < 0) {
@@ -274,7 +274,7 @@ int RunModeIdsPcapSingle(void)
  *
  * \retval 0 If all goes well. (If any problem is detected the engine will
  *           exit()).
- */
+ *//* pcap autofp模型初始化 */
 int RunModeIdsPcapAutoFp(void)
 {
     int ret;
@@ -287,10 +287,10 @@ int RunModeIdsPcapAutoFp(void)
     (void) ConfGet("pcap.single-pcap-dev", &live_dev);
                                /* 建立运行所需要的线程，接口接收报文、解析线程，检测线程 */
     ret = RunModeSetLiveCaptureAutoFp(ParsePcapConfig,
-                              PcapConfigGeThreadsCount,
-                              "ReceivePcap",
-                              "DecodePcap", thread_name_autofp,
-                              live_dev);
+                                      PcapConfigGeThreadsCount,
+                                      "ReceivePcap",
+                                      "DecodePcap", thread_name_autofp/*RX*/,
+                                      live_dev);
     if (ret != 0) {
         SCLogError(SC_ERR_RUNMODE, "Runmode start failed");
         exit(EXIT_FAILURE);

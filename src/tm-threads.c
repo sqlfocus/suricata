@@ -271,8 +271,8 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
 
         /* if the flowworker module is the first, get the threads input queue */
         if (slot == (TmSlot *)tv->tm_slots && (slot->tm_id == TMM_FLOWWORKER)) {
-            tv->stream_pq = tv->inq->pq;    /* 流处理模块特殊处理 */
-            tv->tm_flowworker = slot;
+            tv->stream_pq = tv->inq->pq;    /* 首处理模块为"FlowWorker", 如pcap autofp的worker线程 */
+            tv->tm_flowworker = slot;       /* 指向接收队列 */
             SCLogDebug("pre-stream packetqueue %p (inq)", tv->stream_pq);
         /* setup a queue */
         } else if (slot->tm_id == TMM_FLOWWORKER) {
@@ -347,7 +347,7 @@ error:
     pthread_exit((void *) -1);
     return NULL;
 }
-
+/* pcap autofp业务处理线程入口 */
 static void *TmThreadsSlotVar(void *td)
 {
     ThreadVars *tv = (ThreadVars *)td;
@@ -421,20 +421,20 @@ static void *TmThreadsSlotVar(void *td)
         }
 
         /* input a packet */
-        p = tv->tmqh_in(tv);
+        p = tv->tmqh_in(tv);             /* 收包, TmqhInputFlow() */
 
         if (p != NULL) {
             /* run the thread module(s) */
             r = TmThreadsSlotVarRun(tv, p, s);
-            if (r == TM_ECODE_FAILED) {
+            if (r == TM_ECODE_FAILED) {  /* 调用报文处理链 */
                 TmqhOutputPacketpool(tv, p);
                 TmThreadsSetFlag(tv, THV_FAILED);
                 break;
             }
 
             /* output the packet */
-            tv->tmqh_out(tv, p);
-
+            tv->tmqh_out(tv, p);         /* 发包, 放入本线程的packet pool */
+                                         /* <TK!!!>由于PIPELINE, 此报文一定不为本线程分配, 由前置线程分配 */
             /* now handle the stream pq packets */
             TmThreadsHandleInjectedPackets(tv);
         }
@@ -986,10 +986,10 @@ ThreadVars *TmThreadCreate(const char *name, const char *inq_name, const char *i
 
             if (tmqh->OutHandlerCtxSetup != NULL) {
                 tv->outctx = tmqh->OutHandlerCtxSetup(outq_name);
-                if (tv->outctx == NULL)
+                if (tv->outctx == NULL) /* "flow"构建输出环境, TmqhOutputFlowSetupCtx() */
                     goto error;
                 tv->outq = NULL;
-            } else {
+            } else {                    /* 非"flow"构建输出队列 */
                 tmq = TmqGetQueueByName(outq_name);
                 if (tmq == NULL) {
                     tmq = TmqCreateQueue(outq_name);

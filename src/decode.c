@@ -438,8 +438,8 @@ void PacketBypassCallback(Packet *p)
     }
 #endif
 }
-
-/** \brief switch direction of a packet */
+/* suricata认为数据流方向 FLOW_PKT_TOSERVER 与 syn 方向相同；而不是严格 */
+/** \brief switch direction of a packet */ /* 意义上的服务器端 */
 void PacketSwap(Packet *p)
 {
     if (PKT_IS_TOSERVER(p)) {

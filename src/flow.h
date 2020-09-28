@@ -439,7 +439,7 @@ typedef struct Flow_
     uint32_t de_ctx_version;    /* 检测引擎版本号，以发现引擎重新加载 */
 
     /** Thread ID for the stream/detect portion of this flow */
-    FlowThreadId thread_id[2];  /* 对应流汇聚、检测的本地线程索引, ThreadVars->id */
+    FlowThreadId thread_id[2];  /* 处理流汇聚、检测的线程索引, ThreadVars->id; 同一条流必须在相同的线程上处理 */
 
     /** ttl tracking */
     uint8_t min_ttl_toserver;   /* 跟踪报文TTL */

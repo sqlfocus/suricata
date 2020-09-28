@@ -35,7 +35,7 @@
 Packet *TmqhInputSimple(ThreadVars *t);
 void TmqhOutputSimple(ThreadVars *t, Packet *p);
 void TmqhInputSimpleShutdownHandler(ThreadVars *);
-
+/* 加锁版本的单链表队列，实现简单，但估计锁竞争会导致效率低下 */
 void TmqhSimpleRegister (void)
 {
     tmqh_table[TMQH_SIMPLE].name = "simple";

@@ -879,7 +879,7 @@ void RegisterAllModules(void)
     TmModuleNapatechDecodeRegister();
 
     /* flow worker */
-    TmModuleFlowWorkerRegister();
+    TmModuleFlowWorkerRegister();       /* flow模块 */
     /* respond-reject */
     TmModuleRespondRejectRegister();
 
@@ -1338,7 +1338,7 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
             } else if (strcmp((long_opts[option_index]).name , "pcap") == 0) {
                 if (ParseCommandLinePcapLive(suri, optarg) != TM_ECODE_OK) {
                     return TM_ECODE_FAILED;     /* pcap模式时，指定待监听的网卡 */
-                }
+                }                               /* 合法: --pcap=eth0 或 --pcap, 参考 printUsage() */
             } else if(strcmp((long_opts[option_index]).name, "simulate-ips") == 0) {
                 SCLogInfo("Setting IPS mode");
                 EngineModeSetIPS();
@@ -1770,8 +1770,8 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
             suri->sig_file = optarg;
             suri->sig_file_exclusive = TRUE;
             break;
-        case 'u':
-#ifdef UNITTESTS
+        case 'u':    
+#ifdef UNITTESTS                      /* 单元测试 */
             if (suri->run_mode == RUNMODE_UNKNOWN) {
                 suri->run_mode = RUNMODE_UNITTEST;
             } else {
@@ -2465,7 +2465,7 @@ int PostConfLoadedSetup(SCInstance *suri)
             break;
     }
 
-    if (suri->runmode_custom_mode) {/* 更新运行模式，为命令行--runmode指定的模式 */
+    if (suri->runmode_custom_mode) {/* single|autofp|workers, 更新运行模式类型，由命令行--runmode指定 */
         ConfSet("runmode", suri->runmode_custom_mode);
     }
 
@@ -2546,7 +2546,7 @@ int PostConfLoadedSetup(SCInstance *suri)
 
     StorageFinalize();              /* 分配存储类型信息表 storage_map, 完成storage模块初始化 */
 
-    TmModuleRunInit();              /* 初始化各线程模块, call ->Init() */
+    TmModuleRunInit();              /* (全局)初始化各线程模块, call ->Init() */
 
     if (MayDaemonize(suri) != TM_ECODE_OK)
         SCReturnInt(TM_ECODE_FAILED);         /* 进程精灵化 */
@@ -2713,11 +2713,11 @@ int SuricataMain(int argc, char **argv)
 #endif /* OS_WIN32 */
 
     if (ParseCommandLine(argc, argv, &suricata) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);              /* 命令行解析，确定 SCInstance->run_mode */
+        exit(EXIT_FAILURE);              /* 命令行解析，确定 SCInstance->run_mode, 通过传递参数(--pcap)确定 */
     }
 
     if (FinalizeRunMode(&suricata, argv) != TM_ECODE_OK) {
-        exit(EXIT_FAILURE);              /* 检测运行模式是否可以daemon化 */
+        exit(EXIT_FAILURE);              /* 此时运行模式已经确定; 检测运行模式是否可以daemon化 */
     }
 
     switch (StartInternalRunMode(&suricata, argc, argv)) {
@@ -2782,7 +2782,7 @@ int SuricataMain(int argc, char **argv)
         goto out;
     }
 
-    SCSetStartTime(&suricata);                   /* 记录启动时间 */
+    SCSetStartTime(&suricata);                   /* 记录启动时间, 创建处理线程 */
     RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode);
     if (suricata.run_mode != RUNMODE_UNIX_SOCKET) { /* pcap入口函数 -> TmThreadsSlotPktAcqLoop() */
         UnixManagerThreadSpawnNonRunmode();      /* 选择运行模型，并初始化管理、统计线程 */

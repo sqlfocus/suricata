@@ -32,10 +32,10 @@ typedef struct TmqhFlowMode_ {
  *  \param size number of queues to output to
  *  \param queues array of queue id's this flow handler outputs to */
 typedef struct TmqhFlowCtx_ {
-    uint16_t size;
+    uint16_t size;         /* ->queues[]大小 */
     uint16_t last;
 
-    TmqhFlowMode *queues;
+    TmqhFlowMode *queues;  /* 记录输出队列 */
 } TmqhFlowCtx;
 
 void TmqhFlowRegister (void);

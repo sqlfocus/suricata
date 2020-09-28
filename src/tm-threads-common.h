@@ -68,7 +68,7 @@ typedef enum {
     TMM_BYPASSEDFLOWMANAGER,
     TMM_DETECTLOADER,
 
-    TMM_UNIXMANAGER,
+    TMM_UNIXMANAGER,    /* unix-socket命令行管理 */
 
     TMM_SIZE,
 } TmmId;

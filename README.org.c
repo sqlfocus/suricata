@@ -44,12 +44,16 @@
     --FlowManagerThreadSpawn()
     --FlowRecyclerThreadSpawn()    启动流管理/回收线程
     --StatsSpawnThreads()          启动统计线程
+  --UnixManagerThreadSpawnNonRunmode()
+    --UnixManagerInit()            启动命令行, TMM_UNIXMANAGER/UnixManager()
   --SuricataMainLoop()
     --DetectEngineReload()         主循环，处理SIGUSR2信号，重新加载规则引擎
 
 * 重要的全局变量
 SCInstance suricata        全局环境数据
 RunModes runmodes[]        引擎支持的运行模式
+Tmqh tmqh_table[]          支持的队列类型
+TmModule tmm_modules[]     支持的报文处理模块
 
     
 * 调试输出初始化
@@ -182,6 +186,28 @@ SCLogConfig *sc_log_config         日志配置信息结构
         --"FlowWorker"    -> TMM_FLOWWORKER
         --"RespondReject" -> TMM_RESPONDREJECT
       --TmThreadSpawn()            创建线程
+    
+对于autofp模式的pcap，采用pipeline形式; 由于报文在前置线程分配, 并且由
+尾端线程释放, 两者采用锁+信号量同步, 可能存在性能问题
+接口监听线程, RX#01-eth0
+    收包, 名"packetpool", 处理"packetpool"
+       ThreadVars->inq_id/tmqh_in = TMQH_PACKETPOOL/TmqhInputPacketpool()
+       ThreadVars->inq = NULL
+    发包, 名"pickup0", 处理"flow"
+       ThreadVars->outq_id/tmqh_out = TMQH_FLOW/TmqhOutputFlowHash()
+       ThreadVars->outq = "pickup0"
+    ->tm_func: "pktacqloop"/TmThreadsSlotPktAcqLoop()
+    ->tm_slots: "ReceivePcap" - "DecodePcap"
+    
+流处理线程, W#01-eth0
+    收包, 名"pickup0", 处理"flow"
+       ThreadVars->inq = "pickup0"
+       ThreadVars->inq_id/tmqh_in = TMQH_FLOW/TmqhInputFlow()
+    发包, 名"packetpool", 处理"packetpool"
+       ThreadVars->outq_id/tmqh_out = TMQH_PACKETPOOL/TmqhOutputPacketpool()
+       ThreadVars->outq = NULL
+    ->tm_func: "varslot"/TmThreadsSlotVar()
+    ->tm_slots: "FlowWorker" - "RespondReject"
 
 * RUNMODE_PCAP_DEV运行模式
 分析此模式下"workers"工作方式的运行代码
@@ -282,7 +308,7 @@ tcp协议上的应用层协议检测时，需要做数据重组
     --PreRunInit()
       --StreamTcpInitConfig()      TCP流重组初始化
         --StreamTcpReassembleInit()
-        --FlowSetProtoFreeFunc()     注册 flow_freefuncs[]
+        --FlowSetProtoFreeFunc()     注册 flow_freefuncs[], StreamTcpSessionClear()
 
     
 --TmThreadsSlotPktAcqLoop()        PCAP入口函数
@@ -466,5 +492,19 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
       --OutputStatsLogger->LogFunc()
       ==JsonStatsLogger()
 
-
+* 单元测试
+单元测试是整个suricata稳定性的重要一环
+编译时需引入 ~UNITTESTS~ 宏定义, 可通过 ~./configure --enable-unittests~ 引入
+#+BEGIN_EXAMPLE
+./suricata --list-unittests   #列举所有单元测试用例函数名
+./suricata -u                 #运行所有单元测试
+./suricata -U "ddos*" -u      #仅运行以“ddos”起始的用例函数
+#+END_EXAMPLE
     
+--SuricataMain()
+  --InitGlobal()
+    --RunModeRegisterRunModes()
+      --UtRunModeRegister()     注册 RUNMODE_UNITTEST
+  --ParseCommandLine()          解析命令行
+  --StartInternalRunMode()
+    --RunUnittests()            运行单元测试

@@ -27,11 +27,11 @@
 #include "threads.h"
 #include "tm-queues.h"
 #include "util-debug.h"
-
+/* autofp模式, 后置处理线程对应的接收队列 */
 static TAILQ_HEAD(TmqList_, Tmq_) tmq_list = TAILQ_HEAD_INITIALIZER(tmq_list);
 
 static uint16_t tmq_id = 0;
-
+/* 创建处理线程的接收队列 */
 Tmq *TmqCreateQueue(const char *name)
 {
     Tmq *q = SCCalloc(1, sizeof(*q));
@@ -45,7 +45,7 @@ Tmq *TmqCreateQueue(const char *name)
     q->id = tmq_id++;
     q->is_packet_pool = (strcmp(q->name, "packetpool") == 0);
     if (!q->is_packet_pool) {
-        q->pq = PacketQueueAlloc();
+        q->pq = PacketQueueAlloc();  /* 非报文池, 创建队列 */
         if (q->pq == NULL)
             FatalError(SC_ERR_MEM_ALLOC, "PacketQueueAlloc failed");
     }

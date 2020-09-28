@@ -89,7 +89,7 @@ SC_ATOMIC_DECLARE(unsigned int, flow_flags);
 
 FlowProtoTimeout flow_timeouts_normal[FLOW_PROTO_MAX];  /* 流超时时限 */
 FlowProtoTimeout flow_timeouts_emerg[FLOW_PROTO_MAX];
-FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];       /* 流清理函数 */
+FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];       /* 流清理函数, StreamTcpSessionClear() */
 
 /** spare/unused/prealloced flows live here */
 FlowQueue flow_spare_q;   /* 预分配的流表 */
@@ -768,7 +768,7 @@ void FlowInitFlowProto(void)
     flow_freefuncs[FLOW_PROTO_UDP].Freefunc = NULL;
     flow_freefuncs[FLOW_PROTO_ICMP].Freefunc = NULL;
 
-    /* Let's see if we have custom timeouts defined from config */
+    /* 读取“flow-timeouts”配置信息, Let's see if we have custom timeouts defined from config */
     const char *new = NULL;
     const char *established = NULL;
     const char *closed = NULL;

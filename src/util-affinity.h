@@ -63,17 +63,17 @@ enum {
 
 typedef struct ThreadsAffinityType_ {
     const char *name;
-    uint8_t mode_flag;
+    uint8_t mode_flag;   /* 使用方式, EXCLUSIVE_AFFINITY */
     int prio;
-    uint32_t nb_threads;
+    uint32_t nb_threads; /* 最终使用的CPU数量 */
     SCMutex taf_mutex;
-    uint16_t lcpu; /* use by exclusive mode */
+    uint16_t lcpu;       /* use by exclusive mode */
 
 #if !defined __CYGWIN__ && !defined OS_WIN32 && !defined __OpenBSD__ && !defined sun
-    cpu_set_t cpu_set;
+    cpu_set_t cpu_set;   /* 配置使用的cpu核心 */
     cpu_set_t lowprio_cpu;
     cpu_set_t medprio_cpu;
-    cpu_set_t hiprio_cpu;
+    cpu_set_t hiprio_cpu;/* 配置核心分属的优先级 */
 #endif
 } ThreadsAffinityType;
 

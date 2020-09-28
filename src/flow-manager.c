@@ -92,8 +92,8 @@ SCCtrlMutex flow_manager_ctrl_mutex;
 SCCtrlCondT flow_recycler_ctrl_cond;
 SCCtrlMutex flow_recycler_ctrl_mutex;
 
-typedef FlowProtoTimeout *FlowProtoTimeoutPtr;
-SC_ATOMIC_DECLARE(FlowProtoTimeoutPtr, flow_timeouts);
+typedef FlowProtoTimeout *FlowProtoTimeoutPtr;          /* = flow_timeouts_normal[] */
+SC_ATOMIC_DECLARE(FlowProtoTimeoutPtr, flow_timeouts);  /* 流各阶段超时配置 */
 
 void FlowTimeoutsInit(void)
 {

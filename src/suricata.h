@@ -122,7 +122,7 @@ enum {
 
 typedef struct SCInstance_ {
     enum RunModes run_mode;     /* 运行模式，默认 RUNMODE_PCAP_DEV */
-    enum RunModes aux_run_mode;
+    enum RunModes aux_run_mode; /* 命令行传入的模式, 如 ./suricata --pcap */
 
     char pcap_dev[128];         /* 监听接口名，通过-i指定 */
     char *sig_file;
@@ -131,7 +131,7 @@ typedef struct SCInstance_ {
     char *regex_arg;
 
     char *keyword_info;
-    char *runmode_custom_mode; /* 命令行--runmode指定的运行模式 */
+    char *runmode_custom_mode; /* single|autofp|worker, 命令行--runmode指定 */
 #ifndef OS_WIN32
     const char *user_name;
     const char *group_name;

@@ -28,11 +28,11 @@
 
 typedef struct Tmq_ {
     char *name;
-    bool is_packet_pool;
-    uint16_t id;
+    bool is_packet_pool;   /* name == "packetpool", 决定使用普通队列 ->pq, 还是本线程pool */
+    uint16_t id;           /* tmq_list 队列中的索引 */
     uint16_t reader_cnt;   /* 读线程数量 */
-    uint16_t writer_cnt;
-    PacketQueue *pq;
+    uint16_t writer_cnt;   /* 写线程数量 */
+    PacketQueue *pq;       /* 普通队列, is_packet_pool=false时动态分配 */
     TAILQ_ENTRY(Tmq_) next;
 } Tmq;
 

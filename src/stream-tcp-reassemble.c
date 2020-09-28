@@ -72,7 +72,7 @@ static uint64_t segment_pool_memuse = 0;
 static uint64_t segment_pool_memcnt = 0;
 #endif
 
-static PoolThread *segment_thread_pool = NULL;
+static PoolThread *segment_thread_pool = NULL;     /* 流汇聚需要的报文段缓存池, TcpSegment */
 /* init only, protect initializing and growing pool */
 static SCMutex segment_thread_pool_mutex = SCMUTEX_INITIALIZER;
 
@@ -436,7 +436,7 @@ TcpReassemblyThreadCtx *StreamTcpReassembleInitThreadCtx(ThreadVars *tv)
     memset(ra_ctx, 0x00, sizeof(TcpReassemblyThreadCtx));
     /* 配置协议识别环境 */
     ra_ctx->app_tctx = AppLayerGetCtxThread(tv);
-    /* 流汇聚需要的池 */
+    /* 流汇聚需要的池, 存储tcp数据段信息, TcpSegment */
     SCMutexLock(&segment_thread_pool_mutex);
     if (segment_thread_pool == NULL) {
         segment_thread_pool = PoolThreadInit(1, /* thread */
@@ -589,7 +589,7 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
  *  If the retval is 0 the segment is inserted correctly, or overlap is handled,
  *  or it wasn't added because of reassembly depth.
  *
- *//* 插入报文数据到缓存引擎 */
+ *//* 插入报文数据到缓存引擎（stream对应发送报文端） */
 int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                 TcpSession *ssn, TcpStream *stream, Packet *p)
 {

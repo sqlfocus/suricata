@@ -94,7 +94,7 @@ RB_PROTOTYPE(TCPSEG, TcpSegment, rb, TcpSegmentCompare);
 typedef struct TcpStream_ {
     uint16_t flags:12;              /**< Flag specific to the stream e.g. Timestamp */
     /* coccinelle: TcpStream:flags:STREAMTCP_STREAM_FLAG_ */
-    uint16_t wscale:4;              /* 窗口扩大因子，[0, 15] */
+    uint16_t wscale:4;              /* 发送缓存的窗口扩大因子，[0, 15] */
     uint8_t os_policy;              /* OS_POLICY_BSD, 目的IP对应的主机类型，用于针对性的重组和报文处理 */
     uint8_t tcp_flags;              /* 目前为止看到的标识, TH_SYN */
 

@@ -40,14 +40,14 @@ typedef struct PcapPacketVars_
 /** needs to be able to contain Windows adapter id's, so
  *  must be quite long. */
 #define PCAP_IFACE_NAME_LENGTH 128
-
+/* 描述PCAP配置信息 */
 typedef struct PcapIfaceConfig_
 {
     char iface[PCAP_IFACE_NAME_LENGTH];
     /* number of threads */
-    int threads;                /* 线程数 */
+    int threads;                /* 监听接口线程数 */
     /* socket buffer size */
-    int buffer_size;
+    int buffer_size;            /* 接口缓存, 建议为略大于带宽 */
     /* snapshot length */
     int snaplen;
     /* promiscuous value */

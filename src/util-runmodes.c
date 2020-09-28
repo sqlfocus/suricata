@@ -54,7 +54,7 @@
  *         the flow queue handler.
  *
  *  The string will be "pickup1,pickup2,pickup3\0"
- */
+ *//* 自动生成队列名，用于分发到业务处理时，接收端；每线程一个 */
 char *RunmodeAutoFpCreatePickupQueuesString(int n)
 {
     if (n > 1024)
@@ -111,15 +111,15 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     }
 
     char *queues = RunmodeAutoFpCreatePickupQueuesString(thread_max);
-    if (queues == NULL) {       /* 构造队列名，“pickup1,...pickupn” */
+    if (queues == NULL) {       /* 构造分发接收端队列名，“pickup1,...pickupn” */
         FatalError(SC_ERR_RUNMODE, "RunmodeAutoFpCreatePickupQueuesString failed");
-    }
+    }                           /* 每线程一个, 后缀ID为线程序号[0, ...] + 1; 此处的序号指worker线程从0开始的索引，并非真实序号 */
     /* 创建接口对应的接收线程  */
     if ((nlive <= 1) && (live_dev != NULL)) {
         SCLogDebug("live_dev %s", live_dev);
 
         void *aconf = ConfigParser(live_dev);
-        if (aconf == NULL) {    /* 获取接口配置 */
+        if (aconf == NULL) {    /* 获取接口配置, ->ParsePcapConfig() */
             FatalError(SC_ERR_RUNMODE, "Failed to allocate config for %s",
                    live_dev);
         }
@@ -133,8 +133,8 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
             snprintf(tname, sizeof(tname), "%s#%02d", thread_name, thread+1);  /* 线程名: RX#01 */
             ThreadVars *tv_receive =     /* 主处理函数, TmThreadsSlotPktAcqLoop() */
                 TmThreadCreatePacketHandler(tname,
-                        "packetpool", "packetpool",
-                        queues, "flow", "pktacqloop");
+                                            "packetpool", "packetpool",   /* inqueue, name handler */
+                                            queues, "flow", "pktacqloop");/* outquque, name handler */
             if (tv_receive == NULL) {
                 FatalError(SC_ERR_RUNMODE, "TmThreadsCreate failed");
             }
@@ -220,15 +220,15 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     /* 创建检测线程 */
     for (int thread = 0; thread < thread_max; thread++) {
         snprintf(tname, sizeof(tname), "%s#%02u", thread_name_workers, thread+1);
-        snprintf(qname, sizeof(qname), "pickup%u", thread+1);
+        snprintf(qname, sizeof(qname), "pickup%u", thread+1); /* 队列名: 前置创建的队列 */
 
         SCLogDebug("tname %s, qname %s", tname, qname);
 
         ThreadVars *tv_detect_ncpu =  /* 输入处理为flow，输出处理为packetpool，slot为varslot */
-            TmThreadCreatePacketHandler(tname,           /* 线程名: W#01 */
+            TmThreadCreatePacketHandler(tname,                /* 线程名: W#01 */
                                         qname, "flow",
                                         "packetpool", "packetpool",
-                                        "varslot");
+                                        "varslot");           /* TmThreadsSlotVar() */
         if (tv_detect_ncpu == NULL) {
             FatalError(SC_ERR_RUNMODE, "TmThreadsCreate failed");
         }

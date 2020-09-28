@@ -45,17 +45,17 @@ void TmqhOutputFlowIPPair(ThreadVars *t, Packet *p);
 void *TmqhOutputFlowSetupCtx(const char *queue_str);
 void TmqhOutputFlowFreeCtx(void *ctx);
 void TmqhFlowRegisterTests(void);
-
+/* autofp模式时, flow后置对接的队列, 实现了分流策略, 需加锁 */
 void TmqhFlowRegister(void)
 {
     tmqh_table[TMQH_FLOW].name = "flow";
-    tmqh_table[TMQH_FLOW].InHandler = TmqhInputFlow;
-    tmqh_table[TMQH_FLOW].OutHandlerCtxSetup = TmqhOutputFlowSetupCtx;
+    tmqh_table[TMQH_FLOW].InHandler = TmqhInputFlow;    /* 类似于simple队列: 无可用报文时, 加锁等待信号 */
+    tmqh_table[TMQH_FLOW].OutHandlerCtxSetup = TmqhOutputFlowSetupCtx; /* 构建输出分流环境 */
     tmqh_table[TMQH_FLOW].OutHandlerCtxFree = TmqhOutputFlowFreeCtx;
     tmqh_table[TMQH_FLOW].RegisterTests = TmqhFlowRegisterTests;
 
     const char *scheduler = NULL;
-    if (ConfGet("autofp-scheduler", &scheduler) == 1) {
+    if (ConfGet("autofp-scheduler", &scheduler) == 1) { /* 分流策略: 均能实现相同的流分配到相同的处理线程 */
         if (strcasecmp(scheduler, "round-robin") == 0) {
             SCLogNotice("using flow hash instead of round robin");
             tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowHash;
@@ -64,7 +64,7 @@ void TmqhFlowRegister(void)
             tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowHash;
         } else if (strcasecmp(scheduler, "hash") == 0) {
             tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowHash;
-        } else if (strcasecmp(scheduler, "ippair") == 0) {
+        } else if (strcasecmp(scheduler, "ippair") == 0) {      /* 基于源、目的IP的加和 */
             tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowIPPair;
         } else {
             SCLogError(SC_ERR_INVALID_YAML_CONF_ENTRY, "Invalid entry \"%s\" "
@@ -73,7 +73,7 @@ void TmqhFlowRegister(void)
             exit(EXIT_FAILURE);
         }
     } else {
-        tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowHash;
+        tmqh_table[TMQH_FLOW].OutHandler = TmqhOutputFlowHash;  /* 默认基于流表"hash" */
     }
 
     return;
@@ -159,7 +159,7 @@ static int StoreQueueId(TmqhFlowCtx *ctx, char *name)
  * \param queue_str comma separated string with output queue names
  *
  * \retval ctx queues handlers ctx or NULL in error
- */
+ *//* 构建分流环境 */
 void *TmqhOutputFlowSetupCtx(const char *queue_str)
 {
     if (queue_str == NULL || strlen(queue_str) == 0)
@@ -168,12 +168,12 @@ void *TmqhOutputFlowSetupCtx(const char *queue_str)
     SCLogDebug("queue_str %s", queue_str);
 
     TmqhFlowCtx *ctx = SCMalloc(sizeof(TmqhFlowCtx));
-    if (unlikely(ctx == NULL))
+    if (unlikely(ctx == NULL))       /* 前置分流环境 */
         return NULL;
     memset(ctx,0x00,sizeof(TmqhFlowCtx));
 
     char *str = SCStrdup(queue_str);
-    if (unlikely(str == NULL)) {
+    if (unlikely(str == NULL)) {     /* 分流后的接收队列 */
         goto error;
     }
     char *tstr = str;
@@ -181,7 +181,7 @@ void *TmqhOutputFlowSetupCtx(const char *queue_str)
     /* parse the comma separated string */
     do {
         char *comma = strchr(tstr,',');
-        if (comma != NULL) {
+        if (comma != NULL) {         /* 建立关联关系 */
             *comma = '\0';
             char *qname = tstr;
             int r = StoreQueueId(ctx,qname);

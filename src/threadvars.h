@@ -63,8 +63,8 @@ typedef struct ThreadVars_ {
      *  void pointers in and out. */ /* "management"->TmThreadsManagement() */
     void *(*tm_func)(void *);  /* 线程主函数, "pktacqloop" -> TmThreadsSlotPktAcqLoop() */
 
-    char name[16];
-    char *printable_name;      /* 如 "W01-eth0" */
+    char name[16];             /* PCAP autofo, 如 RX#01-eth0 */
+    char *printable_name;      /* 如 "RX#01-eth0" */
     char *thread_group_name;   /* 如 "Detect" */
 
     uint8_t thread_setup_flags;
@@ -81,15 +81,15 @@ typedef struct ThreadVars_ {
 
     uint8_t cap_flags; /**< Flags to indicate the capabilities of all the
                             TmModules resgitered under this thread */
-    uint8_t inq_id;    /* 如 TMQH_PACKETPOOL */
-    uint8_t outq_id;
+    uint8_t inq_id;    /* 如 pcap autofp -> TMQH_PACKETPOOL */
+    uint8_t outq_id;   /* 如 pcap autofp -> TMQH_FLOW */
 
     /** local id */
     int id;            /* 在 thread_store->threads[] 中的索引 */
 
     /** incoming queue and handler */
-    Tmq *inq;          /* 输入队列，及处理函数，如 TmqhInputPacketpool() */
-    struct Packet_ * (*tmqh_in)(struct ThreadVars_ *);
+    Tmq *inq;          /* 非packetpool输入队列; pcap autofp为NULL */
+    struct Packet_ * (*tmqh_in)(struct ThreadVars_ *); /* 如 TmqhInputPacketpool() */
 
     SC_ATOMIC_DECLARE(uint32_t, flags);    /* THV_PAUSE */
 
@@ -102,8 +102,8 @@ typedef struct ThreadVars_ {
     struct TmSlot_ *tm_flowworker;/* 指向tm_slots[]中的 TMM_FLOWWORKER 处理函数 */
 
     /** outgoing queue and handler */
-    Tmq *outq;
-    void *outctx;      /* 输出队列及处理函数, TmqhOutputPacketpool() */
+    Tmq *outq;         /* 非 packetpool 输出队列; pcap autofp为NULL */
+    void *outctx;      /* 输出环境, TmqhFlowCtx; 输出函数 TmqhOutputFlowHash() */
     void (*tmqh_out)(struct ThreadVars_ *, struct Packet_ *);
 
     /** queue for decoders to temporarily store extra packets they
@@ -112,7 +112,7 @@ typedef struct ThreadVars_ {
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */
-    struct PacketQueue_ *stream_pq;         /* 维护此线程的流报文 */
+    struct PacketQueue_ *stream_pq;         /* 包含"FlowWorker"模块, =->inq->pq, 维护此线程的流报文 */
     struct PacketQueue_ *stream_pq_local;
 
     /* counters */

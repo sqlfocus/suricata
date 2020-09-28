@@ -40,9 +40,9 @@ void TmqhSetup (void)
 {
     memset(&tmqh_table, 0, sizeof(tmqh_table));
 
-    TmqhSimpleRegister();        /* simple */
-    TmqhPacketpoolRegister();    /* packetpool */
-    TmqhFlowRegister();          /* flow */
+    TmqhSimpleRegister();        /* simple, 简单的加锁队列 */
+    TmqhPacketpoolRegister();    /* packetpool, 本地线程池, 提升性能 */
+    TmqhFlowRegister();          /* flow, 用于autofp模式, 向业务线程分流 */
 }
 
 /** \brief Clean up registration time allocs */

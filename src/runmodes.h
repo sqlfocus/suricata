@@ -36,7 +36,7 @@ enum RunModes {
     RUNMODE_DAG,
     RUNMODE_AFP_DEV,          /* HAVE_AF_PACKET时，默认运行模式 */
     RUNMODE_NETMAP,
-    RUNMODE_UNITTEST,
+    RUNMODE_UNITTEST,         /* 运行单元测试用例 */
     RUNMODE_NAPATECH,
     RUNMODE_UNIX_SOCKET,
     RUNMODE_WINDIVERT,
@@ -48,8 +48,8 @@ enum RunModes {
     RUNMODE_PRINT_BUILDINFO,  /* 打印构建的配置信息 */
     RUNMODE_PRINT_USAGE,
     RUNMODE_DUMP_CONFIG,      /* 打印配置文件 */
-    RUNMODE_CONF_TEST,
-    RUNMODE_LIST_UNITTEST,
+    RUNMODE_CONF_TEST,        /* */
+    RUNMODE_LIST_UNITTEST,    /* 罗列单元测试用例 */
     RUNMODE_ENGINE_ANALYSIS,
 #ifdef OS_WIN32
     RUNMODE_INSTALL_SERVICE,

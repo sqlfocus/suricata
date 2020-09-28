@@ -93,7 +93,7 @@ RB_PROTOTYPE(SBB, StreamingBufferBlock, rb, SBBCompare);
 StreamingBufferBlock *SBB_RB_FIND_INCLUSIVE(struct SBB *head, StreamingBufferBlock *elm);
 
 typedef struct StreamingBuffer_ {
-    const StreamingBufferConfig *cfg;
+    const StreamingBufferConfig *cfg;  /* 指向 stream_config */
     uint64_t stream_offset; /* 维护slide后偏移仍然正确，不slide值为0 */
 
     uint8_t *buf;           /* 缓存起始地址 */

@@ -64,9 +64,9 @@ static inline PktPool *GetThreadPacketPool(void)
 /**
  * \brief TmqhPacketpoolRegister
  * \initonly
- */
-void TmqhPacketpoolRegister (void)
-{
+ *//* 基于线程的报文缓存池，本线程操控去除了锁，提升了性能 */
+void TmqhPacketpoolRegister (void) /* 但autofp模式需要后续线程释放到分配线程 */
+{                                  /* 采用锁+信号量, 可能存在性能问题 */
     tmqh_table[TMQH_PACKETPOOL].name = "packetpool";
     tmqh_table[TMQH_PACKETPOOL].InHandler = TmqhInputPacketpool;
     tmqh_table[TMQH_PACKETPOOL].OutHandler = TmqhOutputPacketpool;
@@ -87,9 +87,9 @@ void PacketPoolWait(void)
 
     if (PacketPoolIsEmpty(my_pool)) {   /* 检查报文缓存池是否为空 */
         SCMutexLock(&my_pool->return_stack.mutex);
-        SC_ATOMIC_ADD(my_pool->return_stack.sync_now, 1);
+        SC_ATOMIC_ADD(my_pool->return_stack.sync_now, 1); /* 设置标志, 希望其他线程释放（pcap autofp） */
         SCCondWait(&my_pool->return_stack.cond, &my_pool->return_stack.mutex);
-        SCMutexUnlock(&my_pool->return_stack.mutex);  /* 空则等待 */
+        SCMutexUnlock(&my_pool->return_stack.mutex);      /* 等待 */
     }
 
     while(PacketPoolIsEmpty(my_pool))
@@ -240,11 +240,11 @@ void PacketPoolReturnPacket(Packet *p)
     BUG_ON(my_pool->destroyed == 1);
 #endif /* DEBUG_VALIDATION */
 
-    if (pool == my_pool) {  /* case2: 此报文申请自本线程，直接释放 */
+    if (pool == my_pool) {  /* case2: 此报文申请自本线程, 且由本线程回收, 放回缓存池 */
         /* Push back onto this thread's own stack, so no locking. */
         p->next = my_pool->head;
         my_pool->head = p;
-    } else {                /* case3: 申请自其他线程， */
+    } else {                /* case3: 申请自其他线程, 如pcap autofp的业务处理线程释放报文 */
         PktPool *pending_pool = my_pool->pending_pool;
         if (pending_pool == NULL) {         /* 释放到临时缓存 */
             /* No pending packet, so store the current packet. */
@@ -260,7 +260,7 @@ void PacketPoolReturnPacket(Packet *p)
             my_pool->pending_count++;
             if (SC_ATOMIC_GET(pool->return_stack.sync_now) || my_pool->pending_count > max_pending_return_packets) {
                 /* Return the entire list of pending packets. */
-                SCMutexLock(&pool->return_stack.mutex);
+                SCMutexLock(&pool->return_stack.mutex);   /* 到达一定数量或原线程池已空, 释放回原申请线程 */
                 my_pool->pending_tail->next = pool->return_stack.head;
                 pool->return_stack.head = my_pool->pending_head;
                 SC_ATOMIC_RESET(pool->return_stack.sync_now);
@@ -272,7 +272,7 @@ void PacketPoolReturnPacket(Packet *p)
                 my_pool->pending_tail = NULL;
                 my_pool->pending_count = 0;
             }
-        } else {                            /* 临时缓存一次性释放到此stack */
+        } else {                            /* 直接释放回原申请线程, 加锁 */
             /* Push onto return stack for this pool */
             SCMutexLock(&pool->return_stack.mutex);
             p->next = pool->return_stack.head;

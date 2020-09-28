@@ -83,7 +83,7 @@ enum {
  */
 
 /** FlowProto specific timeouts and free/state functions */
-
+/* 流超时时限，及资源释放操作函数指针 */
 extern FlowProtoTimeout flow_timeouts_normal[FLOW_PROTO_MAX];
 extern FlowProtoTimeout flow_timeouts_emerg[FLOW_PROTO_MAX];
 extern FlowProtoFreeFunc flow_freefuncs[FLOW_PROTO_MAX];
