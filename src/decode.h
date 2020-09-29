@@ -576,7 +576,7 @@ typedef struct Packet_
     /** data linktype in host order */
     int datalink;
 
-    /* tunnel/encapsulation handling */
+    /* tunnel/encapsulation handling *//* 当前报文为tunnel内容时, 指向最上层的原始的真实报文 */
     struct Packet_ *root; /* in case of tunnel this is a ptr
                            * to the 'real' packet, the one we
                            * need to set the verdict on --
@@ -589,9 +589,9 @@ typedef struct Packet_
      */
     SCMutex tunnel_mutex;
     /* ready to set verdict counter, only set in root */
-    uint16_t tunnel_rtv_cnt;
-    /* tunnel packet ref count */
-    uint16_t tunnel_tpr_cnt;
+    uint16_t tunnel_rtv_cnt;    /* 释放关联报文后, 计数++; 仅维护在root报文 */
+    /* tunnel packet ref count */    /* 两者的差用于检查是否仍然有关联报文, 由最后一个关联报文触发释放root报文 */
+    uint16_t tunnel_tpr_cnt;    /* tunnel报文数量, 即tunnel层数 */
 
     /** tenant id for this packet, if any. If 0 then no tenant was assigned. */
     uint32_t tenant_id;

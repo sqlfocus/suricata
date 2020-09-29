@@ -5939,7 +5939,7 @@ void StreamTcpSetSessionBypassFlag(TcpSession *ssn)
  * @param len       length of the packet
  * @return          upon success returns the pointer to the new pseudo packet
  *                  otherwise NULL
- */
+ *//* 流重组构建TUNNEL包 */
 Packet *StreamTcpPseudoSetup(Packet *parent, uint8_t *pkt, uint32_t len)
 {
     SCEnter();

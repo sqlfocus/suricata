@@ -42,7 +42,7 @@
 /**
  * \brief Function to decode GRE packets
  */
-
+/* GRE报文解析入口 */
 int DecodeGRE(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, const uint8_t *pkt, uint32_t len)
 {
     uint32_t header_len = GRE_HDR_LEN;
@@ -194,7 +194,7 @@ int DecodeGRE(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p, const uint8_t *p
             ENGINE_SET_INVALID_EVENT(p, GRE_WRONG_VERSION);
             return TM_ECODE_OK;
     }
-
+    /* 建立tunnel报文, 根据内层协议重走解码流程 */
     switch (GRE_GET_PROTO(p->greh))
     {
         case ETHERNET_TYPE_IP:

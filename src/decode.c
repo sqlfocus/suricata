@@ -72,7 +72,7 @@ uint32_t default_packet_size = 0;
 extern bool stats_decoder_events;
 extern const char *stats_decoder_events_prefix;
 extern bool stats_stream_events;
-
+/* tunnel报文内层报文解码入口 */
 int DecodeTunnel(ThreadVars *tv, DecodeThreadVars *dtv, Packet *p,
         const uint8_t *pkt, uint32_t len, enum DecodeTunnelProto proto)
 {
@@ -231,10 +231,10 @@ inline int PacketCopyDataOffset(Packet *p, uint32_t offset, const uint8_t *data,
         // check overflow
         if (newsize < offset)
             return -1;
-        if (newsize <= default_packet_size) {
+        if (newsize <= default_packet_size) { /* 可以容纳的数据直接copy */
             /* data will fit in memory allocated with packet */
             memcpy(GET_PKT_DIRECT_DATA(p) + offset, data, datalen);
-        } else {
+        } else {                              /* 过大的数据则利用malloc内存 */
             /* here we need a dynamic allocation */
             p->ext_pkt = SCMalloc(MAX_PAYLOAD_SIZE);
             if (unlikely(p->ext_pkt == NULL)) {
@@ -246,7 +246,7 @@ inline int PacketCopyDataOffset(Packet *p, uint32_t offset, const uint8_t *data,
             /* copy data as asked */
             memcpy(p->ext_pkt + offset, data, datalen);
         }
-    } else {
+    } else {                                  /* 存在ext_pkt, 则直接拷贝 */
         memcpy(p->ext_pkt + offset, data, datalen);
     }
     return 0;
@@ -274,7 +274,7 @@ inline int PacketCopyData(Packet *p, const uint8_t *pktdata, uint32_t pktlen)
  *  \param proto protocol of the tunneled packet
  *
  *  \retval p the pseudo packet or NULL if out of memory
- */
+ *//* 构建tunnel内层报文 */
 Packet *PacketTunnelPktSetup(ThreadVars *tv, DecodeThreadVars *dtv, Packet *parent,
                              const uint8_t *pkt, uint32_t len, enum DecodeTunnelProto proto)
 {
@@ -282,13 +282,13 @@ Packet *PacketTunnelPktSetup(ThreadVars *tv, DecodeThreadVars *dtv, Packet *pare
 
     SCEnter();
 
-    /* get us a packet */
+    /* 分配新报文内存, get us a packet */
     Packet *p = PacketGetFromQueueOrAlloc();
     if (unlikely(p == NULL)) {
         SCReturnPtr(NULL, "Packet");
     }
 
-    /* copy packet and set length, proto */
+    /* “拷贝”尚未解析的部分, copy packet and set length, proto */
     PacketCopyData(p, pkt, len);
     p->recursion_level = parent->recursion_level + 1;
     p->ts.tv_sec = parent->ts.tv_sec;
@@ -297,15 +297,15 @@ Packet *PacketTunnelPktSetup(ThreadVars *tv, DecodeThreadVars *dtv, Packet *pare
     p->tenant_id = parent->tenant_id;
     p->livedev = parent->livedev;
 
-    /* set the root ptr to the lowest layer */
-    if (parent->root != NULL)
+    /* <TRICK!!!>Packet->root 指向最外层的报文, 而不是真实的父报文,  */
+    if (parent->root != NULL)   /* set the root ptr to the lowest layer */
         p->root = parent->root;
     else
         p->root = parent;
 
-    /* tell new packet it's part of a tunnel */
+    /* 设置当前报文为TUNNEL, tell new packet it's part of a tunnel */
     SET_TUNNEL_PKT(p);
-
+    /* 解码 */
     ret = DecodeTunnel(tv, dtv, p, GET_PKT_DATA(p),
                        GET_PKT_LEN(p), proto);
 
@@ -322,13 +322,13 @@ Packet *PacketTunnelPktSetup(ThreadVars *tv, DecodeThreadVars *dtv, Packet *pare
     }
 
 
-    /* tell parent packet it's part of a tunnel */
+    /* 设置父报文为TUNNEL, tell parent packet it's part of a tunnel */
     SET_TUNNEL_PKT(parent);
 
-    /* increment tunnel packet refcnt in the root packet */
+    /* 更新最外层报文的tunnel层数计数, increment tunnel packet refcnt in the root packet */
     TUNNEL_INCR_PKT_TPR(p);
 
-    /* disable payload (not packet) inspection on the parent, as the payload
+    /* 不检测父报文的内容, 仅关注其报文头; disable payload (not packet) inspection on the parent, as the payload
      * is the packet we will now run through the system separately. We do
      * check it against the ip/port/other header checks though */
     DecodeSetNoPayloadInspectionFlag(parent);
@@ -348,7 +348,7 @@ Packet *PacketTunnelPktSetup(ThreadVars *tv, DecodeThreadVars *dtv, Packet *pare
  *  \param proto protocol of the tunneled packet
  *
  *  \retval p the pseudo packet or NULL if out of memory
- */
+ *//* 碎片重组完毕, 构建完整报文走后续流程 *//* <TK!!!>构建此报文并不增加tunnel层数, 因为它和碎片包在同一流上 */
 Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, uint8_t proto)
 {
     SCEnter();
@@ -359,13 +359,13 @@ Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, u
         SCReturnPtr(NULL, "Packet");
     }
 
-    /* 关联父报文, set the root ptr to the lowest layer */
+    /* 关联最外层父报文, set the root ptr to the lowest layer */
     if (parent->root != NULL)
         p->root = parent->root;
     else
         p->root = parent;
 
-    /* 利用父报文初始化某些变量, copy packet and set lenght, proto */
+    /* 拷贝内容, copy packet and set lenght, proto */
     if (pkt && len) {
         PacketCopyData(p, pkt, len);
     }
@@ -374,8 +374,8 @@ Packet *PacketDefragPktSetup(Packet *parent, const uint8_t *pkt, uint32_t len, u
     p->ts.tv_usec = parent->ts.tv_usec;
     p->datalink = DLT_RAW;
     p->tenant_id = parent->tenant_id;
-    /* tell new packet it's part of a tunnel */
-    SET_TUNNEL_PKT(p);       /* 也设置了 PKT_TUNNEL 标志 */
+    /* 设置TUNNEL标志, tell new packet it's part of a tunnel */
+    SET_TUNNEL_PKT(p);       /* 设置了 PKT_TUNNEL 标志 */
     p->vlan_id[0] = parent->vlan_id[0];
     p->vlan_id[1] = parent->vlan_id[1];
     p->vlan_idx = parent->vlan_idx;

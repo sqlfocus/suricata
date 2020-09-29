@@ -895,7 +895,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                     TmqhOutputPacketpool(tv, r);
                     r = NULL;
                 } else {
-                    PacketDefragPktSetupParent(p);           /* 设置触发重组的报文, PKT_TUNNEL */
+                    PacketDefragPktSetupParent(p);           /* 设置触发重组的报文, PKT_TUNNEL, 以被关联释放 */
                 }
             }
         }

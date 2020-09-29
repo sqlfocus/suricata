@@ -246,14 +246,14 @@ void PacketPoolReturnPacket(Packet *p)
         my_pool->head = p;
     } else {                /* case3: 申请自其他线程, 如pcap autofp的业务处理线程释放报文 */
         PktPool *pending_pool = my_pool->pending_pool;
-        if (pending_pool == NULL) {         /* 释放到临时缓存 */
+        if (pending_pool == NULL) {         /* 快速释放到本地临时缓存 */
             /* No pending packet, so store the current packet. */
             p->next = NULL;
             my_pool->pending_pool = pool;
             my_pool->pending_head = p;
             my_pool->pending_tail = p;
             my_pool->pending_count = 1;
-        } else if (pending_pool == pool) {  /* 释放到临时缓存 */
+        } else if (pending_pool == pool) {  /* 相同源释放到临时缓存 */
             /* Another packet for the pending pool list. */
             p->next = my_pool->pending_head;
             my_pool->pending_head = p;
@@ -272,7 +272,7 @@ void PacketPoolReturnPacket(Packet *p)
                 my_pool->pending_tail = NULL;
                 my_pool->pending_count = 0;
             }
-        } else {                            /* 直接释放回原申请线程, 加锁 */
+        } else {                            /* 不同源直接释放回原申请线程, 加锁 */
             /* Push onto return stack for this pool */
             SCMutexLock(&pool->return_stack.mutex);
             p->next = pool->return_stack.head;
@@ -371,15 +371,15 @@ Packet *TmqhInputPacketpool(ThreadVars *tv)
 {
     return PacketPoolGetPacket();
 }
-
+/* 释放报文回报文池 */
 void TmqhOutputPacketpool(ThreadVars *t, Packet *p)
 {
     bool proot = false;
 
     SCEnter();
     SCLogDebug("Packet %p, p->root %p, alloced %s", p, p->root, p->flags & PKT_ALLOC ? "true" : "false");
-
-    if (IS_TUNNEL_PKT(p)) {
+    /* tunnel报文处理: tunnel报文的root报文由最后释放的报文触发释放；整个 */
+    if (IS_TUNNEL_PKT(p)) { /* tunnel中其他报文随时释放 */
         SCLogDebug("Packet %p is a tunnel packet: %s",
             p,p->root ? "upper layer" : "tunnel root");
 
@@ -387,18 +387,18 @@ void TmqhOutputPacketpool(ThreadVars *t, Packet *p)
         SCMutex *m = p->root ? &p->root->tunnel_mutex : &p->tunnel_mutex;
         SCMutexLock(m);
 
-        if (IS_TUNNEL_ROOT_PKT(p)) {
+        if (IS_TUNNEL_ROOT_PKT(p)) {     /* 为最外层报文 */
             SCLogDebug("IS_TUNNEL_ROOT_PKT == TRUE");
             const uint16_t outstanding = TUNNEL_PKT_TPR(p) - TUNNEL_PKT_RTV(p);
             SCLogDebug("root pkt: outstanding %u", outstanding);
-            if (outstanding == 0) {
+            if (outstanding == 0) {               /* 无关联报文, 释放 */
                 SCLogDebug("no tunnel packets outstanding, no more tunnel "
                         "packet(s) depending on this root");
                 /* if this packet is the root and there are no
                  * more tunnel packets to consider
                  *
                  * return it to the pool */
-            } else {
+            } else {                              /* 仍有关联报文, 不释放 */
                 SCLogDebug("tunnel root Packet %p: outstanding > 0, so "
                         "packets are still depending on this root, setting "
                         "SET_TUNNEL_PKT_VERDICTED", p);
@@ -412,16 +412,16 @@ void TmqhOutputPacketpool(ThreadVars *t, Packet *p)
                 SCMutexUnlock(m);
                 SCReturn;
             }
-        } else {
+        } else {                         /* 非最外层报文 */
             SCLogDebug("NOT IS_TUNNEL_ROOT_PKT, so tunnel pkt");
 
-            TUNNEL_INCR_PKT_RTV_NOLOCK(p);
+            TUNNEL_INCR_PKT_RTV_NOLOCK(p);        /* 增加释放计数 */
             const uint16_t outstanding = TUNNEL_PKT_TPR(p) - TUNNEL_PKT_RTV(p);
             SCLogDebug("tunnel pkt: outstanding %u", outstanding);
             /* all tunnel packets are processed except us. Root already
              * processed. So return tunnel pkt and root packet to the
              * pool. */
-            if (outstanding == 0 &&
+            if (outstanding == 0 &&               /* 仅剩余自己和root报文, 都释放 */
                     p->root && IS_TUNNEL_PKT_VERDICTED(p->root))
             {
                 SCLogDebug("root verdicted == true && no outstanding");
@@ -433,7 +433,7 @@ void TmqhOutputPacketpool(ThreadVars *t, Packet *p)
 
                 /* fall through */
 
-            } else {
+            } else {                              /* 仍然有其他关联报文 */
                 /* root not ready yet, or not the last tunnel packet,
                  * so get rid of the tunnel pkt only */
 
@@ -450,19 +450,19 @@ void TmqhOutputPacketpool(ThreadVars *t, Packet *p)
         SCLogDebug("tunnel stuff done, move on (proot %d)", proot);
     }
 
-    /* we're done with the tunnel root now as well */
+    /* 无其他关联报文, 仅剩余root和自己; we're done with the tunnel root now as well */
     if (proot == true) {
         SCLogDebug("getting rid of root pkt... alloc'd %s", p->root->flags & PKT_ALLOC ? "true" : "false");
 
         PACKET_RELEASE_REFS(p->root);
-        p->root->ReleasePacket(p->root);
+        p->root->ReleasePacket(p->root);   /* 释放root报文 */
         p->root = NULL;
     }
 
     PACKET_PROFILING_END(p);
 
     PACKET_RELEASE_REFS(p);
-    p->ReleasePacket(p);
+    p->ReleasePacket(p);                   /* 释放自身 */
 
     SCReturn;
 }
