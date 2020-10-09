@@ -101,7 +101,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 /** Indicate that alproto detection for flow should be done again */
 #define FLOW_CHANGE_PROTO               BIT_U32(24)
 
-#define FLOW_WRONG_THREAD               BIT_U32(25)
+#define FLOW_WRONG_THREAD               BIT_U32(25)   /* TCP流必须在相同线程 */
 /** Protocol detection told us flow is picked up in wrong direction (midstream) */
 #define FLOW_DIR_REVERSED               BIT_U32(26)
 /** Indicate that the flow did trigger an expectation creation */
@@ -440,7 +440,7 @@ typedef struct Flow_
 
     /** Thread ID for the stream/detect portion of this flow */
     FlowThreadId thread_id[2];  /* 处理流汇聚、检测的线程索引, ThreadVars->id; 同一条流必须在相同的线程上处理 */
-
+                                /* 0-->to server, 1-->to client */
     /** ttl tracking */
     uint8_t min_ttl_toserver;   /* 跟踪报文TTL */
     uint8_t max_ttl_toserver;

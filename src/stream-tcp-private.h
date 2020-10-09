@@ -63,7 +63,7 @@ typedef struct TcpSegment {
     uint16_t payload_len;    /* 缓存段长度(当缓存报文一部分时，小于报文长度) */
     uint32_t seq;            /* 缓存段起始序号 */
     RB_ENTRY(TcpSegment) __attribute__((__packed__)) rb;
-    StreamingBufferSegment sbseg;
+    StreamingBufferSegment sbseg;  /* 数据在 TcpStream->sb 中的位置: 偏移+长度 */
 } __attribute__((__packed__)) TcpSegment;  /* 记录TCP流重组的段信息 */
 
 /** \brief compare function for the Segment tree
@@ -92,7 +92,7 @@ RB_PROTOTYPE(TCPSEG, TcpSegment, rb, TcpSegmentCompare);
 #define STREAM_HAS_SEEN_DATA(stream)    (!RB_EMPTY(&(stream)->sb.sbb_tree) || (stream)->sb.stream_offset || (stream)->sb.buf_offset)
 
 typedef struct TcpStream_ {
-    uint16_t flags:12;              /**< Flag specific to the stream e.g. Timestamp */
+    uint16_t flags:12;              /* 此方向上到目前收到的所有报文标识 *< Flag specific to the stream e.g. Timestamp */
     /* coccinelle: TcpStream:flags:STREAMTCP_STREAM_FLAG_ */
     uint16_t wscale:4;              /* 发送缓存的窗口扩大因子，[0, 15] */
     uint8_t os_policy;              /* OS_POLICY_BSD, 目的IP对应的主机类型，用于针对性的重组和报文处理 */
@@ -264,10 +264,10 @@ typedef struct TcpSession_ {
     uint8_t queue_len;                      /**< length of queue list below */
     int8_t data_first_seen_dir;             /* 首包方向, STREAM_TOSERVER */
     /** track all the tcp flags we've seen */
-    uint8_t tcp_packet_flags;    /* 跟踪此流所有的 Packet->tcph->th_flags, TH_SYN */
+    uint8_t tcp_packet_flags;    /* 跟踪此流所有的 Packet->tcph->th_flags, 如 TH_SYN */
     /* coccinelle: TcpSession:flags:STREAMTCP_FLAG */
     uint16_t flags;              /* STREAMTCP_FLAG_ASYNC */
-    uint32_t reassembly_depth;   /* 0表示不限制缓存总量, reassembly depth for the stream */
+    uint32_t reassembly_depth;   /* 最大缓存深度, 0表示不限制缓存总量, reassembly depth for the stream */
     TcpStream server;            /* 服务器状态信息，跟踪服务器发出的报文 */
     TcpStream client;            /* 客户端状态信息 */
     TcpStateQueue *queue;        /* list of SYN/ACK candidates */

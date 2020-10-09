@@ -102,7 +102,7 @@ StreamingBufferBlock *SBB_RB_FIND_INCLUSIVE(struct SBB *head, StreamingBufferBlo
 static inline int InitBuffer(StreamingBuffer *sb)
 {
     sb->buf = CALLOC(sb->cfg, 1, sb->cfg->buf_size);
-    if (sb->buf == NULL) {
+    if (sb->buf == NULL) {    /* 默认大小2k */
         return -1;
     }
     sb->buf_size = sb->cfg->buf_size;
@@ -433,13 +433,13 @@ static void SBBPrune(StreamingBuffer *sb)
  */
 static void AutoSlide(StreamingBuffer *sb)
 {
-    uint32_t size = sb->cfg->buf_slide;
-    uint32_t slide = sb->buf_offset - size;
+    uint32_t size = sb->cfg->buf_slide;      /* 保留数据量 */
+    uint32_t slide = sb->buf_offset - size;  /* 舍弃数据量 = 原总数据量 - 保留数据量 */
     SCLogDebug("sliding %u forward, size of original buffer left after slide %u", slide, size);
-    memmove(sb->buf, sb->buf+slide, size);
-    sb->stream_offset += slide;
-    sb->buf_offset = size;
-    SBBPrune(sb);
+    memmove(sb->buf, sb->buf+slide, size);   /* 移动数据 */
+    sb->stream_offset += slide;              /* 记录舍弃的数据 */
+    sb->buf_offset = size;                   /* 新数据总偏移 */
+    SBBPrune(sb);                            /* 缩减红黑树 */
 }
 
 static int WARN_UNUSED
@@ -666,12 +666,12 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
 
     if (offset < sb->stream_offset)
         return -1;
-    /* 首次初始化缓存 */
+    /* 首次初始化缓存, calloc() */
     if (sb->buf == NULL) {
         if (InitBuffer(sb) == -1)
             return -1;
     }
-    /* 内存不够，slide */
+    /* 内存不够，slide, 仍不够则新分配内存 */
     uint32_t rel_offset = offset - sb->stream_offset;
     if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) {
         if (sb->cfg->flags & STREAMING_BUFFER_AUTOSLIDE) {
@@ -688,12 +688,12 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
     }
     /* 拷贝内存 */
     memcpy(sb->buf + rel_offset, data, data_len);
-    seg->stream_offset = offset;   /* 更新字段，待插入红黑树 */
+    seg->stream_offset = offset;   /* 更新段信息的字段 */
     seg->segment_len = data_len;
 
     SCLogDebug("rel_offset %u sb->stream_offset %"PRIu64", buf_offset %u",
             rel_offset, sb->stream_offset, sb->buf_offset);
-    /* 记录到红黑树，以判断是否有空洞 */
+    /* 更新 TcpStream->sb->sbb_tree 红黑树，以判断是否有空洞 */
     if (RB_EMPTY(&sb->sbb_tree)) {
         SCLogDebug("empty sbb list");
 

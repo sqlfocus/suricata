@@ -1,3 +1,19 @@
+#+BEGIN_EXAMPLE
+安装 ~https://github.com/OISF/libhtp~
+
+sudo apt-get install libtool pkg-config libpcre3-dev libyaml-dev libjansson-dev
+sudo apt-get install libpcap-dev
+sudo apt-get install rustc cargo
+
+sh ./autogen.sh
+./configure --enable-non-bundled-htp
+make
+make install
+make install-conf
+
+suricata --pcap
+#+END_EXAMPLE
+
 本文档介绍suricata主流程，以便于快速浏览
   1. 可参考单元测试 RunUnittests() 入口，了解环境初始化，以便于支持lib编译
   2. TODO 协议解析/ TCP状态机/ 流重组/ 日志输出/ 存储
@@ -236,7 +252,11 @@ SCLogConfig *sc_log_config         日志配置信息结构
 
     
 * L1-L4解码
-从底层PCAP接收报文后，通过此函数处理L1-L4解码        
+从底层PCAP接收报文后，通过此函数处理L1-L4解码; 对于GRE等tunnel报文;
+其每发现一层, 就新创建一个报文, 重走解码流程及后续检测流程, 以保证
+内、外层报文头均过检测, 但仅有内层过内容检测。中间构建的tunnel报文
+除最外层报文(root)由最内层报文释放时一块释放外, 其他报文走正常的释
+放逻辑
         
 --DecodePcap()
   --DecodeLinkLayer()
@@ -306,7 +326,7 @@ tcp协议上的应用层协议检测时，需要做数据重组
 --SuricataMain()
   --PostConfLoadedSetup()
     --PreRunInit()
-      --StreamTcpInitConfig()      TCP流重组初始化
+      --StreamTcpInitConfig()      读取TCP流重组配置文件
         --StreamTcpReassembleInit()
         --FlowSetProtoFreeFunc()     注册 flow_freefuncs[], StreamTcpSessionClear()
 
@@ -314,7 +334,7 @@ tcp协议上的应用层协议检测时，需要做数据重组
 --TmThreadsSlotPktAcqLoop()        PCAP入口函数
   --TmSlot->SlotThreadInit()
   -->FlowWorkerThreadInit()        初始化 TMM_FLOWWORKER 运行环境
-    --StreamTcpThreadInit()        初始化流汇聚环境
+    --StreamTcpThreadInit()        初始化流汇聚环境, FlowWorkerThreadData->stream_thread_ptr/StreamTcpThread
 
     
 --FlowWorker()

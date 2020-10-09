@@ -67,7 +67,7 @@
 typedef struct StreamingBufferConfig_ {
     uint32_t flags;
     uint32_t buf_slide;
-    uint32_t buf_size;
+    uint32_t buf_size;      /* 默认大小2k */
     void *(*Malloc)(size_t size);
     void *(*Calloc)(size_t n, size_t size);
     void *(*Realloc)(void *ptr, size_t orig_size, size_t size);
@@ -94,11 +94,11 @@ StreamingBufferBlock *SBB_RB_FIND_INCLUSIVE(struct SBB *head, StreamingBufferBlo
 
 typedef struct StreamingBuffer_ {
     const StreamingBufferConfig *cfg;  /* 指向 stream_config */
-    uint64_t stream_offset; /* 维护slide后偏移仍然正确，不slide值为0 */
+    uint64_t stream_offset; /* 维护slide后偏移仍然正确(slide量)，不slide值为0 */
 
     uint8_t *buf;           /* 缓存起始地址 */
     uint32_t buf_size;      /* 已分配的缓存大小 */
-    uint32_t buf_offset;    /* 实际已缓存数据的右边界 */
+    uint32_t buf_offset;    /* 实际已缓存数据的右边界, 相对于->buf的偏移 */
 
     struct SBB sbb_tree;    /* 存储缓存段信息, StreamingBufferBlock, red black tree of Stream Buffer Blocks */
     StreamingBufferBlock *head; /**< head, should always be the same as RB_MIN */
@@ -114,8 +114,8 @@ typedef struct StreamingBuffer_ {
 #endif
 
 typedef struct StreamingBufferSegment_ {
-    uint32_t segment_len;
-    uint64_t stream_offset;
+    uint32_t segment_len;     /* 长度 */
+    uint64_t stream_offset;   /* 偏移 */
 } __attribute__((__packed__)) StreamingBufferSegment;
 
 StreamingBuffer *StreamingBufferInit(const StreamingBufferConfig *cfg);

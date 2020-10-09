@@ -160,7 +160,7 @@ static inline bool CheckOverlap(struct TCPSEG *tree, TcpSegment *seg)
  */
 static int DoInsertSegment (TcpStream *stream, TcpSegment *seg, TcpSegment **dup_seg, Packet *p)
 {
-    /* before our base_seq we don't insert it in our list */
+    /* 段落在起始序号外, <TK!!!>有此情形??? before our base_seq we don't insert it in our list */
     if (SEQ_LEQ(SEG_SEQ_RIGHT_EDGE(seg), stream->base_seq))
     {
         SCLogDebug("not inserting: SEQ+payload %"PRIu32", last_ack %"PRIu32", "
@@ -170,7 +170,7 @@ static int DoInsertSegment (TcpStream *stream, TcpSegment *seg, TcpSegment **dup
         return -1;
     }
 
-    /* 首次插入，fast track */
+    /* 首次插入, 记录右边界, fast track */
     if (RB_EMPTY(&stream->seg_tree)) {
         SCLogDebug("empty tree, inserting seg %p seq %" PRIu32 ", "
                    "len %" PRIu32 "", seg, seg->seq, TCP_SEG_LEN(seg));

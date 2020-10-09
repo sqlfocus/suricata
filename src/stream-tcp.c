@@ -5222,7 +5222,7 @@ TmEcode StreamTcpThreadInit(ThreadVars *tv, void *initdata, void **data)
         SCReturnInt(TM_ECODE_FAILED);
     memset(stt, 0, sizeof(StreamTcpThread));
     stt->ssn_pool_id = -1;
-
+    /* 赋值 FlowWorkerThreadData->stream_thread_ptr */
     *data = (void *)stt;
 
     stt->counter_tcp_sessions = StatsRegisterCounter("tcp.sessions", tv);

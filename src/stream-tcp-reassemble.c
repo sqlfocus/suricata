@@ -76,7 +76,7 @@ static PoolThread *segment_thread_pool = NULL;     /* 流汇聚需要的报文�
 /* init only, protect initializing and growing pool */
 static SCMutex segment_thread_pool_mutex = SCMUTEX_INITIALIZER;
 
-/* Memory use counter */
+/* 流汇聚使用的内存, Memory use counter */
 SC_ATOMIC_DECLARE(uint64_t, ra_memuse);
 
 /* prototypes */
@@ -382,7 +382,7 @@ static int StreamTcpReassemblyConfig(char quiet)
     }
 
     stream_config.sbcnf.flags = STREAMING_BUFFER_NOFLAGS;
-    stream_config.sbcnf.buf_size = 2048;
+    stream_config.sbcnf.buf_size = 2048;   /* 重组缓存大小为2k */
     stream_config.sbcnf.Malloc = ReassembleMalloc;
     stream_config.sbcnf.Calloc = ReassembleCalloc;
     stream_config.sbcnf.Realloc = ReassembleRealloc;
@@ -639,7 +639,7 @@ int StreamTcpReassembleHandleSegmentHandleData(ThreadVars *tv, TcpReassemblyThre
         SCReturnInt(-1);
     }
 
-    TCP_SEG_LEN(seg) = size;    /* 初始化其缓存信息 */
+    TCP_SEG_LEN(seg) = size;    /* 初始化其缓存信息: 缓存数据量, 缓存起始序号 */
     seg->seq = TCP_GET_SEQ(p);
 
     /* HACK: for TFO SYN packets the seq for data starts at + 1 */

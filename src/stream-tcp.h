@@ -33,10 +33,10 @@
 #define STREAM_VERBOSE    FALSE
 /* Flag to indicate that the checksum validation for the stream engine
    has been enabled */
-#define STREAMTCP_INIT_FLAG_CHECKSUM_VALIDATION    BIT_U8(0)
-#define STREAMTCP_INIT_FLAG_DROP_INVALID           BIT_U8(1)
-#define STREAMTCP_INIT_FLAG_BYPASS                 BIT_U8(2)
-#define STREAMTCP_INIT_FLAG_INLINE                 BIT_U8(3)
+#define STREAMTCP_INIT_FLAG_CHECKSUM_VALIDATION    BIT_U8(0)  /* 校验和错误后, 此报文不处理 */
+#define STREAMTCP_INIT_FLAG_DROP_INVALID           BIT_U8(1)  /* inline模式时, 丢弃非流内报文 */
+#define STREAMTCP_INIT_FLAG_BYPASS                 BIT_U8(2)  /* bypass模式, 到达重组深度后, 丢弃报文 */
+#define STREAMTCP_INIT_FLAG_INLINE                 BIT_U8(3)  /* inline模式 */
 
 /*global flow data*/
 typedef struct TcpStreamCnf_ {
@@ -53,18 +53,18 @@ typedef struct TcpStreamCnf_ {
     uint8_t flags;
     uint8_t max_synack_queued;
 
-    uint32_t prealloc_sessions; /**< ssns to prealloc per stream thread */
-    uint32_t prealloc_segments; /**< segments to prealloc per stream thread */
+    uint32_t prealloc_sessions; /* 预分配的 TcpSession 数, 描述TCP会话 *< ssns to prealloc per stream thread */
+    uint32_t prealloc_segments; /* 预分配的 TcpSegment 数, 描述缓存的段信息 *< segments to prealloc per stream thread */
     int midstream;              /* 中间报文是否可以触发建立 TcpSession */
     int async_oneside;          /* 异步单边，可以理解为单向数据包捕获，即只有一个方向的数据包经过IDS */
-    uint32_t reassembly_depth;  /**< Depth until when we reassemble the stream */
+    uint32_t reassembly_depth;  /* *< Depth until when we reassemble the stream */
 
     uint16_t reassembly_toserver_chunk_size;
     uint16_t reassembly_toclient_chunk_size;
 
     bool streaming_log_api;
 
-    StreamingBufferConfig sbcnf;
+    StreamingBufferConfig sbcnf;/* 重组内存的操控方法集 */
 } TcpStreamCnf;
 
 typedef struct StreamTcpThread_ {
