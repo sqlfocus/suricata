@@ -54,7 +54,7 @@ AppProto AppLayerRegisterProtocolDetection(const struct AppLayerParser *p, int e
 
     AppLayerProtoDetectRegisterProtocol(alproto, p->name);
 
-    if (p->ProbeTS == NULL || p->ProbeTC == NULL) {
+    if (p->ProbeTS == NULL && p->ProbeTC == NULL) {
         return alproto;
     }
 
@@ -174,6 +174,16 @@ int AppLayerRegisterParser(const struct AppLayerParser *p, AppProto alproto)
     if (p->ApplyTxConfig) {
         AppLayerParserRegisterApplyTxConfigFunc(p->ip_proto, alproto,
                 p->ApplyTxConfig);
+    }
+
+    if (p->flags) {
+        AppLayerParserRegisterOptionFlags(p->ip_proto, alproto,
+                p->flags);
+
+    }
+
+    if (p->Truncate) {
+        AppLayerParserRegisterTruncateFunc(p->ip_proto, alproto, p->Truncate);
     }
 
     return 0;

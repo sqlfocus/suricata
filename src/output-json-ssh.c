@@ -1,4 +1,4 @@
-/* Copyright (C) 2014 Open Information Security Foundation
+/* Copyright (C) 2014-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -61,6 +61,7 @@ typedef struct OutputSshCtx_ {
 
 typedef struct JsonSshLogThread_ {
     OutputSshCtx *sshlog_ctx;
+    LogFileCtx *file_ctx;
     MemBuffer *buffer;
 } JsonSshLogThread;
 
@@ -89,7 +90,7 @@ static int JsonSshLogger(ThreadVars *tv, void *thread_data, const Packet *p,
         goto end;
     }
     jb_close(js);
-    OutputJsonBuilderBuffer(js, ssh_ctx->file_ctx, &aft->buffer);
+    OutputJsonBuilderBuffer(js, aft->file_ctx, &aft->buffer);
 
 end:
     jb_free(js);
@@ -98,29 +99,37 @@ end:
 
 static TmEcode JsonSshLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonSshLogThread *aft = SCMalloc(sizeof(JsonSshLogThread));
-    if (unlikely(aft == NULL))
-        return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(JsonSshLogThread));
-
-    if(initdata == NULL)
-    {
+    if (initdata == NULL) {
         SCLogDebug("Error getting context for EveLogSSH.  \"initdata\" argument NULL");
-        SCFree(aft);
         return TM_ECODE_FAILED;
     }
 
-    /* Use the Ouptut Context (file pointer and mutex) */
+    JsonSshLogThread *aft = SCCalloc(1, sizeof(JsonSshLogThread));
+    if (unlikely(aft == NULL))
+        return TM_ECODE_FAILED;
+
+    /* Use the Output Context (file pointer and mutex) */
     aft->sshlog_ctx = ((OutputCtx *)initdata)->data;
 
     aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
     if (aft->buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
+    }
+
+    aft->file_ctx = LogFileEnsureExists(aft->sshlog_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
     }
 
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->buffer != NULL) {
+        MemBufferFree(aft->buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonSshLogThreadDeinit(ThreadVars *t, void *data)
@@ -136,55 +145,6 @@ static TmEcode JsonSshLogThreadDeinit(ThreadVars *t, void *data)
 
     SCFree(aft);
     return TM_ECODE_OK;
-}
-
-static void OutputSshLogDeinit(OutputCtx *output_ctx)
-{
-    OutputSshCtx *ssh_ctx = output_ctx->data;
-    LogFileCtx *logfile_ctx = ssh_ctx->file_ctx;
-    LogFileFreeCtx(logfile_ctx);
-    SCFree(ssh_ctx);
-    SCFree(output_ctx);
-}
-
-#define DEFAULT_LOG_FILENAME "ssh.json"
-static OutputInitResult OutputSshLogInit(ConfNode *conf)
-{
-    OutputInitResult result = { NULL, false };
-    LogFileCtx *file_ctx = LogFileNewCtx();
-    if(file_ctx == NULL) {
-        SCLogError(SC_ERR_SSH_LOG_GENERIC, "couldn't create new file_ctx");
-        return result;
-    }
-
-    if (SCConfLogOpenGeneric(conf, file_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputSshCtx *ssh_ctx = SCMalloc(sizeof(OutputSshCtx));
-    if (unlikely(ssh_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
-    if (unlikely(output_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        SCFree(ssh_ctx);
-        return result;
-    }
-
-    ssh_ctx->file_ctx = file_ctx;
-
-    output_ctx->data = ssh_ctx;
-    output_ctx->DeInit = OutputSshLogDeinit;
-
-    AppLayerParserRegisterLogger(IPPROTO_TCP, ALPROTO_SSH);
-
-    result.ctx = output_ctx;
-    result.ok = true;
-    return result;
 }
 
 static void OutputSshLogDeinitSub(OutputCtx *output_ctx)
@@ -224,13 +184,7 @@ static OutputInitResult OutputSshLogInitSub(ConfNode *conf, OutputCtx *parent_ct
 
 void JsonSshLogRegister (void)
 {
-    /* register as separate module */
-    OutputRegisterTxModuleWithCondition(LOGGER_JSON_SSH,
-        "JsonSshLog", "ssh-json-log",
-        OutputSshLogInit, ALPROTO_SSH, JsonSshLogger,
-        SSHTxLogCondition, JsonSshLogThreadInit, JsonSshLogThreadDeinit, NULL);
-
-    /* also register as child of eve-log */
+    /* register as child of eve-log */
     OutputRegisterTxSubModuleWithCondition(LOGGER_JSON_SSH,
         "eve-log", "JsonSshLog", "eve-log.ssh",
         OutputSshLogInitSub, ALPROTO_SSH, JsonSshLogger,

@@ -20,7 +20,6 @@ use crate::core;
 use crate::core::{ALPROTO_UNKNOWN, AppProto, Flow, IPPROTO_UDP};
 use crate::core::{sc_detect_engine_state_free, sc_app_layer_decoder_events_free_events};
 use crate::dhcp::parser::*;
-use crate::log::*;
 use std;
 use std::ffi::{CStr,CString};
 use std::mem::transmute;
@@ -307,7 +306,7 @@ pub extern "C" fn rs_dhcp_state_tx_free(
 }
 
 #[no_mangle]
-pub extern "C" fn rs_dhcp_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_dhcp_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = DHCPState::new();
     let boxed = Box::new(state);
     return unsafe {
@@ -437,6 +436,8 @@ pub unsafe extern "C" fn rs_dhcp_register_parser() {
         get_tx_iterator    : Some(rs_dhcp_state_get_tx_iterator),
         get_tx_data        : rs_dhcp_get_tx_data,
         apply_tx_config    : None,
+        flags              : APP_LAYER_PARSER_OPT_UNIDIR_TXS,
+        truncate           : None,
     };
 
     let ip_proto_str = CString::new("udp").unwrap();

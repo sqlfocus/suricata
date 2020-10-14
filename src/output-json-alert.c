@@ -1,4 +1,4 @@
-/* Copyright (C) 2013-2014 Open Information Security Foundation
+/* Copyright (C) 2013-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -35,6 +35,7 @@
 #include "threadvars.h"
 #include "util-debug.h"
 
+#include "util-logopenfile.h"
 #include "util-misc.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
@@ -69,6 +70,7 @@
 #include "output-json-flow.h"
 #include "output-json-sip.h"
 #include "output-json-rfb.h"
+#include "output-json-mqtt.h"
 
 #include "util-byte.h"
 #include "util-privs.h"
@@ -160,6 +162,24 @@ static void AlertJsonSsh(const Flow *f, JsonBuilder *js)
     return;
 }
 
+static void AlertJsonHttp2(const Flow *f, const uint64_t tx_id, JsonBuilder *js)
+{
+    void *h2_state = FlowGetAppState(f);
+    if (h2_state) {
+        void *tx_ptr = rs_http2_state_get_tx(h2_state, tx_id);
+        JsonBuilderMark mark = { 0, 0, 0 };
+        jb_get_mark(js, &mark);
+        jb_open_object(js, "http");
+        if (rs_http2_log_json(tx_ptr, js)) {
+            jb_close(js);
+        } else {
+            jb_restore_mark(js, &mark);
+        }
+    }
+
+    return;
+}
+
 static void AlertJsonDnp3(const Flow *f, const uint64_t tx_id, JsonBuilder *js)
 {
     DNP3State *dnp3_state = (DNP3State *)FlowGetAppState(f);
@@ -215,6 +235,36 @@ static void AlertJsonDns(const Flow *f, const uint64_t tx_id, JsonBuilder *js)
         }
     }
     return;
+}
+
+static void AlertJsonSNMP(const Flow *f, const uint64_t tx_id, JsonBuilder *js)
+{
+    void *snmp_state = (void *)FlowGetAppState(f);
+    if (snmp_state != NULL) {
+        void *tx = AppLayerParserGetTx(f->proto, ALPROTO_SNMP, snmp_state,
+                tx_id);
+        if (tx != NULL) {
+            jb_open_object(js, "snmp");
+            rs_snmp_log_json_response(js, snmp_state, tx);
+            jb_close(js);
+        }
+    }
+}
+
+static void AlertJsonRDP(const Flow *f, const uint64_t tx_id, JsonBuilder *js)
+{
+    void *rdp_state = (void *)FlowGetAppState(f);
+    if (rdp_state != NULL) {
+        void *tx = AppLayerParserGetTx(f->proto, ALPROTO_RDP, rdp_state,
+                tx_id);
+        if (tx != NULL) {
+            JsonBuilderMark mark = { 0, 0, 0 };
+            jb_get_mark(js, &mark);
+            if (!rs_rdp_to_json(tx, js)) {
+                jb_restore_mark(js, &mark);
+            }
+        }
+    }
 }
 
 static void AlertJsonSourceTarget(const Packet *p, const PacketAlert *pa,
@@ -278,33 +328,10 @@ static void AlertJsonSourceTarget(const Packet *p, const PacketAlert *pa,
 }
 
 static void AlertJsonMetadata(AlertJsonOutputCtx *json_output_ctx,
-        const PacketAlert *pa, JsonBuilder *ajs)
+        const PacketAlert *pa, JsonBuilder *js)
 {
-    if (pa->s->metadata) {
-        const DetectMetadata* kv = pa->s->metadata;
-        json_t *mjs = json_object();
-        if (unlikely(mjs == NULL)) {
-            return;
-        }
-        while (kv) {
-            json_t *jkey = json_object_get(mjs, kv->key);
-            if (jkey == NULL) {
-                jkey = json_array();
-                if (unlikely(jkey == NULL))
-                    break;
-                json_array_append_new(jkey, json_string(kv->value));
-                json_object_set_new(mjs, kv->key, jkey);
-            } else {
-                json_array_append_new(jkey, json_string(kv->value));
-            }
-
-            kv = kv->next;
-        }
-
-        if (json_object_size(mjs) > 0) {
-            jb_set_jsont(ajs, "metadata", mjs);
-        }
-        json_decref(mjs);
+    if (pa->s->metadata && pa->s->metadata->json_str) {
+        jb_set_formatted(js, pa->s->metadata->json_str);
     }
 }
 
@@ -495,8 +522,23 @@ static void AlertAddAppLayer(const Packet *p, JsonBuilder *jb,
         case ALPROTO_DNP3:
             AlertJsonDnp3(p->flow, tx_id, jb);
             break;
+        case ALPROTO_HTTP2:
+            AlertJsonHttp2(p->flow, tx_id, jb);
+            break;
         case ALPROTO_DNS:
             AlertJsonDns(p->flow, tx_id, jb);
+            break;
+        case ALPROTO_MQTT:
+            jb_get_mark(jb, &mark);
+            if (!JsonMQTTAddMetadata(p->flow, tx_id, jb)) {
+                jb_restore_mark(jb, &mark);
+            }
+            break;
+        case ALPROTO_SNMP:
+            AlertJsonSNMP(p->flow, tx_id, jb);
+            break;
+        case ALPROTO_RDP:
+            AlertJsonRDP(p->flow, tx_id, jb);
             break;
         default:
             break;
@@ -514,7 +556,7 @@ static void AlertAddFiles(const Packet *p, JsonBuilder *jb, const uint64_t tx_id
             if (tx_id == file->txid) {
                 if (!isopen) {
                     isopen = true;
-                    jb_open_array(jb, "fileinfo");
+                    jb_open_array(jb, "files");
                 }
                 jb_start_object(jb);
                 EveFileInfo(jb, file, file->flags & FILE_STORED);
@@ -739,37 +781,47 @@ static int JsonAlertLogCondition(ThreadVars *tv, const Packet *p)
 
 static TmEcode JsonAlertLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonAlertLogThread *aft = SCMalloc(sizeof(JsonAlertLogThread));
+    JsonAlertLogThread *aft = SCCalloc(1, sizeof(JsonAlertLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(JsonAlertLogThread));
-    if(initdata == NULL)
+
+    if (initdata == NULL)
     {
         SCLogDebug("Error getting context for EveLogAlert.  \"initdata\" argument NULL");
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
     }
 
     aft->json_buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
     if (aft->json_buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
     }
 
     /** Use the Output Context (file pointer and mutex) */
     AlertJsonOutputCtx *json_output_ctx = ((OutputCtx *)initdata)->data;
-    aft->file_ctx = json_output_ctx->file_ctx;
-    aft->json_output_ctx = json_output_ctx;
 
     aft->payload_buffer = MemBufferCreateNew(json_output_ctx->payload_buffer_size);
     if (aft->payload_buffer == NULL) {
-        MemBufferFree(aft->json_buffer);
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
     }
+    aft->file_ctx = LogFileEnsureExists(json_output_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
+    }
+
+    aft->json_output_ctx = json_output_ctx;
 
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->json_buffer != NULL) {
+        MemBufferFree(aft->json_buffer);
+    }
+    if (aft->payload_buffer != NULL) {
+        MemBufferFree(aft->payload_buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonAlertLogThreadDeinit(ThreadVars *t, void *data)
@@ -787,20 +839,6 @@ static TmEcode JsonAlertLogThreadDeinit(ThreadVars *t, void *data)
 
     SCFree(aft);
     return TM_ECODE_OK;
-}
-
-static void JsonAlertLogDeInitCtx(OutputCtx *output_ctx)
-{
-    AlertJsonOutputCtx *json_output_ctx = (AlertJsonOutputCtx *) output_ctx->data;
-    if (json_output_ctx != NULL) {
-        HttpXFFCfg *xff_cfg = json_output_ctx->xff_cfg;
-        if (xff_cfg != NULL) {
-            SCFree(xff_cfg);
-        }
-        LogFileFreeCtx(json_output_ctx->file_ctx);
-        SCFree(json_output_ctx);
-    }
-    SCFree(output_ctx);
 }
 
 static void JsonAlertLogDeInitCtxSub(OutputCtx *output_ctx)
@@ -932,53 +970,6 @@ static HttpXFFCfg *JsonAlertLogGetXffCfg(ConfNode *conf)
  * \param conf The configuration node for this output.
  * \return A LogFileCtx pointer on success, NULL on failure.
  */
-static OutputInitResult JsonAlertLogInitCtx(ConfNode *conf)
-{
-    OutputInitResult result = { NULL, false };
-    AlertJsonOutputCtx *json_output_ctx = NULL;
-    LogFileCtx *logfile_ctx = LogFileNewCtx();
-    if (logfile_ctx == NULL) {
-        SCLogDebug("AlertFastLogInitCtx2: Could not create new LogFileCtx");
-        return result;
-    }
-
-    if (SCConfLogOpenGeneric(conf, logfile_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
-        LogFileFreeCtx(logfile_ctx);
-        return result;
-    }
-
-    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
-    if (unlikely(output_ctx == NULL)) {
-        LogFileFreeCtx(logfile_ctx);
-        return result;
-    }
-
-    json_output_ctx = SCMalloc(sizeof(AlertJsonOutputCtx));
-    if (unlikely(json_output_ctx == NULL)) {
-        LogFileFreeCtx(logfile_ctx);
-        SCFree(output_ctx);
-        return result;
-    }
-    memset(json_output_ctx, 0, sizeof(AlertJsonOutputCtx));
-
-    json_output_ctx->file_ctx = logfile_ctx;
-
-    JsonAlertLogSetupMetadata(json_output_ctx, conf);
-    json_output_ctx->xff_cfg = JsonAlertLogGetXffCfg(conf);
-
-    output_ctx->data = json_output_ctx;
-    output_ctx->DeInit = JsonAlertLogDeInitCtx;
-
-    result.ctx = output_ctx;
-    result.ok = true;
-    return result;
-}
-
-/**
- * \brief Create a new LogFileCtx for "fast" output style.
- * \param conf The configuration node for this output.
- * \return A LogFileCtx pointer on success, NULL on failure.
- */
 static OutputInitResult JsonAlertLogInitCtxSub(ConfNode *conf, OutputCtx *parent_ctx)
 {
     OutputInitResult result = { NULL, false };
@@ -1024,9 +1015,6 @@ error:
 
 void JsonAlertLogRegister (void)
 {
-    OutputRegisterPacketModule(LOGGER_JSON_ALERT, MODULE_NAME, "alert-json-log",
-        JsonAlertLogInitCtx, JsonAlertLogger, JsonAlertLogCondition,
-        JsonAlertLogThreadInit, JsonAlertLogThreadDeinit, NULL);
     OutputRegisterPacketSubModule(LOGGER_JSON_ALERT, "eve-log", MODULE_NAME,
         "eve-log.alert", JsonAlertLogInitCtxSub, JsonAlertLogger,
         JsonAlertLogCondition, JsonAlertLogThreadInit, JsonAlertLogThreadDeinit,

@@ -17,7 +17,6 @@
 
 #![allow(clippy::missing_safety_doc)]
 
-use crate::json;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::str::Utf8Error;
@@ -388,34 +387,6 @@ impl JsonBuilder {
         Ok(self)
     }
 
-    pub fn set_jsont(
-        &mut self, key: &str, jsont: &mut json::JsonT,
-    ) -> Result<&mut Self, JsonError> {
-        match self.current_state() {
-            State::ObjectNth => self.buf.push(','),
-            State::ObjectFirst => self.set_state(State::ObjectNth),
-            _ => {
-                debug_validate_fail!("invalid state");
-                return Err(JsonError::InvalidState);
-            }
-        }
-        self.buf.push('"');
-        self.buf.push_str(key);
-        self.buf.push_str("\":");
-        self.append_jsont(jsont)?;
-        Ok(self)
-    }
-
-    fn append_jsont(&mut self, jsont: &mut json::JsonT) -> Result<&mut Self, JsonError> {
-        unsafe {
-            let raw = json::json_dumps(jsont, 0);
-            let rendered = std::ffi::CStr::from_ptr(raw).to_str()?;
-            self.buf.push_str(rendered);
-            libc::free(raw as *mut std::os::raw::c_void);
-            Ok(self)
-        }
-    }
-
     /// Set a key and string value type on an object.
     #[inline(always)]
     pub fn set_string(&mut self, key: &str, val: &str) -> Result<&mut Self, JsonError> {
@@ -700,16 +671,6 @@ pub unsafe extern "C" fn jb_set_formatted(js: &mut JsonBuilder, formatted: *cons
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn jb_set_jsont(
-    jb: &mut JsonBuilder, key: *const c_char, jsont: &mut json::JsonT,
-) -> bool {
-    if let Ok(key) = CStr::from_ptr(key).to_str() {
-        return jb.set_jsont(key, jsont).is_ok();
-    }
-    return false;
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn jb_append_object(jb: &mut JsonBuilder, obj: &JsonBuilder) -> bool {
     jb.append_object(obj).is_ok()
 }
@@ -868,6 +829,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "debug-validate"))]
     fn test_array_in_object() -> Result<(), JsonError> {
         let mut js = JsonBuilder::new_object();
 

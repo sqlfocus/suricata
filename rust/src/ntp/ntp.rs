@@ -25,8 +25,6 @@ use crate::applayer::{self, *};
 use std;
 use std::ffi::{CStr,CString};
 
-use crate::log::*;
-
 use nom;
 
 #[repr(u32)]
@@ -177,7 +175,7 @@ impl Drop for NTPTransaction {
 
 /// Returns *mut NTPState
 #[no_mangle]
-pub extern "C" fn rs_ntp_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_ntp_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = NTPState::new();
     let boxed = Box::new(state);
     return unsafe{std::mem::transmute(boxed)};
@@ -408,6 +406,8 @@ pub unsafe extern "C" fn rs_register_ntp_parser() {
         get_tx_iterator    : None,
         get_tx_data        : rs_ntp_get_tx_data,
         apply_tx_config    : None,
+        flags              : APP_LAYER_PARSER_OPT_UNIDIR_TXS,
+        truncate           : None,
     };
 
     let ip_proto_str = CString::new("udp").unwrap();

@@ -21,7 +21,6 @@ use std;
 use std::ffi::CString;
 use std::mem::transmute;
 use crate::core::{self, ALPROTO_UNKNOWN, AppProto, Flow, IPPROTO_TCP};
-use crate::log::*;
 use crate::applayer;
 use crate::applayer::*;
 use nom;
@@ -519,7 +518,7 @@ export_tx_set_detect_state!(
 );
 
 #[no_mangle]
-pub extern "C" fn rs_rfb_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_rfb_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = RFBState::new();
     let boxed = Box::new(state);
     return unsafe { transmute(boxed) };
@@ -700,6 +699,8 @@ pub unsafe extern "C" fn rs_rfb_register_parser() {
         get_tx_iterator: Some(rs_rfb_state_get_tx_iterator),
         get_tx_data: rs_rfb_get_tx_data,
         apply_tx_config: None,
+        flags: 0,
+        truncate: None,
     };
 
     let ip_proto_str = CString::new("tcp").unwrap();

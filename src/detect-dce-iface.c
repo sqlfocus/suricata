@@ -58,7 +58,9 @@ static int DetectDceIfaceMatchRust(DetectEngineThreadCtx *det_ctx,
         const Signature *s, const SigMatchCtx *m);
 static int DetectDceIfaceSetup(DetectEngineCtx *, Signature *, const char *);
 static void DetectDceIfaceFree(DetectEngineCtx *, void *);
+#ifdef UNITTESTS
 static void DetectDceIfaceRegisterTests(void);
+#endif
 static int g_dce_generic_list_id = 0;
 
 static int InspectDceGeneric(ThreadVars *tv,
@@ -77,8 +79,9 @@ void DetectDceIfaceRegister(void)
     sigmatch_table[DETECT_DCE_IFACE].AppLayerTxMatch = DetectDceIfaceMatchRust;
     sigmatch_table[DETECT_DCE_IFACE].Setup = DetectDceIfaceSetup;
     sigmatch_table[DETECT_DCE_IFACE].Free  = DetectDceIfaceFree;
+#ifdef UNITTESTS
     sigmatch_table[DETECT_DCE_IFACE].RegisterTests = DetectDceIfaceRegisterTests;
-
+#endif
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 
     g_dce_generic_list_id = DetectBufferTypeRegister("dce_generic");
@@ -126,7 +129,7 @@ static int DetectDceIfaceMatchRust(DetectEngineThreadCtx *det_ctx,
 
     if (f->alproto == ALPROTO_DCERPC) {
         // TODO check if state is NULL
-        return rs_dcerpc_iface_match(state, (void *)m);
+        return rs_dcerpc_iface_match(txv, state, (void *)m);
     }
 
     int ret = 0;
@@ -157,7 +160,9 @@ static int DetectDceIfaceSetup(DetectEngineCtx *de_ctx, Signature *s, const char
 {
     SCEnter();
 
-    if (DetectSignatureSetAppProto(s, ALPROTO_DCERPC) != 0) {
+    if (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_DCERPC &&
+        s->alproto != ALPROTO_SMB) {
+        SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "rule contains conflicting keywords.");
         return -1;
     }
     void *did = rs_dcerpc_iface_parse(arg);
@@ -176,6 +181,7 @@ static int DetectDceIfaceSetup(DetectEngineCtx *de_ctx, Signature *s, const char
     sm->ctx = did;
 
     SigMatchAppendSMToList(s, sm, g_dce_generic_list_id);
+    s->init_data->init_flags |= SIG_FLAG_INIT_DCERPC;
     return 0;
 }
 
@@ -823,11 +829,8 @@ static int DetectDceIfaceTestParse2(void)
     return result;
 }
 
-#endif
-
 static void DetectDceIfaceRegisterTests(void)
 {
-#ifdef UNITTESTS
     UtRegisterTest("DetectDceIfaceTestParse1", DetectDceIfaceTestParse1);
     /* Disabled because of bug_753.  Would be enabled, once we rewrite
      * dce parser */
@@ -835,5 +838,5 @@ static void DetectDceIfaceRegisterTests(void)
     UtRegisterTest("DetectDceIfaceTestParse13", DetectDceIfaceTestParse13, 1);
 #endif
     UtRegisterTest("DetectDceIfaceTestParse2", DetectDceIfaceTestParse2);
-#endif
 }
+#endif /* UNITTESTS */

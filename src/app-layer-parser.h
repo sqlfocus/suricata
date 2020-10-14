@@ -33,11 +33,13 @@
 #include "util-config.h"
 
 /* Flags for AppLayerParserState. */
-#define APP_LAYER_PARSER_EOF                    BIT_U8(0)
+// flag available                               BIT_U8(0)
 #define APP_LAYER_PARSER_NO_INSPECTION          BIT_U8(1)
 #define APP_LAYER_PARSER_NO_REASSEMBLY          BIT_U8(2)
 #define APP_LAYER_PARSER_NO_INSPECTION_PAYLOAD  BIT_U8(3)
 #define APP_LAYER_PARSER_BYPASS_READY           BIT_U8(4)
+#define APP_LAYER_PARSER_EOF_TS                 BIT_U8(5)
+#define APP_LAYER_PARSER_EOF_TC                 BIT_U8(6)
 
 /* Flags for AppLayerParserProtoCtx. */
 #define APP_LAYER_PARSER_OPT_ACCEPT_GAPS        BIT_U32(0)
@@ -143,8 +145,7 @@ void AppLayerParserRegisterParserAcceptableDataDirection(uint8_t ipproto,
 void AppLayerParserRegisterOptionFlags(uint8_t ipproto, AppProto alproto,
         uint32_t flags);
 void AppLayerParserRegisterStateFuncs(uint8_t ipproto, AppProto alproto,
-                           void *(*StateAlloc)(void),
-                           void (*StateFree)(void *));
+        void *(*StateAlloc)(void *, AppProto), void (*StateFree)(void *));
 void AppLayerParserRegisterLocalStorageFunc(uint8_t ipproto, AppProto proto,
                                  void *(*LocalStorageAlloc)(void),
                                  void (*LocalStorageFree)(void *));
@@ -256,6 +257,8 @@ int AppLayerParserIsEnabled(AppProto alproto);
 
 /***** Cleanup *****/
 
+void AppLayerParserStateProtoCleanup(
+        uint8_t protomap, AppProto alproto, void *alstate, AppLayerParserState *pstate);
 void AppLayerParserStateCleanup(const Flow *f, void *alstate, AppLayerParserState *pstate);
 
 void AppLayerParserRegisterProtocolParsers(void);

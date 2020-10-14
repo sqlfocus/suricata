@@ -164,7 +164,8 @@ enum TcpState
 #define STREAMTCP_FLAG_TIMESTAMP                    0x0008
 /** Server supports wscale (even though it can be 0) */
 #define STREAMTCP_FLAG_SERVER_WSCALE                0x0010
-// vacancy
+/** Closed by RST */
+#define STREAMTCP_FLAG_CLOSED_BY_RST                0x0020
 /** Flag to indicate that the session is handling asynchronous stream.*/
 #define STREAMTCP_FLAG_ASYNC                        0x0040
 /** Flag to indicate we're dealing with 4WHS: SYN, SYN, SYN/ACK, ACK
@@ -194,8 +195,7 @@ enum TcpState
  * Per STREAM flags
  */
 
-/** stream is in a gap state */
-#define STREAMTCP_STREAM_FLAG_GAP                           BIT_U16(0)
+// bit 0 vacant
 /** Flag to avoid stream reassembly/app layer inspection for the stream */
 #define STREAMTCP_STREAM_FLAG_NOREASSEMBLY                  BIT_U16(1)
 /** we received a keep alive */

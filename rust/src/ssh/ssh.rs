@@ -19,7 +19,6 @@ use super::parser;
 use crate::applayer::*;
 use crate::core::STREAM_TOSERVER;
 use crate::core::{self, AppProto, Flow, ALPROTO_UNKNOWN, IPPROTO_TCP};
-use crate::log::*;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -62,7 +61,6 @@ pub enum SSHConnectionState {
 
 const SSH_MAX_BANNER_LEN: usize = 256;
 const SSH_RECORD_HEADER_LEN: usize = 6;
-const SSH_RECORD_PADDING_LEN: usize = 4;
 const SSH_MAX_REASSEMBLED_RECORD_LEN: usize = 65535;
 
 pub struct SshHeader {
@@ -158,24 +156,28 @@ impl SSHState {
         if hdr.record_left > 0 {
             //should we check for overflow ?
             let ilen = input.len() as u32;
-            if hdr.record_left >= ilen {
+            if hdr.record_left > ilen {
                 hdr.record_left -= ilen;
                 return AppLayerResult::ok();
             } else {
+                let start = hdr.record_left as usize;
                 match hdr.record_left_msg {
                     // parse reassembled tcp segments
                     parser::MessageCode::SshMsgKexinit if hassh_is_enabled() => {
-                        if let Ok((rem, key_exchange)) = parser::ssh_parse_key_exchange(&input) {
-                            key_exchange.generate_hassh(&mut hdr.hassh_string, &mut hdr.hassh, &resp);
-                            input = &rem[SSH_RECORD_PADDING_LEN..];
+                        if let Ok((_rem, key_exchange)) =
+                            parser::ssh_parse_key_exchange(&input[..start])
+                        {
+                            key_exchange.generate_hassh(
+                                &mut hdr.hassh_string,
+                                &mut hdr.hassh,
+                                &resp,
+                            );
                         }
                         hdr.record_left_msg = parser::MessageCode::SshMsgUndefined(0);
                     }
-                    _ => {
-                        let start = hdr.record_left as usize;
-                        input = &input[start..];
-                    }
+                    _ => {}
                 }
+                input = &input[start..];
                 hdr.record_left = 0;
             }
         }
@@ -186,7 +188,9 @@ impl SSHState {
                     SCLogDebug!("SSH valid record {}", head);
                     match head.msg_code {
                         parser::MessageCode::SshMsgKexinit if hassh_is_enabled() => {
-                        	if let Ok((_, key_exchange)) = parser::ssh_parse_key_exchange(&input[SSH_RECORD_HEADER_LEN..]) {
+                            //let endkex = SSH_RECORD_HEADER_LEN + head.pkt_len - 2;
+                            let endkex = input.len() - rem.len();
+                            if let Ok((_, key_exchange)) = parser::ssh_parse_key_exchange(&input[SSH_RECORD_HEADER_LEN..endkex]) {
                                 key_exchange.generate_hassh(&mut hdr.hassh_string, &mut hdr.hassh, &resp);
                             }
                         }
@@ -222,6 +226,7 @@ impl SSHState {
                                 }
                                 parser::MessageCode::SshMsgKexinit if hassh_is_enabled() => {
                                     // check if buffer is bigger than maximum reassembled packet size
+                                    hdr.record_left = head.pkt_len - 2;
                                     if hdr.record_left < SSH_MAX_REASSEMBLED_RECORD_LEN as u32 {
                                         // saving type of incomplete kex message
                                         hdr.record_left_msg = parser::MessageCode::SshMsgKexinit;
@@ -423,7 +428,7 @@ pub extern "C" fn rs_ssh_state_get_event_info_by_id(
 }
 
 #[no_mangle]
-pub extern "C" fn rs_ssh_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_ssh_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = SSHState::new();
     let boxed = Box::new(state);
     return unsafe { transmute(boxed) };
@@ -560,6 +565,8 @@ pub unsafe extern "C" fn rs_ssh_register_parser() {
         get_tx_iterator: None,
         get_tx_data: rs_ssh_get_tx_data,
         apply_tx_config: None,
+        flags: 0,
+        truncate: None,
     };
 
     let ip_proto_str = CString::new("tcp").unwrap();

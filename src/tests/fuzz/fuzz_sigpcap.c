@@ -130,6 +130,10 @@ app-layer:\n\
     ssh:\n\
       enabled: yes\n\
       hassh: yes\n\
+    mqtt:\n\
+      enabled: yes\n\
+    http2:\n\
+      enabled: yes\n\
 ";
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
@@ -167,6 +171,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         PostConfLoadedDetectSetup(&surifuzz);
 
         memset(&tv, 0, sizeof(tv));
+        tv.flow_queue = FlowQueueNew();
+        if (tv.flow_queue == NULL)
+            abort();
         dtv = DecodeThreadVarsAlloc(&tv);
         DecodeRegisterPerfCounters(dtv, &tv);
         tmm_modules[TMM_FLOWWORKER].ThreadInit(&tv, NULL, &fwd);

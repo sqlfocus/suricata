@@ -48,7 +48,6 @@ void TmModuleNapatechStreamRegister(void)
     tmm_modules[TMM_RECEIVENAPATECH].Func = NULL;
     tmm_modules[TMM_RECEIVENAPATECH].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_RECEIVENAPATECH].ThreadDeinit = NULL;
-    tmm_modules[TMM_RECEIVENAPATECH].RegisterTests = NULL;
     tmm_modules[TMM_RECEIVENAPATECH].cap_flags = SC_CAP_NET_ADMIN;
 }
 
@@ -59,7 +58,6 @@ void TmModuleNapatechDecodeRegister(void)
     tmm_modules[TMM_DECODENAPATECH].Func = NULL;
     tmm_modules[TMM_DECODENAPATECH].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_DECODENAPATECH].ThreadDeinit = NULL;
-    tmm_modules[TMM_DECODENAPATECH].RegisterTests = NULL;
     tmm_modules[TMM_DECODENAPATECH].cap_flags = 0;
     tmm_modules[TMM_DECODENAPATECH].flags = TM_FLAG_DECODE_TM;
 }
@@ -136,7 +134,6 @@ void TmModuleNapatechStreamRegister(void)
     tmm_modules[TMM_RECEIVENAPATECH].PktAcqBreakLoop = NULL;
     tmm_modules[TMM_RECEIVENAPATECH].ThreadExitPrintStats = NapatechStreamThreadExitStats;
     tmm_modules[TMM_RECEIVENAPATECH].ThreadDeinit = NapatechStreamThreadDeinit;
-    tmm_modules[TMM_RECEIVENAPATECH].RegisterTests = NULL;
     tmm_modules[TMM_RECEIVENAPATECH].cap_flags = SC_CAP_NET_RAW;
     tmm_modules[TMM_RECEIVENAPATECH].flags = TM_FLAG_RECEIVE_TM;
 
@@ -167,7 +164,6 @@ void TmModuleNapatechDecodeRegister(void)
     tmm_modules[TMM_DECODENAPATECH].Func = NapatechDecode;
     tmm_modules[TMM_DECODENAPATECH].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_DECODENAPATECH].ThreadDeinit = NapatechDecodeThreadDeinit;
-    tmm_modules[TMM_DECODENAPATECH].RegisterTests = NULL;
     tmm_modules[TMM_DECODENAPATECH].cap_flags = 0;
     tmm_modules[TMM_DECODENAPATECH].flags = TM_FLAG_DECODE_TM;
 }
@@ -683,11 +679,11 @@ static void NapatechReleasePacket(struct Packet_ *p)
      * If the packet is to be dropped we need to set the wirelength
      * before releasing the Napatech buffer back to NTService.
      */
+#ifdef NAPATECH_ENABLE_BYPASS
     if (is_inline && PACKET_TEST_ACTION(p, ACTION_DROP)) {
         p->ntpv.dyn3->wireLength = 0;
     }
 
-#ifdef NAPATECH_ENABLE_BYPASS
     /*
      *  If this flow is to be programmed for hardware bypass we do it now.  This is done
      *  here because the action is not available in the packet structure at the time of the
@@ -851,11 +847,11 @@ TmEcode NapatechPacketLoop(ThreadVars *tv, void *data, void *slot)
         SC_ATOMIC_ADD(stream_count, 1);
         if (SC_ATOMIC_GET(stream_count) == NapatechGetNumConfiguredStreams()) {
 
+#ifdef NAPATECH_ENABLE_BYPASS
             if (ConfGetBool("napatech.inline", &is_inline) == 0) {
                 is_inline = 0;
             }
 
-#ifdef NAPATECH_ENABLE_BYPASS
             /* Initialize the port map before we setup traffic filters */
             for (int i = 0; i < MAX_PORTS; ++i) {
                 inline_port_map[i] = -1;

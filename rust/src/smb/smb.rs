@@ -35,7 +35,6 @@ use std::collections::HashMap;
 use nom;
 
 use crate::core::*;
-use crate::log::*;
 use crate::applayer;
 use crate::applayer::{AppLayerResult, AppLayerTxData};
 
@@ -1825,7 +1824,7 @@ impl SMBState {
 
 /// Returns *mut SMBState
 #[no_mangle]
-pub extern "C" fn rs_smb_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_smb_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = SMBState::new();
     let boxed = Box::new(state);
     SCLogDebug!("allocating state");
@@ -2132,6 +2131,7 @@ pub extern "C" fn rs_smb_state_get_event_info_by_id(event_id: std::os::raw::c_in
             SMBEvent::MalformedNtlmsspResponse => { "malformed_ntlmssp_response\0" },
             SMBEvent::DuplicateNegotiate => { "duplicate_negotiate\0" },
             SMBEvent::NegotiateMalformedDialects => { "netogiate_malformed_dialects\0" },
+            SMBEvent::FileOverlap => { "file_overlap\0" },
         };
         unsafe{
             *event_name = estr.as_ptr() as *const std::os::raw::c_char;

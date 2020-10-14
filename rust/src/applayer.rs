@@ -228,6 +228,12 @@ pub struct RustParser {
     // the requests and responses are not sharing tx. It is then up to
     // the implementation to make sure the config is applied correctly.
     pub apply_tx_config: Option<ApplyTxConfigFn>,
+
+    pub flags: u32,
+
+    /// Function to handle the end of data coming on one of the sides
+    /// due to the stream reaching its 'depth' limit.
+    pub truncate: Option<TruncateFn>,
 }
 
 /// Create a slice, given a buffer and a length
@@ -254,7 +260,7 @@ pub type ParseFn      = extern "C" fn (flow: *const Flow,
                                        data: *const c_void,
                                        flags: u8) -> AppLayerResult;
 pub type ProbeFn      = extern "C" fn (flow: *const Flow,direction: u8,input:*const u8, input_len: u32, rdir: *mut u8) -> AppProto;
-pub type StateAllocFn = extern "C" fn () -> *mut c_void;
+pub type StateAllocFn = extern "C" fn (*mut c_void, AppProto) -> *mut c_void;
 pub type StateFreeFn  = extern "C" fn (*mut c_void);
 pub type StateTxFreeFn  = extern "C" fn (*mut c_void, u64);
 pub type StateGetTxFn            = extern "C" fn (*mut c_void, u64) -> *mut c_void;
@@ -277,6 +283,8 @@ pub type GetTxIteratorFn    = extern "C" fn (ipproto: u8, alproto: AppProto,
                                              -> AppLayerGetTxIterTuple;
 pub type GetTxDataFn = unsafe extern "C" fn(*mut c_void) -> *mut AppLayerTxData;
 pub type ApplyTxConfigFn = unsafe extern "C" fn (*mut c_void, *mut c_void, c_int, AppLayerTxConfig);
+pub type TruncateFn = unsafe extern "C" fn (*mut c_void, u8);
+
 
 // Defined in app-layer-register.h
 extern {

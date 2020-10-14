@@ -44,7 +44,7 @@
  * be the size of a header. */
 #define TFTP_MIN_FRAME_LEN 4
 
-static void *TFTPStateAlloc(void)
+static void *TFTPStateAlloc(void *orig_state, AppProto proto_orig)
 {
     return rs_tftp_state_alloc();
 }
@@ -104,7 +104,7 @@ static AppLayerResult TFTPParseRequest(Flow *f, void *state,
 
     /* Likely connection closed, we can just return here. */
     if ((input == NULL || input_len == 0) &&
-        AppLayerParserStateIssetFlag(pstate, APP_LAYER_PARSER_EOF)) {
+        AppLayerParserStateIssetFlag(pstate, APP_LAYER_PARSER_EOF_TS)) {
         SCReturnStruct(APP_LAYER_OK);
     }
 

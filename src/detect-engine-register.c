@@ -161,6 +161,7 @@
 #include "detect-http-stat-msg.h"
 #include "detect-http-request-line.h"
 #include "detect-http-response-line.h"
+#include "detect-http2.h"
 #include "detect-byte-extract.h"
 #include "detect-file-data.h"
 #include "detect-pkt-data.h"
@@ -199,6 +200,23 @@
 #include "detect-snmp-version.h"
 #include "detect-snmp-community.h"
 #include "detect-snmp-pdu_type.h"
+#include "detect-mqtt-type.h"
+#include "detect-mqtt-flags.h"
+#include "detect-mqtt-qos.h"
+#include "detect-mqtt-protocol-version.h"
+#include "detect-mqtt-reason-code.h"
+#include "detect-mqtt-connect-flags.h"
+#include "detect-mqtt-connect-clientid.h"
+#include "detect-mqtt-connect-username.h"
+#include "detect-mqtt-connect-password.h"
+#include "detect-mqtt-connect-willtopic.h"
+#include "detect-mqtt-connect-willmessage.h"
+#include "detect-mqtt-connack-sessionpresent.h"
+#include "detect-mqtt-publish-topic.h"
+#include "detect-mqtt-publish-message.h"
+#include "detect-mqtt-subscribe-topic.h"
+#include "detect-mqtt-unsubscribe-topic.h"
+
 #include "detect-template-buffer.h"
 #include "detect-bypass.h"
 #include "detect-ftpdata.h"
@@ -211,6 +229,7 @@
 #include "detect-transform-sha256.h"
 #include "detect-transform-dotprefix.h"
 #include "detect-transform-pcrexform.h"
+#include "detect-transform-urldecode.h"
 
 #include "util-rule-vars.h"
 
@@ -455,6 +474,7 @@ void SigTableSetup(void)
 
     DetectHttpStatMsgRegister();
     DetectHttpStatCodeRegister();
+    DetectHttp2Register();
 
     DetectDnsQueryRegister();
     DetectDnsOpcodeRegister();
@@ -586,6 +606,23 @@ void SigTableSetup(void)
     DetectSNMPVersionRegister();
     DetectSNMPCommunityRegister();
     DetectSNMPPduTypeRegister();
+    DetectMQTTTypeRegister();
+    DetectMQTTFlagsRegister();
+    DetectMQTTQosRegister();
+    DetectMQTTProtocolVersionRegister();
+    DetectMQTTReasonCodeRegister();
+    DetectMQTTConnectFlagsRegister();
+    DetectMQTTConnectClientIDRegister();
+    DetectMQTTConnectUsernameRegister();
+    DetectMQTTConnectPasswordRegister();
+    DetectMQTTConnectWillTopicRegister();
+    DetectMQTTConnectWillMessageRegister();
+    DetectMQTTConnackSessionPresentRegister();
+    DetectMQTTPublishTopicRegister();
+    DetectMQTTPublishMessageRegister();
+    DetectMQTTSubscribeTopicRegister();
+    DetectMQTTUnsubscribeTopicRegister();
+
     DetectTemplateBufferRegister();
     DetectBypassRegister();
     DetectConfigRegister();
@@ -597,16 +634,17 @@ void SigTableSetup(void)
     DetectTransformSha256Register();
     DetectTransformDotPrefixRegister();
     DetectTransformPcrexformRegister();
+    DetectTransformUrlDecodeRegister();
 
     /* close keyword registration */
     DetectBufferTypeCloseRegistration();
 }
 
+#ifdef UNITTESTS
 void SigTableRegisterTests(void)
 {
     /* register the tests */
-    int i = 0;
-    for (i = 0; i < DETECT_TBLSIZE; i++) {
+    for (int i = 0; i < DETECT_TBLSIZE; i++) {
         g_ut_modules++;
         if (sigmatch_table[i].RegisterTests != NULL) {
             sigmatch_table[i].RegisterTests();
@@ -621,3 +659,4 @@ void SigTableRegisterTests(void)
         }
     }
 }
+#endif

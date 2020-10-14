@@ -81,9 +81,9 @@ static AppLayerResult DCERPCParseResponse(Flow *f, void *dcerpc_state,
     }
 }
 
-static void *RustDCERPCStateNew(void)
+static void *RustDCERPCStateNew(void *state_orig, AppProto proto_orig)
 {
-    return rs_dcerpc_state_new();
+    return rs_dcerpc_state_new(state_orig, proto_orig);
 }
 
 static void DCERPCStateFree(void *s)
@@ -180,6 +180,10 @@ void RegisterDCERPCParsers(void)
 
         AppLayerParserRegisterGetStateProgressCompletionStatus(ALPROTO_DCERPC,
                                                                DCERPCGetAlstateProgressCompletionStatus);
+        /* This parser accepts gaps. */
+        AppLayerParserRegisterOptionFlags(IPPROTO_TCP, ALPROTO_DCERPC, APP_LAYER_PARSER_OPT_ACCEPT_GAPS);
+
+        AppLayerParserRegisterTruncateFunc(IPPROTO_TCP, ALPROTO_DCERPC, rs_dcerpc_state_trunc);
     } else {
         SCLogInfo("Parsed disabled for %s protocol. Protocol detection"
                   "still on.", proto_name);

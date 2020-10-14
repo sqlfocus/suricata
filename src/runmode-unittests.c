@@ -21,7 +21,6 @@
  */
 
 #include "suricata-common.h"
-#include "config.h"
 #include "util-unittest.h"
 #include "runmode-unittests.h"
 
@@ -92,6 +91,7 @@
 #include "util-pool.h"
 #include "util-byte.h"
 #include "util-proto-name.h"
+#include "util-macset.h"
 #include "util-memrchr.h"
 
 #include "util-mpm-ac.h"
@@ -147,6 +147,7 @@ static void RegisterUnittests(void)
     DecodeCHDLCRegisterTests();
     DecodePPPRegisterTests();
     DecodeVLANRegisterTests();
+    DecodeGeneveRegisterTests();
     DecodeVXLANRegisterTests();
     DecodeRawRegisterTests();
     DecodePPPOERegisterTests();
@@ -198,6 +199,7 @@ static void RegisterUnittests(void)
     AppLayerUnittestsRegister();
     MimeDecRegisterTests();
     StreamingBufferRegisterTests();
+    MacSetRegisterTests();
 #ifdef OS_WIN32
     Win32SyscallRegisterTests();
 #endif

@@ -60,10 +60,11 @@ typedef struct LogJsonFileCtx_ {
 typedef struct JsonFlowLogThread_ {
     LogJsonFileCtx *flowlog_ctx;
     /** LogFileCtx has the pointer to the file and a mutex to allow multithreading */
+    LogFileCtx *file_ctx;
     MemBuffer *buffer;
 } JsonFlowLogThread;
 
-static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_type)
+static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f)
 {
     char timebuf[64];
     char srcip[46] = {0}, dstip[46] = {0};
@@ -118,9 +119,7 @@ static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_typ
         jb_set_string(jb, "in_iface", f->livedev->dev);
     }
 
-    if (event_type) {
-        jb_set_string(jb, "event_type", event_type);
-    }
+    JB_SET_STRING(jb, "event_type", "flow");
 
     /* vlan */
     if (f->vlan_idx > 0) {
@@ -251,7 +250,7 @@ static void EveFlowLogJSON(JsonFlowLogThread *aft, JsonBuilder *jb, Flow *f)
         state = "closed";
     else if (f->flow_end_flags & FLOW_END_FLAG_STATE_BYPASSED) {
         state = "bypassed";
-        int flow_state = SC_ATOMIC_GET(f->flow_state);
+        int flow_state = f->flow_state;
         switch (flow_state) {
             case FLOW_STATE_LOCAL_BYPASSED:
                 JB_SET_STRING(jb, "bypass", "local");
@@ -271,12 +270,14 @@ static void EveFlowLogJSON(JsonFlowLogThread *aft, JsonBuilder *jb, Flow *f)
     jb_set_string(jb, "state", state);
 
     const char *reason = NULL;
-    if (f->flow_end_flags & FLOW_END_FLAG_TIMEOUT)
-        reason = "timeout";
-    else if (f->flow_end_flags & FLOW_END_FLAG_FORCED)
+    if (f->flow_end_flags & FLOW_END_FLAG_FORCED)
         reason = "forced";
     else if (f->flow_end_flags & FLOW_END_FLAG_SHUTDOWN)
         reason = "shutdown";
+    else if (f->flow_end_flags & FLOW_END_FLAG_TIMEOUT)
+        reason = "timeout";
+    else
+        reason = "unknown";
 
     jb_set_string(jb, "reason", reason);
 
@@ -314,10 +315,6 @@ static void EveFlowLogJSON(JsonFlowLogThread *aft, JsonBuilder *jb, Flow *f)
             const char *tcp_state = StreamTcpStateAsString(ssn->state);
             if (tcp_state != NULL)
                 jb_set_string(jb, "state", tcp_state);
-            if (ssn->client.flags & STREAMTCP_STREAM_FLAG_GAP)
-                JB_SET_TRUE(jb, "gap_ts");
-            if (ssn->server.flags & STREAMTCP_STREAM_FLAG_GAP)
-                JB_SET_TRUE(jb, "gap_tc");
         }
 
         /* Close tcp. */
@@ -333,63 +330,17 @@ static int JsonFlowLogger(ThreadVars *tv, void *thread_data, Flow *f)
     /* reset */
     MemBufferReset(jhl->buffer);
 
-    JsonBuilder *jb = CreateEveHeaderFromFlow(f, "flow");
+    JsonBuilder *jb = CreateEveHeaderFromFlow(f);
     if (unlikely(jb == NULL)) {
-        return TM_ECODE_OK;
+        SCReturnInt(TM_ECODE_OK);
     }
 
     EveFlowLogJSON(jhl, jb, f);
 
-    OutputJsonBuilderBuffer(jb, jhl->flowlog_ctx->file_ctx, &jhl->buffer);
+    OutputJsonBuilderBuffer(jb, jhl->file_ctx, &jhl->buffer);
     jb_free(jb);
 
     SCReturnInt(TM_ECODE_OK);
-}
-
-static void OutputFlowLogDeinit(OutputCtx *output_ctx)
-{
-    LogJsonFileCtx *flow_ctx = output_ctx->data;
-    LogFileCtx *logfile_ctx = flow_ctx->file_ctx;
-    LogFileFreeCtx(logfile_ctx);
-    SCFree(flow_ctx);
-    SCFree(output_ctx);
-}
-
-#define DEFAULT_LOG_FILENAME "flow.json"
-static OutputInitResult OutputFlowLogInit(ConfNode *conf)
-{
-    OutputInitResult result = { NULL, false };
-    LogFileCtx *file_ctx = LogFileNewCtx();
-    if(file_ctx == NULL) {
-        SCLogError(SC_ERR_FLOW_LOG_GENERIC, "couldn't create new file_ctx");
-        return result;
-    }
-
-    if (SCConfLogOpenGeneric(conf, file_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    LogJsonFileCtx *flow_ctx = SCMalloc(sizeof(LogJsonFileCtx));
-    if (unlikely(flow_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
-    if (unlikely(output_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        SCFree(flow_ctx);
-        return result;
-    }
-
-    flow_ctx->file_ctx = file_ctx;
-    output_ctx->data = flow_ctx;
-    output_ctx->DeInit = OutputFlowLogDeinit;
-
-    result.ctx = output_ctx;
-    result.ok = true;
-    return result;
 }
 
 static void OutputFlowLogDeinitSub(OutputCtx *output_ctx)
@@ -427,29 +378,38 @@ static OutputInitResult OutputFlowLogInitSub(ConfNode *conf, OutputCtx *parent_c
 
 static TmEcode JsonFlowLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonFlowLogThread *aft = SCMalloc(sizeof(JsonFlowLogThread));
+    JsonFlowLogThread *aft = SCCalloc(1, sizeof(JsonFlowLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(JsonFlowLogThread));
 
     if(initdata == NULL)
     {
         SCLogDebug("Error getting context for EveLogFlow.  \"initdata\" argument NULL");
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
     }
 
-    /* Use the Ouptut Context (file pointer and mutex) */
+    /* Use the Outptut Context (file pointer and mutex) */
     aft->flowlog_ctx = ((OutputCtx *)initdata)->data; //TODO
 
     aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
     if (aft->buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
+    }
+
+    aft->file_ctx = LogFileEnsureExists(aft->flowlog_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
     }
 
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->buffer != NULL) {
+        MemBufferFree(aft->buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonFlowLogThreadDeinit(ThreadVars *t, void *data)
@@ -469,12 +429,7 @@ static TmEcode JsonFlowLogThreadDeinit(ThreadVars *t, void *data)
 
 void JsonFlowLogRegister (void)
 {
-    /* register as separate module */
-    OutputRegisterFlowModule(LOGGER_JSON_FLOW, "JsonFlowLog", "flow-json-log",
-        OutputFlowLogInit, JsonFlowLogger, JsonFlowLogThreadInit,
-        JsonFlowLogThreadDeinit, NULL);
-
-    /* also register as child of eve-log */
+    /* register as child of eve-log */
     OutputRegisterFlowSubModule(LOGGER_JSON_FLOW, "eve-log", "JsonFlowLog",
         "eve-log.flow", OutputFlowLogInitSub, JsonFlowLogger,
         JsonFlowLogThreadInit, JsonFlowLogThreadDeinit, NULL);

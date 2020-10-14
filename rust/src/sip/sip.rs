@@ -22,7 +22,6 @@ extern crate nom;
 use crate::applayer::{self, *};
 use crate::core;
 use crate::core::{sc_detect_engine_state_free, AppProto, Flow, ALPROTO_UNKNOWN};
-use crate::log::*;
 use crate::sip::parser::*;
 use std;
 use std::ffi::{CStr, CString};
@@ -170,7 +169,7 @@ impl Drop for SIPTransaction {
 }
 
 #[no_mangle]
-pub extern "C" fn rs_sip_state_new() -> *mut std::os::raw::c_void {
+pub extern "C" fn rs_sip_state_new(_orig_state: *mut std::os::raw::c_void, _orig_proto: AppProto) -> *mut std::os::raw::c_void {
     let state = SIPState::new();
     let boxed = Box::new(state);
     return unsafe { std::mem::transmute(boxed) };
@@ -393,6 +392,8 @@ pub unsafe extern "C" fn rs_sip_register_parser() {
         get_tx_iterator: None,
         get_tx_data: rs_sip_get_tx_data,
         apply_tx_config: None,
+        flags: APP_LAYER_PARSER_OPT_UNIDIR_TXS,
+        truncate: None,
     };
 
     let ip_proto_str = CString::new("udp").unwrap();

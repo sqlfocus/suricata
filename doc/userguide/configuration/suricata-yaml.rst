@@ -691,7 +691,7 @@ On `x86_64` hs (Hyperscan) should be used for best performance.
 Threading
 ---------
 
-Suricata is multi-threaded. Suricata uses multiple CPU' s/CPU cores so
+Suricata is multi-threaded. Suricata uses multiple CPUs/CPU cores so
 it can process a lot of network packets simultaneously. (In a
 single-core engine, the packets will be processed one at a time.)
 
@@ -1358,8 +1358,8 @@ use of libhtp.
        # Default value of randomize-inspection-range is 10.
        #randomize-inspection-range: 10
 
-       # Can disable LZMA decompression
-       #lzma-enabled: yes
+       # Can enable LZMA decompression
+       #lzma-enabled: false
        # Memory limit usage for LZMA decompression dictionary
        # Data is decompressed until dictionary reaches this size
        #lzma-memlimit: 1 Mb
@@ -2150,6 +2150,25 @@ unlimited.
       modbus:
         # Stream reassembly size for modbus, default is 0
         stream-depth: 0
+
+
+MQTT
+~~~~
+
+MQTT messages could theoretically be up to 256MB in size, potentially
+containing a lot of payload data (such as properties, topics, or
+published payloads) that would end up parsed and logged. To acknowledge
+the fact that most MQTT messages, however, will be quite small and to
+reduce the potential for denial of service issues, it is possible to limit
+the maximum length of a message that we are willing to parse. Any message
+larger than the limit will just be logged with reduced metadata, and rules
+will only be evaluated against a subset of fields.
+The default is 1 MB.
+
+::
+
+      mqtt:
+        max-msg-length: 1mb
 
 SMTP
 ~~~~~~

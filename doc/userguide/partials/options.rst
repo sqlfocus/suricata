@@ -47,6 +47,12 @@
    interrupted. This is useful with directories to add new files and not reset
    flow state between files.
 
+.. option:: --pcap-file-recursive
+   Used with the -r option when the path provided is a directory.  This option
+   enables recursive traversal into subdirectories to a maximum depth of 255.
+   This option cannot be combined with --pcap-file-continuous.  Symlinks are
+   ignored.
+
 .. option:: --pcap-file-delete
 
    Used with the -r option to indicate that the mode should delete pcap files
@@ -186,10 +192,25 @@
 .. option:: --set <key>=<value>
 
    Set a configuration value. Useful for overriding basic
-   configuration parameters in the configuration. For example, to
-   change the default log directory::
+   configuration parameters. For example, to change the default log
+   directory::
 
      --set default-log-dir=/var/tmp
+
+   This option cannot be used to add new entries to a list in the
+   configuration file, such as a new output. It can only be used to
+   modify a value in a list that already exists.
+
+   For example, to disable the ``eve-log`` in the default
+   configuration file::
+
+     --set outputs.1.eve-log.enabled=no
+
+   Also note that the index values may change as the ``suricata.yaml``
+   is updated.
+
+   See the output of ``--dump-config`` for existing values that could
+   be modified with their index.
 
 .. option:: --engine-analysis
 
