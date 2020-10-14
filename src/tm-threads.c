@@ -152,7 +152,7 @@ TmEcode TmThreadsSlotVarRun(ThreadVars *tv, Packet *p, TmSlot *slot)
  *  Process flow timeout pseudo packets. During shutdown this loop
  *  is run until the flow engine kills the thread and the queue is
  *  empty.
- */
+ *//* 线程退出时, 处理流超时伪报文: 比如规则重新加载, 重新创建线程的场景 */
 static int TmThreadTimeoutLoop(ThreadVars *tv, TmSlot *s)
 {
     TmSlot *fw_slot = tv->tm_flowworker;
@@ -314,7 +314,7 @@ static void *TmThreadsSlotPktAcqLoop(void *td)
 
     TmThreadsSetFlag(tv, THV_FLOW_LOOP);
 
-    /* process all pseudo packets the flow timeout may throw at us */
+    /* 线程退出时, 处理流超时伪报文; process all pseudo packets the flow timeout may throw at us */
     TmThreadTimeoutLoop(tv, s);
 
     TmThreadsSetFlag(tv, THV_RUNNING_DONE);

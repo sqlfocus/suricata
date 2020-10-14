@@ -112,8 +112,8 @@ typedef struct ThreadVars_ {
 
     /** Stream packet queue for flow time out injection. Either a pointer to the
      *  workers input queue or to stream_pq_local */
-    struct PacketQueue_ *stream_pq;         /* 包含"FlowWorker"模块, =->inq->pq, 维护此线程的流报文 */
-    struct PacketQueue_ *stream_pq_local;
+    struct PacketQueue_ *stream_pq;         /* 首模块"FlowWorker"模块, =->inq->pq, 维护此线程的流报文 */
+    struct PacketQueue_ *stream_pq_local;   /* 非模块时, ->stream_pq = ->stream_pq_local(malloc分配) */
 
     /* counters */
 
