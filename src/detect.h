@@ -263,6 +263,7 @@ typedef struct DetectPort_ {
 #define SIG_FLAG_INIT_NEED_FLUSH            BIT_U32(7)
 #define SIG_FLAG_INIT_PRIO_EXPLICT          BIT_U32(8)  /**< priority is explicitly set by the priority keyword */
 #define SIG_FLAG_INIT_FILEDATA              BIT_U32(9)  /**< signature has filedata keyword */
+#define SIG_FLAG_INIT_DCERPC                BIT_U32(10) /**< signature has DCERPC keyword */
 
 /* signature mask flags */
 /** \note: additions should be added to the rule analyzer as well */
@@ -589,7 +590,7 @@ typedef struct Signature_ {
     /** Reference */
     DetectReference *references; /* DetectReference 链表 */
     /** Metadata */
-    DetectMetadata *metadata;
+    DetectMetadataHead *metadata;
 
     char *sig_str;               /* 原配置规则字符串, 解析得到此结构 */
 
@@ -1116,8 +1117,8 @@ typedef struct DetectEngineThreadCtx_ {
     /** ip only rules ctx */
     DetectEngineIPOnlyThreadCtx io_ctx;   /* 记录IPonly检测结果 */
 
-    /* byte jump values */
-    uint64_t *bj_values;           /* */
+    /* byte_* values */
+    uint64_t *byte_values;
 
     /* string to replace */
     DetectReplaceList *replist;
@@ -1198,8 +1199,9 @@ typedef struct SigTableElmt_ {
     int (*SetupPrefilter)(DetectEngineCtx *de_ctx, struct SigGroupHead_ *sgh);
 
     void (*Free)(DetectEngineCtx *, void *);
+#ifdef UNITTESTS
     void (*RegisterTests)(void);
-
+#endif
     uint16_t flags;
     /* coccinelle: SigTableElmt:flags:SIGMATCH_ */
 

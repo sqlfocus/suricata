@@ -17,7 +17,6 @@
 
 #![allow(clippy::missing_safety_doc)]
 
-use crate::json;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::str::Utf8Error;
@@ -330,6 +329,23 @@ impl JsonBuilder {
         Ok(self)
     }
 
+    pub fn append_float(&mut self, val: f64) -> Result<&mut Self, JsonError> {
+        match self.current_state() {
+            State::ArrayFirst => {
+                self.set_state(State::ArrayNth);
+            }
+            State::ArrayNth => {
+                self.buf.push(',');
+            }
+            _ => {
+                debug_validate_fail!("invalid state");
+                return Err(JsonError::InvalidState);
+            }
+        }
+        self.buf.push_str(&val.to_string());
+        Ok(self)
+    }
+
     pub fn set_object(&mut self, key: &str, js: &JsonBuilder) -> Result<&mut Self, JsonError> {
         match self.current_state() {
             State::ObjectNth => {
@@ -369,34 +385,6 @@ impl JsonBuilder {
         }
         self.buf.push_str(&js.buf);
         Ok(self)
-    }
-
-    pub fn set_jsont(
-        &mut self, key: &str, jsont: &mut json::JsonT,
-    ) -> Result<&mut Self, JsonError> {
-        match self.current_state() {
-            State::ObjectNth => self.buf.push(','),
-            State::ObjectFirst => self.set_state(State::ObjectNth),
-            _ => {
-                debug_validate_fail!("invalid state");
-                return Err(JsonError::InvalidState);
-            }
-        }
-        self.buf.push('"');
-        self.buf.push_str(key);
-        self.buf.push_str("\":");
-        self.append_jsont(jsont)?;
-        Ok(self)
-    }
-
-    fn append_jsont(&mut self, jsont: &mut json::JsonT) -> Result<&mut Self, JsonError> {
-        unsafe {
-            let raw = json::json_dumps(jsont, 0);
-            let rendered = std::ffi::CStr::from_ptr(raw).to_str()?;
-            self.buf.push_str(rendered);
-            libc::free(raw as *mut std::os::raw::c_void);
-            Ok(self)
-        }
     }
 
     /// Set a key and string value type on an object.
@@ -448,6 +436,26 @@ impl JsonBuilder {
 
     /// Set a key and an unsigned integer type on an object.
     pub fn set_uint(&mut self, key: &str, val: u64) -> Result<&mut Self, JsonError> {
+        match self.current_state() {
+            State::ObjectNth => {
+                self.buf.push(',');
+            }
+            State::ObjectFirst => {
+                self.set_state(State::ObjectNth);
+            }
+            _ => {
+                debug_validate_fail!("invalid state");
+                return Err(JsonError::InvalidState);
+            }
+        }
+        self.buf.push('"');
+        self.buf.push_str(key);
+        self.buf.push_str("\":");
+        self.buf.push_str(&val.to_string());
+        Ok(self)
+    }
+
+    pub fn set_float(&mut self, key: &str, val: f64) -> Result<&mut Self, JsonError> {
         match self.current_state() {
             State::ObjectNth => {
                 self.buf.push(',');
@@ -663,16 +671,6 @@ pub unsafe extern "C" fn jb_set_formatted(js: &mut JsonBuilder, formatted: *cons
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn jb_set_jsont(
-    jb: &mut JsonBuilder, key: *const c_char, jsont: &mut json::JsonT,
-) -> bool {
-    if let Ok(key) = CStr::from_ptr(key).to_str() {
-        return jb.set_jsont(key, jsont).is_ok();
-    }
-    return false;
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn jb_append_object(jb: &mut JsonBuilder, obj: &JsonBuilder) -> bool {
     jb.append_object(obj).is_ok()
 }
@@ -715,9 +713,22 @@ pub unsafe extern "C" fn jb_append_uint(js: &mut JsonBuilder, val: u64) -> bool 
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn jb_append_float(js: &mut JsonBuilder, val: f64) -> bool {
+    return js.append_float(val).is_ok();
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn jb_set_uint(js: &mut JsonBuilder, key: *const c_char, val: u64) -> bool {
     if let Ok(key) = CStr::from_ptr(key).to_str() {
         return js.set_uint(key, val).is_ok();
+    }
+    return false;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jb_set_float(js: &mut JsonBuilder, key: *const c_char, val: f64) -> bool {
+    if let Ok(key) = CStr::from_ptr(key).to_str() {
+        return js.set_float(key, val).is_ok();
     }
     return false;
 }
@@ -818,6 +829,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "debug-validate"))]
     fn test_array_in_object() -> Result<(), JsonError> {
         let mut js = JsonBuilder::new_object();
 
@@ -1029,6 +1041,24 @@ mod test {
         assert_eq!(jb.buf, r#"{"foo":"bar","bar":"foo""#);
         jb.close().unwrap();
         assert_eq!(jb.buf, r#"{"foo":"bar","bar":"foo"}"#);
+    }
+
+    #[test]
+    fn test_set_float() {
+        let mut jb = JsonBuilder::new_object();
+        jb.set_float("one", 1.1).unwrap();
+        jb.set_float("two", 2.2).unwrap();
+        jb.close().unwrap();
+        assert_eq!(jb.buf, r#"{"one":1.1,"two":2.2}"#);
+    }
+
+    #[test]
+    fn test_append_float() {
+        let mut jb = JsonBuilder::new_array();
+        jb.append_float(1.1).unwrap();
+        jb.append_float(2.2).unwrap();
+        jb.close().unwrap();
+        assert_eq!(jb.buf, r#"[1.1,2.2]"#);
     }
 }
 

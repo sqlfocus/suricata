@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2012 Open Information Security Foundation
+/* Copyright (C) 2007-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -106,6 +106,7 @@ typedef struct OutputTlsCtx_ {
 
 
 typedef struct JsonTlsLogThread_ {
+    LogFileCtx *file_ctx;
     OutputTlsCtx *tlslog_ctx;
     MemBuffer *buffer;
 } JsonTlsLogThread;
@@ -191,7 +192,7 @@ static void JsonTlsLogNotAfter(JsonBuilder *js, SSLState *ssl_state)
         tv.tv_sec = ssl_state->server_connp.cert0_not_after;
         tv.tv_usec = 0;
         CreateUtcIsoTimeString(&tv, timebuf, sizeof(timebuf));
-       jb_set_string(js, "notafter", timebuf);
+        jb_set_string(js, "notafter", timebuf);
     }
 }
 
@@ -440,7 +441,7 @@ static int JsonTlsLogger(ThreadVars *tv, void *thread_data, const Packet *p,
     /* Close the tls object. */
     jb_close(js);
 
-    OutputJsonBuilderBuffer(js, tls_ctx->file_ctx, &aft->buffer);
+    OutputJsonBuilderBuffer(js, aft->file_ctx, &aft->buffer);
     jb_free(js);
 
     return 0;
@@ -448,30 +449,37 @@ static int JsonTlsLogger(ThreadVars *tv, void *thread_data, const Packet *p,
 
 static TmEcode JsonTlsLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonTlsLogThread *aft = SCMalloc(sizeof(JsonTlsLogThread));
+    JsonTlsLogThread *aft = SCCalloc(1, sizeof(JsonTlsLogThread));
     if (unlikely(aft == NULL)) {
         return TM_ECODE_FAILED;
     }
 
-    memset(aft, 0, sizeof(JsonTlsLogThread));
-
     if (initdata == NULL) {
         SCLogDebug("Error getting context for eve-log tls 'initdata' argument NULL");
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
+    }
+
+    aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
+    if (aft->buffer == NULL) {
+        goto error_exit;
     }
 
     /* use the Output Context (file pointer and mutex) */
     aft->tlslog_ctx = ((OutputCtx *)initdata)->data;
 
-    aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
-    if (aft->buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+    aft->file_ctx = LogFileEnsureExists(aft->tlslog_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
     }
-
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->buffer != NULL) {
+        MemBufferFree(aft->buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonTlsLogThreadDeinit(ThreadVars *t, void *data)
@@ -488,15 +496,6 @@ static TmEcode JsonTlsLogThreadDeinit(ThreadVars *t, void *data)
 
     SCFree(aft);
     return TM_ECODE_OK;
-}
-
-static void OutputTlsLogDeinit(OutputCtx *output_ctx)
-{
-    OutputTlsCtx *tls_ctx = output_ctx->data;
-    LogFileCtx *logfile_ctx = tls_ctx->file_ctx;
-    LogFileFreeCtx(logfile_ctx);
-    SCFree(tls_ctx);
-    SCFree(output_ctx);
 }
 
 static OutputTlsCtx *OutputTlsInitCtx(ConfNode *conf)
@@ -557,45 +556,6 @@ static OutputTlsCtx *OutputTlsInitCtx(ConfNode *conf)
     return tls_ctx;
 }
 
-static OutputInitResult OutputTlsLogInit(ConfNode *conf)
-{
-    OutputInitResult result = { NULL, false };
-    LogFileCtx *file_ctx = LogFileNewCtx();
-    if (file_ctx == NULL) {
-        SCLogError(SC_ERR_TLS_LOG_GENERIC, "couldn't create new file_ctx");
-        return result;
-    }
-
-    if (SCConfLogOpenGeneric(conf, file_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputTlsCtx *tls_ctx = OutputTlsInitCtx(conf);
-    if (unlikely(tls_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
-    if (unlikely(output_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        SCFree(tls_ctx);
-        return result;
-    }
-
-    tls_ctx->file_ctx = file_ctx;
-
-    output_ctx->data = tls_ctx;
-    output_ctx->DeInit = OutputTlsLogDeinit;
-
-    AppLayerParserRegisterLogger(IPPROTO_TCP, ALPROTO_TLS);
-
-    result.ctx = output_ctx;
-    result.ok = true;
-    return result;
-}
-
 static void OutputTlsLogDeinitSub(OutputCtx *output_ctx)
 {
     OutputTlsCtx *tls_ctx = output_ctx->data;
@@ -641,13 +601,7 @@ static OutputInitResult OutputTlsLogInitSub(ConfNode *conf, OutputCtx *parent_ct
 
 void JsonTlsLogRegister (void)
 {
-    /* register as separate module */
-    OutputRegisterTxModuleWithProgress(LOGGER_JSON_TLS, "JsonTlsLog",
-        "tls-json-log", OutputTlsLogInit, ALPROTO_TLS, JsonTlsLogger,
-        TLS_HANDSHAKE_DONE, TLS_HANDSHAKE_DONE, JsonTlsLogThreadInit,
-        JsonTlsLogThreadDeinit, NULL);
-
-    /* also register as child of eve-log */
+    /* register as child of eve-log */
     OutputRegisterTxSubModuleWithProgress(LOGGER_JSON_TLS, "eve-log",
         "JsonTlsLog", "eve-log.tls", OutputTlsLogInitSub, ALPROTO_TLS,
         JsonTlsLogger, TLS_HANDSHAKE_DONE, TLS_HANDSHAKE_DONE,

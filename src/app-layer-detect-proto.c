@@ -398,6 +398,36 @@ static AppProto AppLayerProtoDetectPMGetProto(
     SCReturnUInt(0);
 }
 
+static AppLayerProtoDetectProbingParserElement *AppLayerProtoDetectGetProbingParser(
+        AppLayerProtoDetectProbingParser *pp, uint8_t ipproto, AppProto alproto)
+{
+    AppLayerProtoDetectProbingParserElement *pp_elem = NULL;
+    AppLayerProtoDetectProbingParserPort *pp_port = NULL;
+
+    while (pp != NULL) {
+        if (pp->ipproto == ipproto)
+            break;
+        pp = pp->next;
+    }
+    if (pp == NULL)
+        return NULL;
+
+    pp_port = pp->port;
+    while (pp_port != NULL) {
+        if (pp_port->dp != NULL && pp_port->dp->alproto == alproto) {
+            pp_elem = pp_port->dp;
+            break;
+        }
+        if (pp_port->sp != NULL && pp_port->sp->alproto == alproto) {
+            pp_elem = pp_port->sp;
+            break;
+        }
+        pp_port = pp_port->next;
+    }
+
+    SCReturnPtr(pp_elem, "AppLayerProtoDetectProbingParserElement *");
+}
+
 static AppLayerProtoDetectProbingParserPort *AppLayerProtoDetectGetProbingParsers(AppLayerProtoDetectProbingParser *pp,
                                                                                   uint8_t ipproto,
                                                                                   uint16_t port)
@@ -491,6 +521,7 @@ static AppProto AppLayerProtoDetectPPGetProto(Flow *f,
 {
     const AppLayerProtoDetectProbingParserPort *pp_port_dp = NULL;
     const AppLayerProtoDetectProbingParserPort *pp_port_sp = NULL;
+    const AppLayerProtoDetectProbingParserElement *pe0 = NULL;
     const AppLayerProtoDetectProbingParserElement *pe1 = NULL;
     const AppLayerProtoDetectProbingParserElement *pe2 = NULL;
     AppProto alproto = ALPROTO_UNKNOWN;
@@ -552,7 +583,13 @@ again_midstream:
         }
     }
 
-    if (pe1 == NULL && pe2 == NULL) {
+    if (dir == STREAM_TOSERVER && f->alproto_tc != ALPROTO_UNKNOWN) {
+        pe0 = AppLayerProtoDetectGetProbingParser(alpd_ctx.ctx_pp, ipproto, f->alproto_tc);
+    } else if (dir == STREAM_TOCLIENT && f->alproto_ts != ALPROTO_UNKNOWN) {
+        pe0 = AppLayerProtoDetectGetProbingParser(alpd_ctx.ctx_pp, ipproto, f->alproto_ts);
+    }
+
+    if (pe1 == NULL && pe2 == NULL && pe0 == NULL) {
         SCLogDebug("%s - No probing parsers found for either port",
                 (dir == STREAM_TOSERVER) ? "toserver":"toclient");
         if (dir == idir)
@@ -562,6 +599,9 @@ again_midstream:
 
     /* run the parser(s): always call with original direction */
     uint8_t rdir = 0;                  /* 基于端口识别 */
+    alproto = PPGetProto(pe0, f, idir, buf, buflen, alproto_masks, &rdir);
+    if (AppProtoIsValid(alproto))
+        goto end;
     alproto = PPGetProto(pe1, f, idir, buf, buflen, alproto_masks, &rdir);
     if (AppProtoIsValid(alproto))
         goto end;
@@ -869,6 +909,8 @@ static void AppLayerProtoDetectPrintProbingParsers(AppLayerProtoDetectProbingPar
                         printf("            alproto: ALPROTO_TEMPLATE_RUST\n");
                     else if (pp_pe->alproto == ALPROTO_RFB)
                         printf("            alproto: ALPROTO_RFB\n");
+                    else if (pp_pe->alproto == ALPROTO_MQTT)
+                        printf("            alproto: ALPROTO_MQTT\n");
                     else if (pp_pe->alproto == ALPROTO_TEMPLATE)
                         printf("            alproto: ALPROTO_TEMPLATE\n");
                     else if (pp_pe->alproto == ALPROTO_DNP3)
@@ -944,6 +986,8 @@ static void AppLayerProtoDetectPrintProbingParsers(AppLayerProtoDetectProbingPar
                     printf("            alproto: ALPROTO_TEMPLATE_RUST\n");
                 else if (pp_pe->alproto == ALPROTO_RFB)
                     printf("            alproto: ALPROTO_RFB\n");
+                else if (pp_pe->alproto == ALPROTO_MQTT)
+                    printf("            alproto: ALPROTO_MQTT\n");
                 else if (pp_pe->alproto == ALPROTO_TEMPLATE)
                     printf("            alproto: ALPROTO_TEMPLATE\n");
                 else if (pp_pe->alproto == ALPROTO_DNP3)
@@ -1508,6 +1552,16 @@ AppProto AppLayerProtoDetectGetProto(AppLayerProtoDetectThreadCtx *tctx,
         if (pm_matches > 0) {
             alproto = pm_results[0];       /* 多条匹配时，仅取第一条结果 */
                                            /* 因此匹配规则应该按优先级排序 */
+            // rerun probing parser for other direction if it is unknown
+            uint8_t reverse_dir = (direction & STREAM_TOSERVER) ? STREAM_TOCLIENT : STREAM_TOSERVER;
+            if (FLOW_IS_PP_DONE(f, reverse_dir)) {
+                AppProto rev_alproto =
+                        (direction & STREAM_TOSERVER) ? f->alproto_tc : f->alproto_ts;
+                if (rev_alproto == ALPROTO_UNKNOWN) {
+                    FLOW_RESET_PP_DONE(f, reverse_dir);
+                }
+            }
+
             /* HACK: if detected protocol is dcerpc/udp, we run PP as well
              * to avoid misdetecting DNS as DCERPC. */
             if (!(ipproto == IPPROTO_UDP && alproto == ALPROTO_DCERPC))
@@ -1661,11 +1715,9 @@ int AppLayerProtoDetectPPParseConfPorts(const char *ipproto_name,
     r = snprintf(param, sizeof(param), "%s%s%s", "app-layer.protocols.",
                  alproto_name, ".detection-ports");
     if (r < 0) {
-        SCLogError(SC_ERR_FATAL, "snprintf failure.");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "snprintf failure.");
     } else if (r > (int)sizeof(param)) {
-        SCLogError(SC_ERR_FATAL, "buffer not big enough to write param.");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "buffer not big enough to write param.");
     }
     node = ConfGetNode(param);
     if (node == NULL) {
@@ -1673,11 +1725,9 @@ int AppLayerProtoDetectPPParseConfPorts(const char *ipproto_name,
         r = snprintf(param, sizeof(param), "%s%s%s%s%s", "app-layer.protocols.",
                      alproto_name, ".", ipproto_name, ".detection-ports");
         if (r < 0) {
-            SCLogError(SC_ERR_FATAL, "snprintf failure.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "snprintf failure.");
         } else if (r > (int)sizeof(param)) {
-            SCLogError(SC_ERR_FATAL, "buffer not big enough to write param.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "buffer not big enough to write param.");
         }
         node = ConfGetNode(param);
         if (node == NULL)
@@ -1775,9 +1825,8 @@ int AppLayerProtoDetectSetup(void)
 
     alpd_ctx.spm_global_thread_ctx = SpmInitGlobalThreadCtx(spm_matcher);
     if (alpd_ctx.spm_global_thread_ctx == NULL) {
-        SCLogError(SC_ERR_FATAL, "Unable to alloc SpmGlobalThreadCtx.");
-        exit(EXIT_FAILURE);         /* 初始化全局单模匹配环境 */
-    }
+        FatalError(SC_ERR_FATAL, "Unable to alloc SpmGlobalThreadCtx.");
+    }                               /* 初始化全局单模匹配环境 */
 
     for (i = 0; i < FLOW_PROTO_DEFAULT; i++) {
         for (j = 0; j < 2; j++) {
@@ -1869,7 +1918,6 @@ void AppLayerRequestProtocolTLSUpgrade(Flow *f)
 
 void AppLayerProtoDetectReset(Flow *f)
 {
-    FlowUnsetChangeProtoFlag(f);
     FLOW_RESET_PM_DONE(f, STREAM_TOSERVER);
     FLOW_RESET_PM_DONE(f, STREAM_TOCLIENT);
     FLOW_RESET_PP_DONE(f, STREAM_TOSERVER);
@@ -1879,8 +1927,8 @@ void AppLayerProtoDetectReset(Flow *f)
     f->probing_parser_toserver_alproto_masks = 0;
     f->probing_parser_toclient_alproto_masks = 0;
 
-    AppLayerParserStateCleanup(f, f->alstate, f->alparser);
-    f->alstate = NULL;
+    // Does not free the structures for the parser
+    // keeps f->alstate for new state creation
     f->alparser = NULL;
     f->alproto    = ALPROTO_UNKNOWN;
     f->alproto_ts = ALPROTO_UNKNOWN;
@@ -1905,11 +1953,9 @@ int AppLayerProtoDetectConfProtoDetectionEnabled(const char *ipproto,
     r = snprintf(param, sizeof(param), "%s%s%s", "app-layer.protocols.",
                  alproto, ".enabled");
     if (r < 0) {
-        SCLogError(SC_ERR_FATAL, "snprintf failure.");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "snprintf failure.");
     } else if (r > (int)sizeof(param)) {
-        SCLogError(SC_ERR_FATAL, "buffer not big enough to write param.");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "buffer not big enough to write param.");
     }
 
     node = ConfGetNode(param);
@@ -1918,11 +1964,9 @@ int AppLayerProtoDetectConfProtoDetectionEnabled(const char *ipproto,
         r = snprintf(param, sizeof(param), "%s%s%s%s%s", "app-layer.protocols.",
                      alproto, ".", ipproto, ".enabled");
         if (r < 0) {
-            SCLogError(SC_ERR_FATAL, "snprintf failure.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "snprintf failure.");
         } else if (r > (int)sizeof(param)) {
-            SCLogError(SC_ERR_FATAL, "buffer not big enough to write param.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "buffer not big enough to write param.");
         }
 
         node = ConfGetNode(param);

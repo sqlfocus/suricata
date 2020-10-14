@@ -18,7 +18,6 @@ use crate::dcerpc::dcerpc::{
     BindCtxItem, DCERPCBind, DCERPCBindAck, DCERPCBindAckResult, DCERPCHdr, DCERPCRequest, Uuid,
 };
 use crate::dcerpc::dcerpc_udp::DCERPCHdrUdp;
-use crate::log::*;
 use nom::number::complete::{le_u16, le_u32, le_u8};
 use nom::number::Endianness;
 
@@ -256,10 +255,6 @@ named_args!(pub parse_dcerpc_request(endianness: Endianness) <DCERPCRequest>,
                 ctxid: ctxid,
                 opnum: opnum,
                 first_request_seen: 1,
-                stub_data_buffer: Vec::new(),
-                stub_data_buffer_len: 0,
-                stub_data_buffer_reset: false,
-                cmd: 0,
             }
         )
     )

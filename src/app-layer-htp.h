@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2011 Open Information Security Foundation
+/* Copyright (C) 2007-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -38,6 +38,7 @@
 #include "app-layer-htp-mem.h"
 #include "detect-engine-state.h"
 #include "util-streaming-buffer.h"
+#include "rust.h"
 
 #include <htp/htp.h>
 
@@ -51,6 +52,7 @@
 #define HTP_CONFIG_DEFAULT_FIELD_LIMIT_SOFT             9000U
 #define HTP_CONFIG_DEFAULT_FIELD_LIMIT_HARD             18000U
 
+#define HTP_CONFIG_DEFAULT_LZMA_LAYERS 0U
 /* default libhtp lzma limit, taken from libhtp. */
 #define HTP_CONFIG_DEFAULT_LZMA_MEMLIMIT                1048576U
 #define HTP_CONFIG_DEFAULT_COMPRESSION_BOMB_LIMIT       1048576U
@@ -204,19 +206,12 @@ typedef struct HtpBody_ {
 /** Now the Body Chunks will be stored per transaction, at
   * the tx user data */
 typedef struct HtpTxUserData_ {
-    /** detection engine flags */
-    uint64_t detect_flags_ts;
-    uint64_t detect_flags_tc;
-
     /* Body of the request (if any) */
     uint8_t request_body_init;
     uint8_t response_body_init;
 
     uint8_t request_has_trailers;
     uint8_t response_has_trailers;
-
-    /* indicates which loggers that have logged */
-    uint32_t logged;                /* 已输出的日志 */
 
     HtpBody request_body;
     HtpBody response_body;
@@ -242,6 +237,7 @@ typedef struct HtpTxUserData_ {
     uint8_t request_body_type;
 
     DetectEngineState *de_state;
+    AppLayerTxData tx_data;
 } HtpTxUserData;                   /* 记录在libhtp中，此http解析的suricata私有数据 */
 
 typedef struct HtpState_ {
@@ -276,7 +272,6 @@ typedef struct HtpState_ {
 SC_ATOMIC_EXTERN(uint32_t, htp_config_flags);
 
 void RegisterHTPParsers(void);
-void HTPParserRegisterTests(void);
 void HTPAtExitPrintStats(void);
 void HTPFreeConfig(void);
 
@@ -293,6 +288,8 @@ void HTPConfigure(void);
 
 void HtpConfigCreateBackup(void);
 void HtpConfigRestoreBackup(void);
+
+void *HtpGetTxForH2(void *);
 
 #endif	/* __APP_LAYER_HTP_H__ */
 

@@ -62,6 +62,7 @@
 #include "output-json-email-common.h"
 #include "output-json-nfs.h"
 #include "output-json-smb.h"
+#include "output-json-http2.h"
 
 #include "app-layer-htp.h"
 #include "app-layer-htp-xff.h"
@@ -77,6 +78,7 @@ typedef struct OutputFileCtx_ {
 
 typedef struct JsonFileLogThread_ {
     OutputFileCtx *filelog_ctx;
+    LogFileCtx *file_ctx;
     MemBuffer *buffer;
 } JsonFileLogThread;
 
@@ -171,6 +173,15 @@ JsonBuilder *JsonBuildFileInfoRecord(const Packet *p, const File *ff,
                 jb_restore_mark(js, &mark);
             }
             break;
+        case ALPROTO_HTTP2:
+            jb_get_mark(js, &mark);
+            jb_open_object(js, "http2");
+            if (EveHTTP2AddMetadata(p->flow, ff->txid, js)) {
+                jb_close(js);
+            } else {
+                jb_restore_mark(js, &mark);
+            }
+            break;
     }
 
     jb_set_string(js, "app_proto", AppProtoToString(p->flow->alproto));
@@ -203,7 +214,7 @@ static void FileWriteJsonRecord(JsonFileLogThread *aft, const Packet *p,
     }
 
     MemBufferReset(aft->buffer);
-    OutputJsonBuilderBuffer(js, aft->filelog_ctx->file_ctx, &aft->buffer);
+    OutputJsonBuilderBuffer(js, aft->file_ctx, &aft->buffer);
     jb_free(js);
 }
 
@@ -224,29 +235,37 @@ static int JsonFileLogger(ThreadVars *tv, void *thread_data, const Packet *p,
 
 static TmEcode JsonFileLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonFileLogThread *aft = SCMalloc(sizeof(JsonFileLogThread));
+    JsonFileLogThread *aft = SCCalloc(1, sizeof(JsonFileLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(JsonFileLogThread));
 
     if(initdata == NULL)
     {
         SCLogDebug("Error getting context for EveLogFile.  \"initdata\" argument NULL");
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
+    }
+
+    aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
+    if (aft->buffer == NULL) {
+        goto error_exit;
     }
 
     /* Use the Ouptut Context (file pointer and mutex) */
     aft->filelog_ctx = ((OutputCtx *)initdata)->data;
-
-    aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
-    if (aft->buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+    aft->file_ctx = LogFileEnsureExists(aft->filelog_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
     }
 
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->buffer != NULL) {
+        MemBufferFree(aft->buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonFileLogThreadDeinit(ThreadVars *t, void *data)

@@ -57,9 +57,9 @@ static AppLayerResult RustDCERPCUDPParse(Flow *f, void *dcerpc_state,
                                local_data, flags);
 }
 
-static void *RustDCERPCUDPStateNew(void)
+static void *RustDCERPCUDPStateNew(void *state_orig, AppProto proto_orig)
 {
-    return rs_dcerpc_udp_state_new();
+    return rs_dcerpc_udp_state_new(state_orig, proto_orig);
 }
 
 static void RustDCERPCUDPStateFree(void *s)
@@ -142,6 +142,7 @@ void RegisterDCERPCUDPParsers(void)
                                                RustDCERPCUDPGetTxDetectState, RustDCERPCUDPSetTxDetectState);
 
         AppLayerParserRegisterGetTx(IPPROTO_UDP, ALPROTO_DCERPC, RustDCERPCUDPGetTx);
+        AppLayerParserRegisterTxDataFunc(IPPROTO_UDP, ALPROTO_DCERPC, rs_dcerpc_udp_get_tx_data);
 
         AppLayerParserRegisterGetTxCnt(IPPROTO_UDP, ALPROTO_DCERPC, RustDCERPCUDPGetTxCnt);
 

@@ -50,7 +50,6 @@ pub mod core;
 #[macro_use]
 pub mod common;
 pub mod conf;
-pub mod json;
 pub mod jsonbuilder;
 #[macro_use]
 pub mod applayer;
@@ -76,7 +75,12 @@ pub mod tftp;
 pub mod dhcp;
 pub mod sip;
 pub mod rfb;
+pub mod mqtt;
 pub mod applayertemplate;
 pub mod rdp;
 pub mod x509;
+pub mod asn1;
 pub mod ssh;
+pub mod http2;
+pub mod plugin;
+pub mod util;

@@ -543,6 +543,9 @@ SigMatch *DetectGetLastSMByListId(const Signature *s, int list_id, ...)
     SigMatch *sm_new;
     int sm_type;
 
+    if ((uint32_t)list_id >= s->init_data->smlists_array_size) {
+        return NULL;
+    }
     SigMatch *sm_list = s->init_data->smlists_tail[list_id];
     if (sm_list == NULL)
         return NULL;
@@ -1010,6 +1013,9 @@ static int SigParseAction(Signature *s, const char *action)
         if (!(SigParseActionRejectValidate(action)))
             return -1;
         s->action = ACTION_REJECT_BOTH|ACTION_DROP;
+    } else if (strcasecmp(action, "config") == 0) {
+        s->action = ACTION_CONFIG;
+        s->flags |= SIG_FLAG_NOALERT;
     } else {
         SCLogError(SC_ERR_INVALID_ACTION,"An invalid action \"%s\" was given",action);
         return -1;
@@ -1206,6 +1212,11 @@ static int SigParse(DetectEngineCtx *de_ctx, Signature *s,
 {
     SCEnter();
 
+    if (!rs_check_utf8(sigstr)) {
+        SCLogError(SC_ERR_RULE_INVALID_UTF8, "rule is not valid UTF-8");
+        SCReturnInt(-1);
+    }
+
     s->sig_str = SCStrdup(sigstr);    /* 存储配置规则字符串 */
     if (unlikely(s->sig_str == NULL)) {
         SCReturnInt(-1);
@@ -1295,18 +1306,19 @@ static void SigMetadataFree(Signature *s)
     DetectMetadata *mdata = NULL;
     DetectMetadata *next_mdata = NULL;
 
-    if (s == NULL) {
+    if (s == NULL || s->metadata == NULL) {
         SCReturn;
     }
 
     SCLogDebug("s %p, s->metadata %p", s, s->metadata);
 
-    for (mdata = s->metadata; mdata != NULL;)   {
+    for (mdata = s->metadata->list; mdata != NULL;)   {
         next_mdata = mdata->next;
         DetectMetadataFree(mdata);
         mdata = next_mdata;
     }
-
+    SCFree(s->metadata->json_str);
+    SCFree(s->metadata);
     s->metadata = NULL;
 
     SCReturn;
@@ -1610,8 +1622,7 @@ SigMatchData* SigMatchList2DataArray(SigMatch *head)
 
     SigMatchData *smd = (SigMatchData *)SCCalloc(len, sizeof(SigMatchData));
     if (smd == NULL) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
     }
     SigMatchData *out = smd;
 
@@ -1846,12 +1857,24 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
                     "support file matching", AppProtoToString(s->alproto));
             SCReturnInt(0);
         }
+        if (s->alproto == ALPROTO_HTTP2 && (s->file_flags & FILE_SIG_NEED_FILENAME)) {
+            SCLogError(SC_ERR_NO_FILES_FOR_PROTOCOL,
+                    "protocol HTTP2 doesn't support file name matching");
+            SCReturnInt(0);
+        }
 
         if (s->alproto == ALPROTO_HTTP) {
             AppLayerHtpNeedFileInspection();
         }
     }
-
+    if (s->init_data->init_flags & SIG_FLAG_INIT_DCERPC) {
+        if (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_DCERPC &&
+                s->alproto != ALPROTO_SMB) {
+            SCLogError(SC_ERR_NO_FILES_FOR_PROTOCOL, "protocol %s doesn't support DCERPC keyword",
+                    AppProtoToString(s->alproto));
+            SCReturnInt(0);
+        }
+    }
     SCReturnInt(1);
 }
 
@@ -2445,7 +2468,7 @@ void DetectParseRegexAddToFreeList(DetectParseRegex *detect_parse)
 
 bool DetectSetupParseRegexesOpts(const char *parse_str, DetectParseRegex *detect_parse, int opts)
 {
-    const char *eb;
+    const char *eb = NULL;
     int eo;
 
     detect_parse->regex = pcre_compile(parse_str, opts, &eb, &eo, NULL);

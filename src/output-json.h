@@ -31,6 +31,7 @@
 #include "rust.h"
 
 #include "app-layer-htp-xff.h"
+#include "suricata-plugin.h"
 
 void OutputJsonRegister(void);
 
@@ -69,22 +70,13 @@ typedef struct OutputJSONMemBufferWrapper_ {
 
 int OutputJSONMemBufferCallback(const char *str, size_t size, void *data);
 
-void CreateJSONFlowId(json_t *js, const Flow *f);
 void CreateEveFlowId(JsonBuilder *js, const Flow *f);
-void JsonTcpFlags(uint8_t flags, json_t *js);
 void EveFileInfo(JsonBuilder *js, const File *file, const bool stored);
 void EveTcpFlags(uint8_t flags, JsonBuilder *js);
-void JsonPacket(const Packet *p, json_t *js, unsigned long max_length);
 void EvePacket(const Packet *p, JsonBuilder *js, unsigned long max_length);
-void JsonFiveTuple(const Packet *, enum OutputJsonLogDirection, json_t *);
-json_t *CreateJSONHeader(const Packet *p,
-        enum OutputJsonLogDirection dir, const char *event_type,
-        JsonAddrInfo *addr);
 JsonBuilder *CreateEveHeader(const Packet *p,
         enum OutputJsonLogDirection dir, const char *event_type,
         JsonAddrInfo *addr);
-json_t *CreateJSONHeaderWithTxId(const Packet *p,
-        enum OutputJsonLogDirection dir, const char *event_type, uint64_t tx_id);
 JsonBuilder *CreateEveHeaderWithTxId(const Packet *p,
         enum OutputJsonLogDirection dir, const char *event_type, JsonAddrInfo *addr,
         uint64_t tx_id);
@@ -99,6 +91,7 @@ TmEcode JsonLogThreadDeinit(ThreadVars *t, void *data);
 typedef struct OutputJsonCommonSettings_ {
     bool include_metadata;
     bool include_community_id;
+    bool include_ethernet;
     uint16_t community_id_seed;
 } OutputJsonCommonSettings;
 
@@ -110,10 +103,12 @@ typedef struct OutputJsonCtx_ {
     enum LogFileType json_out;
     OutputJsonCommonSettings cfg;
     HttpXFFCfg *xff_cfg;
+    SCPluginFileType *plugin;
 } OutputJsonCtx;
 
 typedef struct OutputJsonThreadCtx_ {
     OutputJsonCtx *ctx;
+    LogFileCtx *file_ctx;
     MemBuffer *buffer;
 } OutputJsonThreadCtx;
 
@@ -121,8 +116,6 @@ json_t *SCJsonBool(int val);
 json_t *SCJsonString(const char *val);
 void SCJsonDecref(json_t *js);
 
-void JsonAddCommonOptions(const OutputJsonCommonSettings *cfg,
-        const Packet *p, const Flow *f, json_t *js);
 void EveAddCommonOptions(const OutputJsonCommonSettings *cfg,
         const Packet *p, const Flow *f, JsonBuilder *js);
 

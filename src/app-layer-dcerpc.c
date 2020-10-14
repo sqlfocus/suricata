@@ -81,9 +81,9 @@ static AppLayerResult DCERPCParseResponse(Flow *f, void *dcerpc_state,
     }
 }
 
-static void *RustDCERPCStateNew(void)
+static void *RustDCERPCStateNew(void *state_orig, AppProto proto_orig)
 {
-    return rs_dcerpc_state_new();
+    return rs_dcerpc_state_new(state_orig, proto_orig);
 }
 
 static void DCERPCStateFree(void *s)
@@ -124,16 +124,6 @@ static int DCERPCGetAlstateProgressCompletionStatus(uint8_t direction)
 static int DCERPCGetAlstateProgress(void *tx, uint8_t direction)
 {
     return rs_dcerpc_get_alstate_progress(tx, direction);
-}
-
-static void DCERPCSetTxDetectFlags(void *vtx, uint8_t dir, uint64_t flags)
-{
-    return rs_dcerpc_set_tx_detect_flags(vtx, dir, flags);
-}
-
-static uint64_t DCERPCGetTxDetectFlags(void *vtx, uint8_t dir)
-{
-    return rs_dcerpc_get_tx_detect_flags(vtx, dir);
 }
 
 static int DCERPCRegisterPatternsForProtocolDetection(void)
@@ -182,6 +172,7 @@ void RegisterDCERPCParsers(void)
                                                DCERPCGetTxDetectState, DCERPCSetTxDetectState);
 
         AppLayerParserRegisterGetTx(IPPROTO_TCP, ALPROTO_DCERPC, DCERPCGetTx);
+        AppLayerParserRegisterTxDataFunc(IPPROTO_TCP, ALPROTO_DCERPC, rs_dcerpc_get_tx_data);
 
         AppLayerParserRegisterGetTxCnt(IPPROTO_TCP, ALPROTO_DCERPC, DCERPCGetTxCnt);
 
@@ -189,8 +180,10 @@ void RegisterDCERPCParsers(void)
 
         AppLayerParserRegisterGetStateProgressCompletionStatus(ALPROTO_DCERPC,
                                                                DCERPCGetAlstateProgressCompletionStatus);
-        AppLayerParserRegisterDetectFlagsFuncs(IPPROTO_TCP, ALPROTO_DCERPC,
-                DCERPCGetTxDetectFlags, DCERPCSetTxDetectFlags);
+        /* This parser accepts gaps. */
+        AppLayerParserRegisterOptionFlags(IPPROTO_TCP, ALPROTO_DCERPC, APP_LAYER_PARSER_OPT_ACCEPT_GAPS);
+
+        AppLayerParserRegisterTruncateFunc(IPPROTO_TCP, ALPROTO_DCERPC, rs_dcerpc_state_trunc);
     } else {
         SCLogInfo("Parsed disabled for %s protocol. Protocol detection"
                   "still on.", proto_name);

@@ -59,7 +59,9 @@ static int DetectDceOpnumMatchRust(DetectEngineThreadCtx *det_ctx,
         const Signature *s, const SigMatchCtx *m);
 static int DetectDceOpnumSetup(DetectEngineCtx *, Signature *, const char *);
 static void DetectDceOpnumFree(DetectEngineCtx *, void *);
+#ifdef UNITTESTS
 static void DetectDceOpnumRegisterTests(void);
+#endif
 static int g_dce_generic_list_id = 0;
 
 /**
@@ -72,8 +74,9 @@ void DetectDceOpnumRegister(void)
     sigmatch_table[DETECT_DCE_OPNUM].AppLayerTxMatch = DetectDceOpnumMatchRust;
     sigmatch_table[DETECT_DCE_OPNUM].Setup = DetectDceOpnumSetup;
     sigmatch_table[DETECT_DCE_OPNUM].Free  = DetectDceOpnumFree;
+#ifdef UNITTESTS
     sigmatch_table[DETECT_DCE_OPNUM].RegisterTests = DetectDceOpnumRegisterTests;
-
+#endif
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 
     g_dce_generic_list_id = DetectBufferTypeRegister("dce_generic");
@@ -100,8 +103,7 @@ static int DetectDceOpnumMatchRust(DetectEngineThreadCtx *det_ctx,
     SCEnter();
 
     if (f->alproto == ALPROTO_DCERPC) {
-        // TODO check for NULL state
-        return rs_dcerpc_opnum_match(state, (void *)m);
+        return rs_dcerpc_opnum_match(txv, (void *)m);
     }
 
     if (rs_smb_tx_match_dce_opnum(txv, (void *)m) != 1)
@@ -130,6 +132,11 @@ static int DetectDceOpnumSetup(DetectEngineCtx *de_ctx, Signature *s, const char
         return -1;
     }
 
+    if (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_DCERPC &&
+        s->alproto != ALPROTO_SMB) {
+        SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "rule contains conflicting keywords.");
+        return -1;
+    }
     void *dod = rs_dcerpc_opnum_parse(arg);
     if (dod == NULL) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "Error parsing dce_opnum option in "
@@ -147,6 +154,7 @@ static int DetectDceOpnumSetup(DetectEngineCtx *de_ctx, Signature *s, const char
     sm->ctx = (void *)dod;
 
     SigMatchAppendSMToList(s, sm, g_dce_generic_list_id);
+    s->init_data->init_flags |= SIG_FLAG_INIT_DCERPC;
     return 0;
 }
 
@@ -2403,11 +2411,9 @@ static int DetectDceOpnumTestParse13(void)
     return result;
 }
 #endif
-#endif /* UNITTESTS */
 
 static void DetectDceOpnumRegisterTests(void)
 {
-#ifdef UNITTESTS
     UtRegisterTest("DetectDceOpnumTestParse01", DetectDceOpnumTestParse01);
     UtRegisterTest("DetectDceOpnumTestParse02", DetectDceOpnumTestParse02);
     /* Disabled because of bug_753.  Would be enabled, once we rewrite
@@ -2418,5 +2424,5 @@ static void DetectDceOpnumRegisterTests(void)
     UtRegisterTest("DetectDceOpnumTestParse12", DetectDceOpnumTestParse12, 1);
     UtRegisterTest("DetectDceOpnumTestParse13", DetectDceOpnumTestParse13, 1);
 #endif
-#endif
 }
+#endif /* UNITTESTS */

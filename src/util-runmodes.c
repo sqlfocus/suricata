@@ -25,7 +25,6 @@
  */
 
 #include "suricata-common.h"
-#include "config.h"
 #include "tm-threads.h"
 #include "conf.h"
 #include "runmodes.h"
@@ -97,18 +96,8 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
     char qname[TM_QUEUE_NAME_MAX];
 
     /* Available cpus */
-    uint16_t ncpus = UtilCpuGetNumProcessorsOnline();
     int nlive = LiveGetDeviceCount();
-    int thread_max = TmThreadGetNbThreads(WORKER_CPU_SET);
-    /* always create at least one thread */
-    if (thread_max == 0)        /* 根据比例获取检测线程数, [1, 1024] */
-        thread_max = ncpus * threading_detect_ratio;
-    if (thread_max < 1)
-        thread_max = 1;
-    if (thread_max > 1024) {
-        SCLogWarning(SC_ERR_RUNMODE, "limited number of 'worker' threads to 1024. Wanted %d", thread_max);
-        thread_max = 1024;
-    }
+    uint16_t thread_max = TmThreadsGetWorkerThreadMax();
 
     char *queues = RunmodeAutoFpCreatePickupQueuesString(thread_max);
     if (queues == NULL) {       /* 构造分发接收端队列名，“pickup1,...pickupn” */
@@ -129,8 +118,8 @@ int RunModeSetLiveCaptureAutoFp(ConfigIfaceParserFunc ConfigParser,
                   threads_count, recv_mod_name);
 
         /* create the threads *//* 创建线程，线程名参考 thread_name_autofp = "RX" */
-        for (int thread = 0; thread < MIN(thread_max, threads_count); thread++) {
-            snprintf(tname, sizeof(tname), "%s#%02d", thread_name, thread+1);  /* 线程名: RX#01 */
+        for (int thread = 0; thread < threads_count; thread++) {
+            snprintf(tname, sizeof(tname), "%s#%02d", thread_name, thread+1);
             ThreadVars *tv_receive =     /* 主处理函数, TmThreadsSlotPktAcqLoop() */
                 TmThreadCreatePacketHandler(tname,
                                             "packetpool", "packetpool",   /* inqueue, name handler */
@@ -266,11 +255,12 @@ static int RunModeSetLiveCaptureWorkersForDevice(ConfigIfaceThreadsCountFunc Mod
                               unsigned char single_mode)
 {
     int threads_count;
+    uint16_t thread_max = TmThreadsGetWorkerThreadMax();
 
     if (single_mode) {
         threads_count = 1;
     } else {
-        threads_count = ModThreadsCount(aconf);
+        threads_count = MIN(ModThreadsCount(aconf), thread_max);
         SCLogInfo("Going to use %" PRId32 " thread(s)", threads_count);
     }
 
@@ -418,19 +408,9 @@ int RunModeSetIPSAutoFp(ConfigIPSParserFunc ConfigParser,
     TmModule *tm_module ;
 
     /* Available cpus */
-    uint16_t ncpus = UtilCpuGetNumProcessorsOnline();
     const int nqueue = LiveGetDeviceCount();
 
-    int thread_max = TmThreadGetNbThreads(WORKER_CPU_SET);
-    /* always create at least one thread */
-    if (thread_max == 0)
-        thread_max = ncpus * threading_detect_ratio;
-    if (thread_max < 1)
-        thread_max = 1;
-    if (thread_max > 1024) {
-        SCLogWarning(SC_ERR_RUNMODE, "limited number of 'worker' threads to 1024. Wanted %d", thread_max);
-        thread_max = 1024;
-    }
+    uint16_t thread_max = TmThreadsGetWorkerThreadMax();
 
     char *queues = RunmodeAutoFpCreatePickupQueuesString(thread_max);
     if (queues == NULL) {

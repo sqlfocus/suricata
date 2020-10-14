@@ -22,7 +22,6 @@
  */
 
 #include "suricata-common.h"
-#include "config.h"
 
 #if HAVE_GETOPT_H
 #include <getopt.h>
@@ -154,7 +153,6 @@
 #include "runmodes.h"
 #include "runmode-unittests.h"
 
-#include "util-decode-asn1.h"
 #include "util-debug.h"
 #include "util-error.h"
 #include "util-daemon.h"
@@ -173,6 +171,8 @@
 #include "host-storage.h"
 
 #include "util-lua.h"
+
+#include "util-plugin.h"
 
 #include "rust.h"
 
@@ -468,10 +468,9 @@ static void SetBpfStringFromFile(char *filename)
     size_t nm = 0;
 
     if (EngineModeIsIPS()) {
-        SCLogError(SC_ERR_NOT_SUPPORTED,
-                   "BPF filter not available in IPS mode."
-                   " Use firewall filtering if possible.");
-        exit(EXIT_FAILURE);
+                   FatalError(SC_ERR_FATAL,
+                              "BPF filter not available in IPS mode."
+                              " Use firewall filtering if possible.");
     }
 
 #ifdef OS_WIN32
@@ -600,6 +599,7 @@ static void PrintUsage(const char *progname)
     printf("\t--pcap[=<dev>]                       : run in pcap mode, no value select interfaces from suricata.yaml\n");
     printf("\t--pcap-file-continuous               : when running in pcap mode with a directory, continue checking directory for pcaps until interrupted\n");
     printf("\t--pcap-file-delete                   : when running in replay mode (-r with directory or file), will delete pcap files that have been processed when done\n");
+    printf("\t--pcap-file-recursive                : will descend into subdirectories when running in replay mode (-r)\n");
 #ifdef HAVE_PCAP_SET_BUFF
     printf("\t--pcap-buffer-size                   : size of the pcap buffer value from 0 - %i\n",INT_MAX);
 #endif /* HAVE_SET_PCAP_BUFF */
@@ -1197,9 +1197,13 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
         {"pcap", optional_argument, 0, 0},
         {"pcap-file-continuous", 0, 0, 0},
         {"pcap-file-delete", 0, 0, 0},
+        {"pcap-file-recursive", 0, 0, 0},
         {"simulate-ips", 0, 0 , 0},
         {"no-random", 0, &g_disable_randomness, 1},
         {"strict-rule-keywords", optional_argument, 0, 0},
+
+        {"capture-plugin", required_argument, 0, 0},
+        {"capture-plugin-args", required_argument, 0, 0},
 
 #ifdef BUILD_UNIX_SOCKET
         {"unix-socket", optional_argument, 0, 0},
@@ -1291,6 +1295,13 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
                         "to pass --enable-pfring to configure when building.");
                 return TM_ECODE_FAILED;
 #endif /* HAVE_PFRING */
+            }
+            else if (strcmp((long_opts[option_index]).name , "capture-plugin") == 0){
+                suri->run_mode = RUNMODE_PLUGIN;
+                suri->capture_plugin_name = optarg;
+            }
+            else if (strcmp((long_opts[option_index]).name , "capture-plugin-args") == 0){
+                suri->capture_plugin_args = optarg;
             }
             else if (strcmp((long_opts[option_index]).name , "af-packet") == 0)
             {
@@ -1467,17 +1478,15 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
 						" to receive packets using --dag.");
                 return TM_ECODE_FAILED;
 #endif /* HAVE_DAG */
-		}
-        else if (strcmp((long_opts[option_index]).name, "napatech") == 0) {
+            } else if (strcmp((long_opts[option_index]).name, "napatech") == 0) {
 #ifdef HAVE_NAPATECH
-            suri->run_mode = RUNMODE_NAPATECH;
+                suri->run_mode = RUNMODE_NAPATECH;
 #else
-            SCLogError(SC_ERR_NAPATECH_REQUIRED, "libntapi and a Napatech adapter are required"
-                                                 " to capture packets using --napatech.");
-            return TM_ECODE_FAILED;
+                SCLogError(SC_ERR_NAPATECH_REQUIRED, "libntapi and a Napatech adapter are required"
+                                                     " to capture packets using --napatech.");
+                return TM_ECODE_FAILED;
 #endif /* HAVE_NAPATECH */
-			}
-            else if(strcmp((long_opts[option_index]).name, "pcap-buffer-size") == 0) {
+            } else if (strcmp((long_opts[option_index]).name, "pcap-buffer-size") == 0) {
 #ifdef HAVE_PCAP_SET_BUFF
                 if (ConfSetFinal("pcap.buffer-size", optarg) != 1) {
                     fprintf(stderr, "ERROR: Failed to set pcap-buffer-size.\n");
@@ -1487,12 +1496,10 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
                 SCLogError(SC_ERR_NO_PCAP_SET_BUFFER_SIZE, "The version of libpcap you have"
                         " doesn't support setting buffer size.");
 #endif /* HAVE_PCAP_SET_BUFF */
-            }
-            else if(strcmp((long_opts[option_index]).name, "build-info") == 0) {
+            } else if (strcmp((long_opts[option_index]).name, "build-info") == 0) {
                 suri->run_mode = RUNMODE_PRINT_BUILDINFO;
                 return TM_ECODE_OK;
-            }
-            else if(strcmp((long_opts[option_index]).name, "windivert-forward") == 0) {
+            } else if (strcmp((long_opts[option_index]).name, "windivert-forward") == 0) {
 #ifdef WINDIVERT
                 if (suri->run_mode == RUNMODE_UNKNOWN) {
                     suri->run_mode = RUNMODE_WINDIVERT;
@@ -1532,6 +1539,7 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
 #endif /* WINDIVERT */
             } else if(strcmp((long_opts[option_index]).name, "reject-dev") == 0) {
 #ifdef HAVE_LIBNET11
+                BUG_ON(optarg == NULL); /* for static analysis */
                 extern char *g_reject_dev;
                 extern uint16_t g_reject_dev_mtu;
                 g_reject_dev = optarg;
@@ -1550,9 +1558,8 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
                     /* Quick validation. */
                     char *val = strchr(optarg, '=');
                     if (val == NULL) {
-                        SCLogError(SC_ERR_CMD_LINE,
-                                "Invalid argument for --set, must be key=val.");
-                        exit(EXIT_FAILURE);
+                                FatalError(SC_ERR_FATAL,
+                                           "Invalid argument for --set, must be key=val.");
                     }
                     if (!ConfSetFromString(optarg, 1)) {
                         fprintf(stderr, "Failed to set configuration value %s.",
@@ -1570,6 +1577,12 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
             else if (strcmp((long_opts[option_index]).name, "pcap-file-delete") == 0) {
                 if (ConfSetFinal("pcap-file.delete-when-done", "true") != 1) {
                     SCLogError(SC_ERR_CMD_LINE, "Failed to set pcap-file.delete-when-done");
+                    return TM_ECODE_FAILED;
+                }
+            }
+            else if (strcmp((long_opts[option_index]).name, "pcap-file-recursive") == 0) {
+                if (ConfSetFinal("pcap-file.recursive", "true") != 1) {
+                    SCLogError(SC_ERR_CMD_LINE, "ERROR: Failed to set pcap-file.recursive");
                     return TM_ECODE_FAILED;
                 }
             }
@@ -1731,6 +1744,7 @@ static TmEcode ParseCommandLine(int argc, char** argv, SCInstance *suri)
 #endif /* IPFW */
             break;
         case 'r':
+            BUG_ON(optarg == NULL); /* for static analysis */
             if (suri->run_mode == RUNMODE_UNKNOWN) {
                 suri->run_mode = RUNMODE_PCAP_FILE;
             } else {
@@ -1993,6 +2007,8 @@ static int InitSignalHandler(SCInstance *suri)
  * Will be run once per pcap in unix-socket mode */
 void PreRunInit(const int runmode)
 {
+    /* Initialize Datasets to be able to use them with unix socket */
+    DatasetsInit();
     if (runmode == RUNMODE_UNIX_SOCKET)
         return;
 
@@ -2004,7 +2020,6 @@ void PreRunInit(const int runmode)
     SCProfilingSghsGlobalInit();
     SCProfilingInit();
 #endif /* PROFILING */
-    DatasetsInit();                   /* */
     DefragInit();                     /* 初始化IP分片重组模块配置 */
     FlowInitConfig(FLOW_QUIET);       /* 初始化FLOW引擎配置，包括流超时 */
     IPPairInitConfig(FLOW_QUIET);     /* IP Pair配置信息初始化 */
@@ -2316,9 +2331,8 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
         if (mt_enabled)            /* 多租户支持？？？ */
             (void)ConfGetBool("multi-detect.default", &default_tenant);
         if (DetectEngineMultiTenantSetup() == -1) {
-            SCLogError(SC_ERR_INITIALIZATION, "initializing multi-detect "
-                    "detection engine contexts failed.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "initializing multi-detect "
+                       "detection engine contexts failed.");
         }
         if (suri->delayed_detect && suri->run_mode != RUNMODE_CONF_TEST) {
             de_ctx = DetectEngineCtxInitStubForDD();
@@ -2328,9 +2342,8 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
             de_ctx = DetectEngineCtxInit();   /* 初始化检测引擎 */
         }
         if (de_ctx == NULL) {
-            SCLogError(SC_ERR_INITIALIZATION, "initializing detection engine "
-                    "context failed.");
-            exit(EXIT_FAILURE);
+            FatalError(SC_ERR_FATAL, "initializing detection engine "
+                       "context failed.");
         }
 
         if (de_ctx->type == DETECT_ENGINE_TYPE_NORMAL) {
@@ -2475,6 +2488,7 @@ int PostConfLoadedSetup(SCInstance *suri)
     LiveDevRegisterExtension();
 #endif
     RegisterFlowBypassInfo();       /* 注册流bypass计数器存储内存 */
+    MacSetRegisterFlowStorage();
     AppLayerSetup();                /* 应用协议识别相关设置 */
 
     /* Suricata will use this umask if provided. By default it will use the
@@ -2541,7 +2555,9 @@ int PostConfLoadedSetup(SCInstance *suri)
 
     FeatureTrackingRegister(); /* must occur prior to output mod registration */
     RegisterAllModules();           /* 注册支持的线程模块，如pcap报文捕获、解码等, tmm_modules[] */
-
+#ifdef HAVE_PLUGINS
+    SCPluginsLoad(suri->capture_plugin_name, suri->capture_plugin_args);
+#endif
     AppLayerHtpNeedFileInspection();/* 设置libhtp库的一些标志位 */
 
     StorageFinalize();              /* 分配存储类型信息表 storage_map, 完成storage模块初始化 */
@@ -2587,7 +2603,6 @@ int PostConfLoadedSetup(SCInstance *suri)
     }
 
     HostInitConfig(HOST_VERBOSE);    /* 初始化 host_config */
-    SCAsn1LoadConfig();
 
     CoredumpLoadConfig();            /* 使能coredump，并初始化相关配置 */
 
@@ -2644,8 +2659,6 @@ static void SuricataMainLoop(SCInstance *suri)
     }
 }
 
-SuricataContext context;    /* 全局函数指针表 */
-
 /**
  * \brief Global initialization common to all runmodes.
  *
@@ -2653,21 +2666,20 @@ SuricataContext context;    /* 全局函数指针表 */
  */
 
 int InitGlobal(void) {
-    context.SCLogMessage = SCLogMessage;
-    context.DetectEngineStateFree = DetectEngineStateFree;
-    context.AppLayerDecoderEventsSetEventRaw =
-        AppLayerDecoderEventsSetEventRaw;
-    context.AppLayerDecoderEventsFreeEvents = AppLayerDecoderEventsFreeEvents;
+    suricata_context.SCLogMessage = SCLogMessage;
+    suricata_context.DetectEngineStateFree = DetectEngineStateFree;
+    suricata_context.AppLayerDecoderEventsSetEventRaw = AppLayerDecoderEventsSetEventRaw;
+    suricata_context.AppLayerDecoderEventsFreeEvents = AppLayerDecoderEventsFreeEvents;
 
-    context.FileOpenFileWithId = FileOpenFileWithId;
-    context.FileCloseFileById = FileCloseFileById;
-    context.FileAppendDataById = FileAppendDataById;
-    context.FileAppendGAPById = FileAppendGAPById;
-    context.FileContainerRecycle = FileContainerRecycle;
-    context.FilePrune = FilePrune;
-    context.FileSetTx = FileContainerSetTx;
+    suricata_context.FileOpenFileWithId = FileOpenFileWithId;
+    suricata_context.FileCloseFileById = FileCloseFileById;
+    suricata_context.FileAppendDataById = FileAppendDataById;
+    suricata_context.FileAppendGAPById = FileAppendGAPById;
+    suricata_context.FileContainerRecycle = FileContainerRecycle;
+    suricata_context.FilePrune = FilePrune;
+    suricata_context.FileSetTx = FileContainerSetTx;
 
-    rs_init(&context);
+    rs_init(&suricata_context);
 
     SC_ATOMIC_INIT(engine_stage);              /* 设置引擎状态为启动 */
 
@@ -2783,16 +2795,16 @@ int SuricataMain(int argc, char **argv)
     }
 
     SCSetStartTime(&suricata);                   /* 记录启动时间, 创建处理线程 */
-    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode);
+    RunModeDispatch(suricata.run_mode, suricata.runmode_custom_mode,
+            suricata.capture_plugin_name, suricata.capture_plugin_args);
     if (suricata.run_mode != RUNMODE_UNIX_SOCKET) { /* pcap入口函数 -> TmThreadsSlotPktAcqLoop() */
         UnixManagerThreadSpawnNonRunmode();      /* 选择运行模型，并初始化管理、统计线程 */
     }
 
     /* Wait till all the threads have been initialized */
     if (TmThreadWaitOnThreadInit() == TM_ECODE_FAILED) {
-        SCLogError(SC_ERR_INITIALIZATION, "Engine initialization failed, "
-                   "aborting...");               /* 等待子线程初始化完毕 */
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "Engine initialization failed, "
+                   "aborting...");                /* 等待子线程初始化完毕 */
     }
 
     SC_ATOMIC_SET(engine_stage, SURICATA_RUNTIME);/* 设置引擎为运行态 */

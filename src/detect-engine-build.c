@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2018 Open Information Security Foundation
+/* Copyright (C) 2007-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -631,18 +631,20 @@ static json_t *RulesGroupPrintSghStats(const SigGroupHead *sgh,
     uint32_t mpms_min = 0;
     uint32_t mpms_max = 0;
 
+    int max_buffer_type_id = DetectBufferTypeMaxId() + 1;
+
     struct {
         uint32_t total;
         uint32_t cnt;
         uint32_t min;
         uint32_t max;
-    } mpm_stats[DETECT_SM_LIST_MAX];
+    } mpm_stats[max_buffer_type_id];
     memset(mpm_stats, 0x00, sizeof(mpm_stats));
 
     uint32_t alstats[ALPROTO_MAX] = {0};
-    uint32_t mpm_sizes[DETECT_SM_LIST_MAX][256];
+    uint32_t mpm_sizes[max_buffer_type_id][256];
     memset(mpm_sizes, 0, sizeof(mpm_sizes));
-    uint32_t alproto_mpm_bufs[ALPROTO_MAX][DETECT_SM_LIST_MAX];
+    uint32_t alproto_mpm_bufs[ALPROTO_MAX][max_buffer_type_id];
     memset(alproto_mpm_bufs, 0, sizeof(alproto_mpm_bufs));
 
     json_t *js = json_object();
@@ -802,10 +804,11 @@ static json_t *RulesGroupPrintSghStats(const SigGroupHead *sgh,
             json_t *app = json_object();
             json_object_set_new(app, "total", json_integer(alstats[i]));
 
-            for (x = 0; x < DETECT_SM_LIST_MAX; x++) {
-                if (alproto_mpm_bufs[i][x] == 0)
+            for (int y = 0; y < max_buffer_type_id; y++) {
+                if (alproto_mpm_bufs[i][y] == 0)
                     continue;
-                json_object_set_new(app, DetectListToHumanString(x), json_integer(alproto_mpm_bufs[i][x]));
+                json_object_set_new(
+                        app, DetectListToHumanString(y), json_integer(alproto_mpm_bufs[i][y]));
             }
 
             json_object_set_new(stats, AppProtoToString(i), app);
@@ -815,17 +818,17 @@ static json_t *RulesGroupPrintSghStats(const SigGroupHead *sgh,
     if (add_mpm_stats) {
         json_t *mpm_js = json_object();
 
-        for (i = 0; i < DETECT_SM_LIST_MAX; i++) {
+        for (i = 0; i < max_buffer_type_id; i++) {
             if (mpm_stats[i].cnt > 0) {
 
                 json_t *mpm_sizes_array = json_array();
-                for (x = 0; x < 256; x++) {
-                    if (mpm_sizes[i][x] == 0)
+                for (int y = 0; y < 256; y++) {
+                    if (mpm_sizes[i][y] == 0)
                         continue;
 
                     json_t *e = json_object();
-                    json_object_set_new(e, "size", json_integer(x));
-                    json_object_set_new(e, "count", json_integer(mpm_sizes[i][x]));
+                    json_object_set_new(e, "size", json_integer(y));
+                    json_object_set_new(e, "count", json_integer(mpm_sizes[i][y]));
                     json_array_append_new(mpm_sizes_array, e);
                 }
 
@@ -845,7 +848,8 @@ static json_t *RulesGroupPrintSghStats(const SigGroupHead *sgh,
     }
     json_object_set_new(js, "stats", stats);
 
-    json_object_set_new(js, "whitelist", json_integer(sgh->init->whitelist));
+    if (sgh->init)
+        json_object_set_new(js, "whitelist", json_integer(sgh->init->whitelist));
 
     return js;
 }
@@ -1803,7 +1807,7 @@ int SigAddressPrepareStage4(DetectEngineCtx *de_ctx)
         int add_rules = 0;
         (void)ConfGetBool("detect.profiling.grouping.include-rules", &add_rules);
         int add_mpm_stats = 0;
-        (void)ConfGetBool("detect.profiling.grouping.include-mpm-stats", &add_rules);
+        (void)ConfGetBool("detect.profiling.grouping.include-mpm-stats", &add_mpm_stats);
 
         RulesDumpGrouping(de_ctx, add_rules, add_mpm_stats);
     }
@@ -1858,6 +1862,12 @@ static int SigMatchPrepare(DetectEngineCtx *de_ctx)
         }
         SCFree(s->init_data->smlists);
         SCFree(s->init_data->smlists_tail);
+        for (i = 0; i < (uint32_t)s->init_data->transforms.cnt; i++) {
+            if (s->init_data->transforms.transforms[i].options) {
+                SCFree(s->init_data->transforms.transforms[i].options);
+                s->init_data->transforms.transforms[i].options = NULL;
+            }
+        }
         SCFree(s->init_data);
         s->init_data = NULL;
     }
@@ -1897,36 +1907,30 @@ int SigGroupBuild(DetectEngineCtx *de_ctx)
     SigInitStandardMpmFactoryContexts(de_ctx);
                               /* 注册多模引擎工厂 */
     if (SigAddressPrepareStage1(de_ctx) != 0) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段1: 创建规则数组, DetectEngineCtx->sig_array[]; 约束内容查找范围；检测flowbit配置状态等 */
-    }
-
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
+    }                         /* 准备阶段1: 创建规则数组, DetectEngineCtx->sig_array[]; 约束内容查找范围；检测flowbit配置状态等 */
+   
     if (SigAddressPrepareStage2(de_ctx) != 0) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段2: 构建规则组，基于IP、端口 */
-    }
-
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
+    }                         /* 准备阶段2: 构建规则组，基于IP、端口 */
+   
     if (SigAddressPrepareStage3(de_ctx) != 0) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段3: 构建基于解码事件的规则组 */
-    }
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
+    }                         /* 准备阶段3: 构建基于解码事件的规则组 */
     if (SigAddressPrepareStage4(de_ctx) != 0) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 准备阶段4: 构建规则组的prefilter多模匹配引擎 */
-    }
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
+    }                         /* 准备阶段4: 构建规则组的prefilter多模匹配引擎 */
 
     int r = DetectMpmPrepareBuiltinMpms(de_ctx);
     r |= DetectMpmPrepareAppMpms(de_ctx);
     r |= DetectMpmPreparePktMpms(de_ctx);
     if (r != 0) {             /* 共享环境下，构建多模式匹配引擎 */
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
     }
 
     if (SigMatchPrepare(de_ctx) != 0) {
-        SCLogError(SC_ERR_DETECT_PREPARE, "initializing the detection engine failed");
-        exit(EXIT_FAILURE);   /* 初始化基于单个Signature匹配环境 */
-    }
+        FatalError(SC_ERR_FATAL, "initializing the detection engine failed");
+    }                         /* 初始化基于单个Signature匹配环境 */
 
 #ifdef PROFILING
     SCProfilingKeywordInitCounters(de_ctx);

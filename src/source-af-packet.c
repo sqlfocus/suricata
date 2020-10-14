@@ -33,7 +33,6 @@
 #define PCAP_DONT_INCLUDE_PCAP_BPF_H 1
 #define SC_PCAP_DONT_INCLUDE_PCAP_H 1
 #include "suricata-common.h"
-#include "config.h"
 #include "suricata.h"
 #include "decode.h"
 #include "packet-queue.h"
@@ -129,7 +128,6 @@ void TmModuleReceiveAFPRegister (void)
     tmm_modules[TMM_RECEIVEAFP].Func = NULL;
     tmm_modules[TMM_RECEIVEAFP].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_RECEIVEAFP].ThreadDeinit = NULL;
-    tmm_modules[TMM_RECEIVEAFP].RegisterTests = NULL;
     tmm_modules[TMM_RECEIVEAFP].cap_flags = 0;
     tmm_modules[TMM_RECEIVEAFP].flags = TM_FLAG_RECEIVE_TM;
 }
@@ -144,7 +142,6 @@ void TmModuleDecodeAFPRegister (void)
     tmm_modules[TMM_DECODEAFP].Func = NULL;
     tmm_modules[TMM_DECODEAFP].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_DECODEAFP].ThreadDeinit = NULL;
-    tmm_modules[TMM_DECODEAFP].RegisterTests = NULL;
     tmm_modules[TMM_DECODEAFP].cap_flags = 0;
     tmm_modules[TMM_DECODEAFP].flags = TM_FLAG_DECODE_TM;
 }
@@ -332,7 +329,6 @@ void TmModuleReceiveAFPRegister (void)
     tmm_modules[TMM_RECEIVEAFP].PktAcqBreakLoop = NULL;
     tmm_modules[TMM_RECEIVEAFP].ThreadExitPrintStats = ReceiveAFPThreadExitStats;
     tmm_modules[TMM_RECEIVEAFP].ThreadDeinit = ReceiveAFPThreadDeinit;
-    tmm_modules[TMM_RECEIVEAFP].RegisterTests = NULL;
     tmm_modules[TMM_RECEIVEAFP].cap_flags = SC_CAP_NET_RAW;
     tmm_modules[TMM_RECEIVEAFP].flags = TM_FLAG_RECEIVE_TM;
 
@@ -550,7 +546,6 @@ void TmModuleDecodeAFPRegister (void)
     tmm_modules[TMM_DECODEAFP].Func = DecodeAFP;
     tmm_modules[TMM_DECODEAFP].ThreadExitPrintStats = NULL;
     tmm_modules[TMM_DECODEAFP].ThreadDeinit = DecodeAFPThreadDeinit;
-    tmm_modules[TMM_DECODEAFP].RegisterTests = NULL;
     tmm_modules[TMM_DECODEAFP].cap_flags = 0;
     tmm_modules[TMM_DECODEAFP].flags = TM_FLAG_DECODE_TM;
 }

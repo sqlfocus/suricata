@@ -203,16 +203,14 @@ static void TCPProtoDetectCheckBailConditions(ThreadVars *tv,
         return;
     }
 
-    uint32_t size_ts = ssn->client.last_ack - ssn->client.isn - 1;
-    uint32_t size_tc = ssn->server.last_ack - ssn->server.isn - 1;
-    SCLogDebug("size_ts %u, size_tc %u", size_ts, size_tc);
+    const uint64_t size_ts = STREAM_HAS_SEEN_DATA(&ssn->client) ?
+        STREAM_RIGHT_EDGE(&ssn->client) : 0;
+    const uint64_t size_tc = STREAM_HAS_SEEN_DATA(&ssn->server) ?
+        STREAM_RIGHT_EDGE(&ssn->server) : 0;
+    SCLogDebug("size_ts %"PRIu64", size_tc %"PRIu64, size_ts, size_tc);
 
-#ifdef DEBUG_VALIDATION
-    if (!(ssn->client.flags & STREAMTCP_STREAM_FLAG_GAP))
-        BUG_ON(size_ts > 1000000UL);
-    if (!(ssn->server.flags & STREAMTCP_STREAM_FLAG_GAP))
-        BUG_ON(size_tc > 1000000UL);
-#endif /* DEBUG_VALIDATION */
+    DEBUG_VALIDATE_BUG_ON(size_ts > 1000000UL);
+    DEBUG_VALIDATE_BUG_ON(size_tc > 1000000UL);
 
     if (ProtoDetectDone(f, ssn, STREAM_TOSERVER) &&
         ProtoDetectDone(f, ssn, STREAM_TOCLIENT))
@@ -629,10 +627,30 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
     } else if (alproto != ALPROTO_UNKNOWN && FlowChangeProto(f)) {
         f->alproto_orig = f->alproto;
         SCLogDebug("protocol change, old %s", AppProtoToString(f->alproto_orig));
+        void *alstate_orig = f->alstate;
+        AppLayerParserState *alparser = f->alparser;
+        // we delay AppLayerParserStateCleanup because we may need previous parser state
         AppLayerProtoDetectReset(f);
+        StreamTcpResetStreamFlagAppProtoDetectionCompleted(&ssn->client);
+        StreamTcpResetStreamFlagAppProtoDetectionCompleted(&ssn->server);
         /* rerun protocol detection */
-        if (TCPProtoDetect(tv, ra_ctx, app_tctx, p, f, ssn, stream,
-                           data, data_len, flags) != 0) {    /* 基于规则、端口的协议识别 */
+        int rd = TCPProtoDetect(tv, ra_ctx, app_tctx, p, f, ssn, stream, data, data_len, flags);
+        if (f->alproto == ALPROTO_UNKNOWN) {
+            DEBUG_VALIDATE_BUG_ON(alstate_orig != f->alstate);
+            // not enough data, revert AppLayerProtoDetectReset to rerun detection
+            f->alparser = alparser;
+            f->alproto = f->alproto_orig;
+            f->alproto_tc = f->alproto_orig;
+            f->alproto_ts = f->alproto_orig;
+        } else {
+            FlowUnsetChangeProtoFlag(f);
+            AppLayerParserStateProtoCleanup(f->protomap, f->alproto_orig, alstate_orig, alparser);
+            if (alstate_orig == f->alstate) {
+                // we just freed it
+                f->alstate = NULL;
+            }
+        }
+        if (rd != 0) {    /* 基于规则、端口的协议识别 */
             SCLogDebug("proto detect failure");
             goto failure;
         }

@@ -569,10 +569,9 @@ void StreamTcpInitConfig(char quiet)
                         temp_rdrange);
                 exit(EXIT_FAILURE);
             } else if (rdrange >= 100) {
-                SCLogError(SC_ERR_INVALID_VALUE,
-                           "stream.reassembly.randomize-chunk-range "
-                           "must be lower than 100");
-                exit(EXIT_FAILURE);
+                           FatalError(SC_ERR_FATAL,
+                                      "stream.reassembly.randomize-chunk-range "
+                                      "must be lower than 100");
             }
         }
     }
@@ -852,6 +851,14 @@ void StreamTcpSetOSPolicy(TcpStream *stream, Packet *p)
         (stream)->next_win = ((win) + sacked_size__); \
         SCLogDebug("ssn %p: next_win set to %"PRIu32, (ssn), (stream)->next_win); \
     } \
+}
+
+static inline void StreamTcpCloseSsnWithReset(Packet *p, TcpSession *ssn)
+{
+    ssn->flags |= STREAMTCP_FLAG_CLOSED_BY_RST;
+    StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
+    SCLogDebug("ssn %p: (state: %s) Reset received and state changed to "
+            "TCP_CLOSED", ssn, StreamTcpStateAsString(ssn->state));
 }
 
 static int StreamTcpPacketIsRetransmission(TcpStream *stream, Packet *p)
@@ -1431,17 +1438,12 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
             {
                 SCLogDebug("ssn->server.flags |= STREAMTCP_STREAM_FLAG_RST_RECV");
                 ssn->server.flags |= STREAMTCP_STREAM_FLAG_RST_RECV;
-
-                StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-                SCLogDebug("ssn %p: Reset received and state changed to "
-                        "TCP_CLOSED", ssn);
+                StreamTcpCloseSsnWithReset(p, ssn);
             }
         } else {
             ssn->client.flags |= STREAMTCP_STREAM_FLAG_RST_RECV; /* 设置收到RST标志 */
             SCLogDebug("ssn->client.flags |= STREAMTCP_STREAM_FLAG_RST_RECV");
-            StreamTcpPacketSetState(p, ssn, TCP_CLOSED);         /* 设置关闭状态 */
-            SCLogDebug("ssn %p: Reset received and state changed to "
-                    "TCP_CLOSED", ssn);
+            StreamTcpCloseSsnWithReset(p, ssn);                  /* 设置关闭状态 */
         }
 
     /* 异常处理：处理FIN报文 */
@@ -1772,9 +1774,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
         }
 
         if (reset == TRUE) {
-            StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-            SCLogDebug("ssn %p: Reset received and state changed to "
-                    "TCP_CLOSED", ssn);
+            StreamTcpCloseSsnWithReset(p, ssn);
 
             if (ssn->flags & STREAMTCP_FLAG_TIMESTAMP) {
                 StreamTcpHandleTimestamp(ssn, p);
@@ -2025,7 +2025,7 @@ static int StreamTcpPacketStateSynRecv(ThreadVars *tv, Packet *p,
 
             SCLogDebug("ssn %p: synrecv => Asynchronous stream, packet SEQ"
                     " %" PRIu32 ", payload size %" PRIu32 " (%" PRIu32 "), "
-                    "ssn->server.next_seq %" PRIu32 "\n"
+                    "ssn->server.next_seq %" PRIu32
                     , ssn, TCP_GET_SEQ(p), p->payload_len, TCP_GET_SEQ(p)
                     + p->payload_len, ssn->server.next_seq);
 
@@ -2505,9 +2505,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
             return -1;
 
         if (PKT_IS_TOSERVER(p)) {
-            StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-            SCLogDebug("ssn %p: Reset received and state changed to "
-                    "TCP_CLOSED", ssn);
+            StreamTcpCloseSsnWithReset(p, ssn);
 
             ssn->server.next_seq = TCP_GET_ACK(p);
             ssn->client.next_seq = TCP_GET_SEQ(p) + p->payload_len;
@@ -2536,9 +2534,7 @@ static int StreamTcpPacketStateEstablished(ThreadVars *tv, Packet *p,
              * packet will take care, otherwise the normal session
              * cleanup. */
         } else {
-            StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-            SCLogDebug("ssn %p: Reset received and state changed to "
-                    "TCP_CLOSED", ssn);
+            StreamTcpCloseSsnWithReset(p, ssn);
 
             ssn->server.next_seq = TCP_GET_SEQ(p) + p->payload_len + 1;
             ssn->client.next_seq = TCP_GET_ACK(p);
@@ -2830,9 +2826,7 @@ static int StreamTcpPacketStateFinWait1(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -3269,9 +3263,7 @@ static int StreamTcpPacketStateFinWait2(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -3568,9 +3560,7 @@ static int StreamTcpPacketStateClosing(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -3747,9 +3737,7 @@ static int StreamTcpPacketStateCloseWait(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -4037,9 +4025,7 @@ static int StreamTcpPacketStateLastAck(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -4164,9 +4150,7 @@ static int StreamTcpPacketStateTimeWait(ThreadVars *tv, Packet *p,
         if (!StreamTcpValidateRst(ssn, p))
             return -1;
 
-        StreamTcpPacketSetState(p, ssn, TCP_CLOSED);
-        SCLogDebug("ssn %p: Reset received state changed to TCP_CLOSED",
-                ssn);
+        StreamTcpCloseSsnWithReset(p, ssn);
 
         if (PKT_IS_TOSERVER(p)) {
             if ((p->tcph->th_flags & TH_ACK) && StreamTcpValidateAck(ssn, &ssn->server, p) == 0)
@@ -4373,6 +4357,7 @@ static void StreamTcpPacketCheckPostRst(TcpSession *ssn, Packet *p)
         SCLogDebug("regular packet %"PRIu64" from same sender as "
                 "the previous RST. Looks like it injected!", p->pcap_cnt);
         ostream->flags &= ~STREAMTCP_STREAM_FLAG_RST_RECV;
+        ssn->flags &= ~STREAMTCP_FLAG_CLOSED_BY_RST;
         StreamTcpSetEvent(p, STREAM_SUSPECTED_RST_INJECT);
         return;
     }
@@ -4847,12 +4832,9 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
             goto skip;
         }
 
-        if (p->flow->flags & FLOW_WRONG_THREAD ||
-            ssn->client.flags & STREAMTCP_STREAM_FLAG_GAP ||
-            ssn->server.flags & STREAMTCP_STREAM_FLAG_GAP)
-        {                        /* 处于known bad condition，不再触发事件 */
+        if (p->flow->flags & FLOW_WRONG_THREAD) {
             /* Stream and/or session in known bad condition. Block events
-             * from being set. */
+             * from being set. *//* 处于known bad condition，不再触发事件 */
             p->flags |= PKT_STREAM_NO_EVENTS;
         }
 

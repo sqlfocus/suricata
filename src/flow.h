@@ -29,6 +29,7 @@
 #include "util-atomic.h"
 #include "util-device.h"
 #include "detect-tag.h"
+#include "util-macset.h"
 #include "util-optimize.h"
 
 /* Part of the flow structure, so we declare it here.
@@ -222,6 +223,9 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_PKT_TOCLIENT_IPONLY_SET    0x10
 #define FLOW_PKT_TOSERVER_FIRST         0x20
 #define FLOW_PKT_TOCLIENT_FIRST         0x40
+/** last pseudo packet in the flow. Can be used to trigger final clean,
+ *  logging, etc. */
+#define FLOW_PKT_LAST_PSEUDO            0x80
 
 #define FLOW_END_FLAG_STATE_NEW         0x01
 #define FLOW_END_FLAG_STATE_ESTABLISHED 0x02
@@ -361,8 +365,33 @@ typedef struct Flow_
     uint8_t proto;
     uint8_t recursion_level;
     uint16_t vlan_id[2];
+    /** how many references exist to this flow *right now*
+     *
+     *  On receiving a packet the counter is incremented while the flow
+     *  bucked is locked, which is also the case on timeout pruning.
+     */
+    FlowRefCount use_cnt;
+
     uint8_t vlan_idx;
 
+    /* track toserver/toclient flow timeout needs */
+    union {
+        struct {
+            uint8_t ffr_ts:4;
+            uint8_t ffr_tc:4;
+        };
+        uint8_t ffr;
+    };
+
+    /** timestamp in seconds of the moment this flow will timeout
+     *  according to the timeout policy. Does *not* take emergency
+     *  mode into account. */
+    uint32_t timeout_at;
+
+    /** Thread ID for the stream/detect portion of this flow */
+    FlowThreadId thread_id[2];
+
+    struct Flow_ *next; /* (hash) list next */
     /** Incoming interface */
     struct LiveDevice_ *livedev;
 
@@ -375,16 +404,12 @@ typedef struct Flow_
     struct timeval lastts;     /* 上次收到报文时间 */
 
     /* end of flow "header" */
-                               /* 流状态, FLOW_STATE_NEW */
-    SC_ATOMIC_DECLARE(FlowStateType, flow_state);
 
-    /** how many pkts and stream msgs are using the flow *right now*. This
-     *  variable is atomic so not protected by the Flow mutex "m".
-     *
-     *  On receiving a packet the counter is incremented while the flow
-     *  bucked is locked, which is also the case on timeout pruning.
-     */
-    SC_ATOMIC_DECLARE(FlowRefCount, use_cnt);
+    /** timeout policy value in seconds to add to the lastts.tv_sec
+     *  when a packet has been received. */
+    uint32_t timeout_policy;
+
+    FlowStateType flow_state;
 
     /** flow tenant id, used to setup flow timeout and stream pseudo
      *  packets with the correct tenant id set */
@@ -438,9 +463,6 @@ typedef struct Flow_
      *  stored sgh ptrs are reset. */
     uint32_t de_ctx_version;    /* 检测引擎版本号，以发现引擎重新加载 */
 
-    /** Thread ID for the stream/detect portion of this flow */
-    FlowThreadId thread_id[2];  /* 处理流汇聚、检测的线程索引, ThreadVars->id; 同一条流必须在相同的线程上处理 */
-                                /* 0-->to server, 1-->to client */
     /** ttl tracking */
     uint8_t min_ttl_toserver;   /* 跟踪报文TTL */
     uint8_t max_ttl_toserver;
@@ -463,14 +485,8 @@ typedef struct Flow_
     /* pointer to the var list */
     GenericVar *flowvar;
 
-    /** hash list pointers, protected by fb->s */
-    struct Flow_ *hnext;       /* 桶内以hash链表组织 */
-    struct Flow_ *hprev;
     struct FlowBucket_ *fb;    /* 对应的hash桶 */
 
-    /** queue list pointers, protected by queue mutex */
-    struct Flow_ *lnext; /* list */
-    struct Flow_ *lprev;
     struct timeval startts;    /* 创建时间 */
 
     uint32_t todstpktcnt;      /* 报文、字节数统计 */
@@ -510,12 +526,23 @@ typedef struct FlowBypassInfo_ {
     uint64_t todstbytecnt;
 } FlowBypassInfo;
 
+#include "flow-queue.h"
+
+typedef struct FlowLookupStruct_ // TODO name
+{
+    /** thread store of spare queues */
+    FlowQueuePrivate spare_queue;
+    DecodeThreadVars *dtv;
+    FlowQueuePrivate work_queue;
+    uint32_t emerg_spare_sync_stamp;
+} FlowLookupStruct;
+
 /** \brief prepare packet for a life with flow
  *  Set PKT_WANTS_FLOW flag to incidate workers should do a flow lookup
  *  and calc the hash value to be used in the lookup and autofp flow
  *  balancing. */
 void FlowSetupPacket(Packet *p);
-void FlowHandlePacket (ThreadVars *, DecodeThreadVars *, Packet *);
+void FlowHandlePacket (ThreadVars *, FlowLookupStruct *, Packet *);
 void FlowInitConfig (char);
 void FlowPrintQueueInfo (void);
 void FlowShutdown(void);
@@ -532,8 +559,6 @@ int FlowSetProtoTimeout(uint8_t ,uint32_t ,uint32_t ,uint32_t);
 int FlowSetProtoEmergencyTimeout(uint8_t ,uint32_t ,uint32_t ,uint32_t);
 int FlowSetProtoFreeFunc (uint8_t , void (*Free)(void *));
 void FlowUpdateQueue(Flow *);
-
-struct FlowQueue_;
 
 int FlowUpdateSpareFlows(void);
 
@@ -595,7 +620,7 @@ static inline void FlowIncrUsecnt(Flow *f)
     if (f == NULL)
         return;
 
-    (void) SC_ATOMIC_ADD(f->use_cnt, 1);
+    f->use_cnt++;
 }
 
 /**
@@ -608,7 +633,7 @@ static inline void FlowDecrUsecnt(Flow *f)
     if (f == NULL)
         return;
 
-    (void) SC_ATOMIC_SUB(f->use_cnt, 1);
+    f->use_cnt--;
 }
 
 /** \brief Reference the flow, bumping the flows use_cnt
@@ -652,12 +677,29 @@ static inline int64_t FlowGetId(const Flow *f)
     return id;
 }
 
+static inline void FlowSetEndFlags(Flow *f)
+{
+    const int state = f->flow_state;
+    if (state == FLOW_STATE_NEW)
+        f->flow_end_flags |= FLOW_END_FLAG_STATE_NEW;
+    else if (state == FLOW_STATE_ESTABLISHED)
+        f->flow_end_flags |= FLOW_END_FLAG_STATE_ESTABLISHED;
+    else if (state == FLOW_STATE_CLOSED)
+        f->flow_end_flags |= FLOW_END_FLAG_STATE_CLOSED;
+    else if (state == FLOW_STATE_LOCAL_BYPASSED)
+        f->flow_end_flags |= FLOW_END_FLAG_STATE_BYPASSED;
+#ifdef CAPTURE_OFFLOAD
+    else if (state == FLOW_STATE_CAPTURE_BYPASSED)
+        f->flow_end_flags = FLOW_END_FLAG_STATE_BYPASSED;
+#endif
+}
+
 int FlowClearMemory(Flow *,uint8_t );
 
 AppProto FlowGetAppProtocol(const Flow *f);
 void *FlowGetAppState(const Flow *f);
 uint8_t FlowGetDisruptionFlags(const Flow *f, uint8_t flags);
 
-void FlowHandlePacketUpdate(Flow *f, Packet *p);
+void FlowHandlePacketUpdate(Flow *f, Packet *p, ThreadVars *tv, DecodeThreadVars *dtv);
 
 #endif /* __FLOW_H__ */

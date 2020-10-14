@@ -1,4 +1,4 @@
-/* Copyright (C) 2014 Open Information Security Foundation
+/* Copyright (C) 2014-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -55,13 +55,14 @@ typedef struct LogJsonFileCtx_ {
 } LogJsonFileCtx;
 
 typedef struct JsonNetFlowLogThread_ {
+    LogFileCtx *file_ctx;
     LogJsonFileCtx *flowlog_ctx;
     /** LogFileCtx has the pointer to the file and a mutex to allow multithreading */
 
     MemBuffer *buffer;
 } JsonNetFlowLogThread;
 
-static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_type, int dir)
+static JsonBuilder *CreateEveHeaderFromNetFlow(const Flow *f, int dir)
 {
     char timebuf[64];
     char srcip[46] = {0}, dstip[46] = {0};
@@ -106,13 +107,6 @@ static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_typ
         dp = f->sp;
     }
 
-    char proto[16];
-    if (SCProtoNameValid(f->proto) == TRUE) {
-        strlcpy(proto, known_proto[f->proto], sizeof(proto));
-    } else {
-        snprintf(proto, sizeof(proto), "%03" PRIu32, f->proto);
-    }
-
     /* time */
     jb_set_string(js, "timestamp", timebuf);
 
@@ -129,9 +123,7 @@ static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_typ
         jb_set_string(js, "in_iface", f->livedev->dev);
     }
 
-    if (event_type) {
-        jb_set_string(js, "event_type", event_type);
-    }
+    JB_SET_STRING(js, "event_type", "netflow");
 
     /* vlan */
     if (f->vlan_idx > 0) {
@@ -164,7 +156,15 @@ static JsonBuilder *CreateEveHeaderFromFlow(const Flow *f, const char *event_typ
             jb_set_uint(js, "dest_port", dp);
             break;
     }
-    jb_set_string(js, "proto", proto);
+
+    if (SCProtoNameValid(f->proto)) {
+        jb_set_string(js, "proto", known_proto[f->proto]);
+    } else {
+        char proto[4];
+        snprintf(proto, sizeof(proto), "%"PRIu8"", f->proto);
+        jb_set_string(js, "proto", proto);
+    }
+
     switch (f->proto) {
         case IPPROTO_ICMP:
         case IPPROTO_ICMPV6: {
@@ -283,73 +283,27 @@ static int JsonNetFlowLogger(ThreadVars *tv, void *thread_data, Flow *f)
 
     /* reset */
     MemBufferReset(jhl->buffer);
-    JsonBuilder *jb = CreateEveHeaderFromFlow(f, "netflow", 0);
+    JsonBuilder *jb = CreateEveHeaderFromNetFlow(f, 0);
     if (unlikely(jb == NULL))
         return TM_ECODE_OK;
     NetFlowLogEveToServer(jhl, jb, f);
     EveAddCommonOptions(&netflow_ctx->cfg, NULL, f, jb);
-    OutputJsonBuilderBuffer(jb, jhl->flowlog_ctx->file_ctx, &jhl->buffer);
+    OutputJsonBuilderBuffer(jb, jhl->file_ctx, &jhl->buffer);
     jb_free(jb);
 
     /* only log a response record if we actually have seen response packets */
     if (f->tosrcpktcnt) {
         /* reset */
         MemBufferReset(jhl->buffer);
-        jb = CreateEveHeaderFromFlow(f, "netflow", 1);
+        jb = CreateEveHeaderFromNetFlow(f, 1);
         if (unlikely(jb == NULL))
             return TM_ECODE_OK;
         NetFlowLogEveToClient(jhl, jb, f);
         EveAddCommonOptions(&netflow_ctx->cfg, NULL, f, jb);
-        OutputJsonBuilderBuffer(jb, jhl->flowlog_ctx->file_ctx, &jhl->buffer);
+        OutputJsonBuilderBuffer(jb, jhl->file_ctx, &jhl->buffer);
         jb_free(jb);
     }
     SCReturnInt(TM_ECODE_OK);
-}
-
-static void OutputNetFlowLogDeinit(OutputCtx *output_ctx)
-{
-    LogJsonFileCtx *flow_ctx = output_ctx->data;
-    LogFileCtx *logfile_ctx = flow_ctx->file_ctx;
-    LogFileFreeCtx(logfile_ctx);
-    SCFree(flow_ctx);
-    SCFree(output_ctx);
-}
-
-#define DEFAULT_LOG_FILENAME "netflow.json"
-static OutputInitResult OutputNetFlowLogInit(ConfNode *conf)
-{
-    OutputInitResult result = { NULL, false };
-    LogFileCtx *file_ctx = LogFileNewCtx();
-    if(file_ctx == NULL) {
-        SCLogError(SC_ERR_NETFLOW_LOG_GENERIC, "couldn't create new file_ctx");
-        return result;
-    }
-
-    if (SCConfLogOpenGeneric(conf, file_ctx, DEFAULT_LOG_FILENAME, 1) < 0) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    LogJsonFileCtx *flow_ctx = SCMalloc(sizeof(LogJsonFileCtx));
-    if (unlikely(flow_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        return result;
-    }
-
-    OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
-    if (unlikely(output_ctx == NULL)) {
-        LogFileFreeCtx(file_ctx);
-        SCFree(flow_ctx);
-        return result;
-    }
-
-    flow_ctx->file_ctx = file_ctx;
-    output_ctx->data = flow_ctx;
-    output_ctx->DeInit = OutputNetFlowLogDeinit;
-
-    result.ctx = output_ctx;
-    result.ok = true;
-    return result;
 }
 
 static void OutputNetFlowLogDeinitSub(OutputCtx *output_ctx)
@@ -387,16 +341,13 @@ static OutputInitResult OutputNetFlowLogInitSub(ConfNode *conf, OutputCtx *paren
 
 static TmEcode JsonNetFlowLogThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
-    JsonNetFlowLogThread *aft = SCMalloc(sizeof(JsonNetFlowLogThread));
+    JsonNetFlowLogThread *aft = SCCalloc(1, sizeof(JsonNetFlowLogThread));
     if (unlikely(aft == NULL))
         return TM_ECODE_FAILED;
-    memset(aft, 0, sizeof(JsonNetFlowLogThread));
 
-    if(initdata == NULL)
-    {
+    if(initdata == NULL) {
         SCLogDebug("Error getting context for EveLogNetflow.  \"initdata\" argument NULL");
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
     }
 
     /* Use the Ouptut Context (file pointer and mutex) */
@@ -404,12 +355,23 @@ static TmEcode JsonNetFlowLogThreadInit(ThreadVars *t, const void *initdata, voi
 
     aft->buffer = MemBufferCreateNew(JSON_OUTPUT_BUFFER_SIZE);
     if (aft->buffer == NULL) {
-        SCFree(aft);
-        return TM_ECODE_FAILED;
+        goto error_exit;
+    }
+
+    aft->file_ctx = LogFileEnsureExists(aft->flowlog_ctx->file_ctx, t->id);
+    if (!aft->file_ctx) {
+        goto error_exit;
     }
 
     *data = (void *)aft;
     return TM_ECODE_OK;
+
+error_exit:
+    if (aft->buffer != NULL) {
+        MemBufferFree(aft->buffer);
+    }
+    SCFree(aft);
+    return TM_ECODE_FAILED;
 }
 
 static TmEcode JsonNetFlowLogThreadDeinit(ThreadVars *t, void *data)
@@ -429,12 +391,7 @@ static TmEcode JsonNetFlowLogThreadDeinit(ThreadVars *t, void *data)
 
 void JsonNetFlowLogRegister(void)
 {
-    /* register as separate module */
-    OutputRegisterFlowModule(LOGGER_JSON_NETFLOW, "JsonNetFlowLog",
-        "netflow-json-log", OutputNetFlowLogInit, JsonNetFlowLogger,
-        JsonNetFlowLogThreadInit, JsonNetFlowLogThreadDeinit, NULL);
-
-    /* also register as child of eve-log */
+    /* register as child of eve-log */
     OutputRegisterFlowSubModule(LOGGER_JSON_NETFLOW, "eve-log", "JsonNetFlowLog",
         "eve-log.netflow", OutputNetFlowLogInitSub, JsonNetFlowLogger,
         JsonNetFlowLogThreadInit, JsonNetFlowLogThreadDeinit, NULL);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2007-2018 Open Information Security Foundation
+/* Copyright (C) 2007-2020 Open Information Security Foundation
  *
  * You can copy, redistribute or modify this Program under the terms of
  * the GNU General Public License version 2 as published by the Free
@@ -103,6 +103,12 @@ void DetectFiledataRegister(void)
     DetectAppLayerMpmRegister2("file_data", SIG_FLAG_TOCLIENT, 2,
             PrefilterMpmFiledataRegister, NULL,
             ALPROTO_SMB, 0);
+    DetectAppLayerMpmRegister2("file_data", SIG_FLAG_TOSERVER, 2,
+            PrefilterMpmFiledataRegister, NULL,
+            ALPROTO_HTTP2, HTTP2StateDataClient);
+    DetectAppLayerMpmRegister2("file_data", SIG_FLAG_TOCLIENT, 2,
+            PrefilterMpmFiledataRegister, NULL,
+            ALPROTO_HTTP2, HTTP2StateDataServer);
 
     DetectAppLayerInspectEngineRegister2("file_data",
             ALPROTO_HTTP, SIG_FLAG_TOCLIENT, HTP_RESPONSE_BODY,
@@ -117,6 +123,12 @@ void DetectFiledataRegister(void)
             DetectEngineInspectFiledata, NULL);
     DetectAppLayerInspectEngineRegister2("file_data",
             ALPROTO_SMB, SIG_FLAG_TOCLIENT, 0,
+            DetectEngineInspectFiledata, NULL);
+    DetectAppLayerInspectEngineRegister2("file_data",
+            ALPROTO_HTTP2, SIG_FLAG_TOSERVER, HTTP2StateDataClient,
+            DetectEngineInspectFiledata, NULL);
+    DetectAppLayerInspectEngineRegister2("file_data",
+            ALPROTO_HTTP2, SIG_FLAG_TOCLIENT, HTTP2StateDataServer,
             DetectEngineInspectFiledata, NULL);
 
     DetectBufferTypeSetDescriptionByName("file_data",
@@ -167,7 +179,8 @@ static int DetectFiledataSetup (DetectEngineCtx *de_ctx, Signature *s, const cha
 
     if (!DetectProtoContainsProto(&s->proto, IPPROTO_TCP) ||
         (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_HTTP &&
-        s->alproto != ALPROTO_SMTP && s->alproto != ALPROTO_SMB)) {
+        s->alproto != ALPROTO_SMTP && s->alproto != ALPROTO_SMB &&
+        s->alproto != ALPROTO_HTTP2)) {
         SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "rule contains conflicting keywords.");
         return -1;
     }
@@ -249,7 +262,7 @@ static InspectionBuffer *HttpServerBodyGetDataCallback(DetectEngineThreadCtx *de
 
     HtpBodyChunk *cur = body->first;
     if (cur == NULL) {
-        SCLogDebug("No http chunks to inspect for this transacation");
+        SCLogDebug("No http chunks to inspect for this transaction");
         return NULL;
     }
 
@@ -320,6 +333,8 @@ static InspectionBuffer *HttpServerBodyGetDataCallback(DetectEngineThreadCtx *de
                                        htp_state->cfg->swf_compress_depth);
         }
     }
+
+    InspectionBufferApplyTransforms(buffer, transforms);
 
     /* move inspected tracker to end of the data. HtpBodyPrune will consider
      * the window sizes when freeing data */

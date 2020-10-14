@@ -44,6 +44,7 @@ vars:
     MODBUS_PORTS: 502
     FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
     FTP_PORTS: 21
+    GENEVE_PORTS: 6081
     VXLAN_PORTS: 4789
     TEREDO_PORTS: 3544
 
@@ -84,12 +85,16 @@ outputs:
       enabled: @e_enable_evelog@
       filetype: regular #regular|syslog|unix_dgram|unix_stream|redis
       filename: eve.json
+      # Enable for multi-threaded eve.json output; output files are amended with
+      # with an identifier, e.g., eve.9.json
+      #threaded: false
       #prefix: "@cee: " # prefix to prepend to each log entry
       # the following are valid when type: syslog above
       #identity: "suricata"
       #facility: local5
       #level: Info ## possible levels: Emergency, Alert, Critical,
                    ## Error, Warning, Notice, Info, Debug
+      #ethernet: no  # log ethernet header in events when available
       #redis:
       #  server: 127.0.0.1
       #  port: 6379
@@ -262,6 +267,7 @@ outputs:
         - smb
         - tftp
         - ikev2
+        - dcerpc
         - krb5
         - snmp
         - rfb
@@ -274,6 +280,12 @@ outputs:
             # to an IP address is logged.
             extended: no
         - ssh
+        - mqtt:
+            # passwords: yes           # enable output of passwords
+        # HTTP2 logging. HTTP2 support is currently experimental and
+        # disabled by default. To enable, uncomment the following line
+        # and be sure to enable http2 in the app-layer section.
+        #- http2
         - stats:
             totals: yes       # stats for all threads merged together
             threads: no       # per thread stats
@@ -447,7 +459,8 @@ outputs:
       #force-filestore: yes
 
       # Override the global stream-depth for sessions in which we want
-      # to perform file extraction. Set to 0 for unlimited.
+      # to perform file extraction. Set to 0 for unlimited; otherwise,
+      # must be greater than the global stream-depth value to be used.
       #stream-depth: 0
 
       # Uncomment the following variable to define how many files can
@@ -705,6 +718,10 @@ app-layer:
       enabled: yes
       detection-ports:
         dp: 5900, 5901, 5902, 5903, 5904, 5905, 5906, 5907, 5908, 5909
+    # MQTT, disabled by default.
+    mqtt:
+      # enabled: no
+      # max-msg-length: 1mb
     krb5:
       enabled: yes
     snmp:
@@ -744,6 +761,9 @@ app-layer:
     ssh:
       enabled: yes
       #hassh: yes
+    # HTTP2: Experimental HTTP 2 support. Disabled by default.
+    http2:
+      enabled: no
     smtp:
       enabled: yes
       raw-extraction: no
@@ -869,8 +889,8 @@ app-layer:
            double-decode-path: no
            double-decode-query: no
 
-           # Can disable LZMA decompression
-           #lzma-enabled: yes
+           # Can enable LZMA decompression
+           #lzma-enabled: false
            # Memory limit usage for LZMA decompression dictionary
            # Data is decompressed until dictionary reaches this size
            #lzma-memlimit: 1mb
@@ -949,6 +969,13 @@ app-layer:
 # Limit for the maximum number of asn1 frames to decode (default 256)
 asn1-max-frames: 256
 
+# Datasets default settings
+# datasets:
+#   # Default fallback memcap and hashsize values for datasets in case these
+#   # were not explicitly defined.
+#   defaults:
+#     memcap: 100mb
+#     hashsize: 2048
 
 ##############################################################################
 ##
@@ -1326,6 +1353,11 @@ decoder:
     enabled: true
     ports: $VXLAN_PORTS # syntax: '[8472, 4789]' or '4789'.
 
+  # Geneve decoder is assigned to up to 4 UDP ports. By default only the
+  # IANA assigned port 6081 is enabled.
+  geneve:
+    enabled: true
+    ports: $GENEVE_PORTS # syntax: '[6081, 1234]' or '6081'.
 
 ##
 ## Performance tuning and profiling

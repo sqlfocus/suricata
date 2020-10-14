@@ -158,6 +158,9 @@ typedef struct SCInstance_ {
     const char *progname;      /**进程名，指向argv[0] */
     const char *conf_filename; /* 配置文件名，'-c'传入 */
     char *strict_rule_parsing_string;
+
+    const char *capture_plugin_name;
+    const char *capture_plugin_args;
 } SCInstance;
 
 

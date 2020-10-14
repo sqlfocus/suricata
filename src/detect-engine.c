@@ -31,6 +31,7 @@
 #include "flow-worker.h"
 #include "conf.h"
 #include "conf-yaml-loader.h"
+#include "datasets.h"
 
 #include "app-layer-parser.h"
 #include "app-layer-htp.h"
@@ -767,6 +768,10 @@ static void DetectBufferTypeFreeFunc(void *data)
 {
     DetectBufferType *map = (DetectBufferType *)data;
 
+    if (map == NULL) {
+        return;
+    }
+
     /* Release transformation option memory, if any */
     for (int i = 0; i < map->transforms.cnt; i++) {
         if (map->transforms.transforms[i].options == NULL)
@@ -779,9 +784,8 @@ static void DetectBufferTypeFreeFunc(void *data)
         }
         sigmatch_table[map->transforms.transforms[i].transform].Free(NULL, map->transforms.transforms[i].options);
     }
-    if (map != NULL) {
-        SCFree(map);
-    }
+
+    SCFree(map);
 }
 
 static int DetectBufferTypeInit(void)
@@ -2721,9 +2725,9 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
     }
 
     /* byte_extract storage */
-    det_ctx->bj_values = SCMalloc(sizeof(*det_ctx->bj_values) *
+    det_ctx->byte_values = SCMalloc(sizeof(*det_ctx->byte_values) *
                                   (de_ctx->byte_extract_max_local_id + 1));
-    if (det_ctx->bj_values == NULL) {
+    if (det_ctx->byte_values == NULL) {
         return TM_ECODE_FAILED;
     }
 
@@ -2951,8 +2955,8 @@ static void DetectEngineThreadCtxFree(DetectEngineThreadCtx *det_ctx)
 
     RuleMatchCandidateTxArrayFree(det_ctx);
 
-    if (det_ctx->bj_values != NULL)
-        SCFree(det_ctx->bj_values);
+    if (det_ctx->byte_values != NULL)
+        SCFree(det_ctx->byte_values);
 
     /* Decoded base64 data. */
     if (det_ctx->base64_decoded != NULL) {
@@ -4090,6 +4094,7 @@ int DetectEngineReload(const SCInstance *suri)
     if (old_de_ctx == NULL)
         return -1;
     SCLogDebug("get ref to old_de_ctx %p", old_de_ctx);
+    DatasetReload();
 
     /* only reload a regular 'normal' and 'delayed detect stub' detect engines */
     if (!(old_de_ctx->type == DETECT_ENGINE_TYPE_NORMAL ||
@@ -4130,6 +4135,8 @@ int DetectEngineReload(const SCInstance *suri)
 
     /* walk free list, freeing the old_de_ctx */
     DetectEnginePruneFreeList();
+
+    DatasetPostReloadCleanup();
 
     DetectEngineBumpVersion();                /* 更新bump版本号 */
 

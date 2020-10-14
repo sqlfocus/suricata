@@ -18,11 +18,73 @@
 //! Parser registration functions and common interface
 
 use std;
-use crate::core::{STREAM_TOSERVER};
 use crate::core::{DetectEngineState,Flow,AppLayerEventType,AppLayerDecoderEvents,AppProto};
 use crate::filecontainer::FileContainer;
 use crate::applayer;
 use std::os::raw::{c_void,c_char,c_int};
+
+#[repr(C)]
+#[derive(Debug,PartialEq)]
+pub struct AppLayerTxConfig {
+    /// config: log flags
+    log_flags: u8,
+}
+
+impl AppLayerTxConfig {
+    pub fn new() -> Self {
+        Self {
+            log_flags: 0,
+        }
+    }
+
+    pub fn add_log_flags(&mut self, flags: u8) {
+        self.log_flags |= flags;
+    }
+    pub fn set_log_flags(&mut self, flags: u8) {
+        self.log_flags = flags;
+    }
+    pub fn get_log_flags(&self) -> u8 {
+        self.log_flags
+    }
+}
+
+#[repr(C)]
+#[derive(Debug,PartialEq)]
+pub struct AppLayerTxData {
+    /// config: log flags
+    pub config: AppLayerTxConfig,
+
+    /// logger flags for tx logging api
+    logged: LoggerFlags,
+
+    /// detection engine flags for use by detection engine
+    detect_flags_ts: u64,
+    detect_flags_tc: u64,
+}
+
+impl AppLayerTxData {
+    pub fn new() -> Self {
+        Self {
+            config: AppLayerTxConfig::new(),
+            logged: LoggerFlags::new(),
+            detect_flags_ts: 0,
+            detect_flags_tc: 0,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules!export_tx_data_get {
+    ($name:ident, $type:ty) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $name(tx: *mut std::os::raw::c_void)
+            -> *mut crate::applayer::AppLayerTxData
+        {
+            let tx = &mut *(tx as *mut $type);
+            &mut tx.tx_data
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Debug,PartialEq,Copy,Clone)]
@@ -136,11 +198,6 @@ pub struct RustParser {
     /// Function returning the current transaction progress
     pub tx_get_progress:    StateGetProgressFn,
 
-    /// Logged transaction getter function
-    pub get_tx_logged:      Option<GetTxLoggedFn>,
-    /// Logged transaction setter function
-    pub set_tx_logged:      Option<SetTxLoggedFn>,
-
     /// Function called to get a detection state
     pub get_de_state:       GetDetectStateFn,
     /// Function called to set a detection state
@@ -164,11 +221,19 @@ pub struct RustParser {
     /// Function to get the TX iterator
     pub get_tx_iterator:    Option<GetTxIteratorFn>,
 
-    // Function to set TX detect flags.
-    pub set_tx_detect_flags: Option<SetTxDetectFlagsFn>,
+    pub get_tx_data: GetTxDataFn,
 
-    // Function to get TX detect flags.
-    pub get_tx_detect_flags: Option<GetTxDetectFlagsFn>,
+    // Function to apply config to a TX. Optional. Normal (bidirectional)
+    // transactions don't need to set this. It is meant for cases where
+    // the requests and responses are not sharing tx. It is then up to
+    // the implementation to make sure the config is applied correctly.
+    pub apply_tx_config: Option<ApplyTxConfigFn>,
+
+    pub flags: u32,
+
+    /// Function to handle the end of data coming on one of the sides
+    /// due to the stream reaching its 'depth' limit.
+    pub truncate: Option<TruncateFn>,
 }
 
 /// Create a slice, given a buffer and a length
@@ -195,7 +260,7 @@ pub type ParseFn      = extern "C" fn (flow: *const Flow,
                                        data: *const c_void,
                                        flags: u8) -> AppLayerResult;
 pub type ProbeFn      = extern "C" fn (flow: *const Flow,direction: u8,input:*const u8, input_len: u32, rdir: *mut u8) -> AppProto;
-pub type StateAllocFn = extern "C" fn () -> *mut c_void;
+pub type StateAllocFn = extern "C" fn (*mut c_void, AppProto) -> *mut c_void;
 pub type StateFreeFn  = extern "C" fn (*mut c_void);
 pub type StateTxFreeFn  = extern "C" fn (*mut c_void, u64);
 pub type StateGetTxFn            = extern "C" fn (*mut c_void, u64) -> *mut c_void;
@@ -207,8 +272,6 @@ pub type SetDetectStateFn   = extern "C" fn (*mut c_void, &mut DetectEngineState
 pub type GetEventInfoFn     = extern "C" fn (*const c_char, *mut c_int, *mut AppLayerEventType) -> c_int;
 pub type GetEventInfoByIdFn = extern "C" fn (c_int, *mut *const c_char, *mut AppLayerEventType) -> i8;
 pub type GetEventsFn        = extern "C" fn (*mut c_void) -> *mut AppLayerDecoderEvents;
-pub type GetTxLoggedFn      = extern "C" fn (*mut c_void, *mut c_void) -> u32;
-pub type SetTxLoggedFn      = extern "C" fn (*mut c_void, *mut c_void, u32);
 pub type LocalStorageNewFn  = extern "C" fn () -> *mut c_void;
 pub type LocalStorageFreeFn = extern "C" fn (*mut c_void);
 pub type GetFilesFn         = extern "C" fn (*mut c_void, u8) -> *mut FileContainer;
@@ -218,8 +281,10 @@ pub type GetTxIteratorFn    = extern "C" fn (ipproto: u8, alproto: AppProto,
                                              max_tx_id: u64,
                                              istate: &mut u64)
                                              -> AppLayerGetTxIterTuple;
-pub type GetTxDetectFlagsFn = unsafe extern "C" fn(*mut c_void, u8) -> u64;
-pub type SetTxDetectFlagsFn = unsafe extern "C" fn(*mut c_void, u8, u64);
+pub type GetTxDataFn = unsafe extern "C" fn(*mut c_void) -> *mut AppLayerTxData;
+pub type ApplyTxConfigFn = unsafe extern "C" fn (*mut c_void, *mut c_void, c_int, AppLayerTxConfig);
+pub type TruncateFn = unsafe extern "C" fn (*mut c_void, u8);
+
 
 // Defined in app-layer-register.h
 extern {
@@ -240,6 +305,7 @@ pub const APP_LAYER_PARSER_NO_INSPECTION_PAYLOAD : u8 = 0b100;
 pub const APP_LAYER_PARSER_BYPASS_READY : u8 = 0b1000;
 
 pub const APP_LAYER_PARSER_OPT_ACCEPT_GAPS: u32 = BIT_U32!(0);
+pub const APP_LAYER_PARSER_OPT_UNIDIR_TXS: u32 = BIT_U32!(1);
 
 pub type AppLayerGetTxIteratorFn = extern "C" fn (ipproto: u8,
                                                   alproto: AppProto,
@@ -253,12 +319,6 @@ extern {
     pub fn AppLayerParserStateIssetFlag(state: *mut c_void, flag: u8) -> c_int;
     pub fn AppLayerParserConfParserEnabled(ipproto: *const c_char, proto: *const c_char) -> c_int;
     pub fn AppLayerParserRegisterGetTxIterator(ipproto: u8, alproto: AppProto, fun: AppLayerGetTxIteratorFn);
-    pub fn AppLayerParserRegisterDetectFlagsFuncs(
-        ipproto: u8,
-        alproto: AppProto,
-        GetTxDetectFlats: GetTxDetectFlagsFn,
-        SetTxDetectFlags: SetTxDetectFlagsFn,
-    );
     pub fn AppLayerParserRegisterOptionFlags(ipproto: u8, alproto: AppProto, flags: u32);
 }
 
@@ -283,7 +343,8 @@ impl AppLayerGetTxIterTuple {
 }
 
 /// LoggerFlags tracks which loggers have already been executed.
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug,PartialEq)]
 pub struct LoggerFlags {
     flags: u32,
 }
@@ -340,50 +401,4 @@ macro_rules!export_tx_set_detect_state {
             0
         }
     )
-}
-
-#[derive(Debug,Default)]
-pub struct TxDetectFlags {
-    ts: u64,
-    tc: u64,
-}
-
-impl TxDetectFlags {
-    pub fn set(&mut self, direction: u8, flags: u64) {
-        if direction & STREAM_TOSERVER != 0 {
-            self.ts = flags;
-        } else {
-            self.tc = flags;
-        }
-    }
-
-    pub fn get(&self, direction: u8) -> u64 {
-        if (direction & STREAM_TOSERVER) != 0 {
-            self.ts
-        } else {
-            self.tc
-        }
-    }
-}
-
-#[macro_export]
-macro_rules!export_tx_detect_flags_set {
-    ($name:ident, $type:ty) => {
-        #[no_mangle]
-        pub unsafe extern "C" fn $name(tx: *mut std::os::raw::c_void, direction: u8, flags: u64) {
-            let tx = &mut *(tx as *mut $type);
-            tx.detect_flags.set(direction, flags);
-        }
-    }
-}
-
-#[macro_export]
-macro_rules!export_tx_detect_flags_get {
-    ($name:ident, $type:ty) => {
-        #[no_mangle]
-        pub unsafe extern "C" fn $name(tx: *mut std::os::raw::c_void, direction: u8) -> u64 {
-            let tx = &mut *(tx as *mut $type);
-            return tx.detect_flags.get(direction);
-        }
-    }
 }
