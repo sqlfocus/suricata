@@ -185,7 +185,7 @@ static void OutputFilestoreFinalizeFiles(ThreadVars *tv,
         }
     }
 }
-
+/* 缓存文件输出的入口函数 */
 static int OutputFilestoreLogger(ThreadVars *tv, void *thread_data,
         const Packet *p, File *ff, const uint8_t *data, uint32_t data_len,
         uint8_t flags, uint8_t dir)

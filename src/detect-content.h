@@ -104,7 +104,7 @@ typedef struct DetectContentData_ {
     SpmCtx *spm_ctx;       /* 单模匹配引擎上下文 */
     /* pointer to replacement data */
     uint8_t *replace;
-} DetectContentData;       /* 代表一个模式 */
+} DetectContentData;       /* 应用识别, 注册的识别模式 */
 
 /* prototypes */
 void DetectContentRegister (void);

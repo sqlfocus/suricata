@@ -95,12 +95,12 @@ typedef struct File_ {
     uint32_t *sid; /* signature id of a rule that triggered the filestore event */
     uint32_t sid_cnt;
     uint32_t sid_max;
-} File;
+} File;     /* 维护文件信息 */
 
 typedef struct FileContainer_ {
     File *head;     /* 单链表头 */
     File *tail;     /* 单链表尾 */
-} FileContainer;
+} FileContainer;    /* 维护HTTP传输的文件列表 */
 
 FileContainer *FileContainerAlloc(void);
 void FileContainerFree(FileContainer *);

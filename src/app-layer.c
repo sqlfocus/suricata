@@ -300,7 +300,7 @@ static int TCPProtoDetectTriggerOpposingSide(ThreadVars *tv,
 /** \todo data const
  *  \retval int -1 error
  *  \retval int 0 ok
- */
+ *//* 协议识别入口 */
 static int TCPProtoDetect(ThreadVars *tv,
         TcpReassemblyThreadCtx *ra_ctx, AppLayerThreadCtx *app_tctx,
         Packet *p, Flow *f, TcpSession *ssn, TcpStream **stream,
@@ -310,7 +310,7 @@ static int TCPProtoDetect(ThreadVars *tv,
     AppProto *alproto_otherdir;
     int direction = (flags & STREAM_TOSERVER) ? 0 : 1;
 
-    if (flags & STREAM_TOSERVER) {
+    if (flags & STREAM_TOSERVER) {   /* 获取识别结果存储指针 */
         alproto = &f->alproto_ts;
         alproto_otherdir = &f->alproto_tc;
     } else {
@@ -337,24 +337,24 @@ static int TCPProtoDetect(ThreadVars *tv,
     PACKET_PROFILING_APP_PD_END(app_tctx);
     SCLogDebug("alproto %u rev %s", *alproto, reverse_flow ? "true" : "false");
 
-    if (*alproto != ALPROTO_UNKNOWN) {
+    if (*alproto != ALPROTO_UNKNOWN) {    /* CASE1: 本方向识别结果, 与反方向不同 */
         if (*alproto_otherdir != ALPROTO_UNKNOWN && *alproto_otherdir != *alproto) {
             AppLayerDecoderEventsSetEventRaw(&p->app_layer_events,
                     APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS);
 
             if (ssn->data_first_seen_dir == APP_LAYER_DATA_ALREADY_SENT_TO_APP_LAYER) {
                 /* if we already invoked the parser, we go with that proto */
-                f->alproto = *alproto_otherdir;
+                f->alproto = *alproto_otherdir;  /* 首先信任已上送协议解析的结论 */
             } else {
                 /* no data sent to parser yet, we can still choose
                  * we're trusting the server more. */
-                if (flags & STREAM_TOCLIENT)
+                if (flags & STREAM_TOCLIENT)     /* 否则信任TO Server方向的结论 */
                     f->alproto = *alproto;
                 else
                     f->alproto = *alproto_otherdir;
             }
         } else {
-            f->alproto = *alproto;
+            f->alproto = *alproto;        /* CASE2: 双向识别结果相同, 更新最终识别结果 */
         }
 
         StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);
@@ -366,7 +366,7 @@ static int TCPProtoDetect(ThreadVars *tv,
          * packet and the direction flags */
         if (reverse_flow && (ssn->flags & STREAMTCP_FLAG_MIDSTREAM)) {
             SCLogDebug("reversing flow after proto detect told us so");
-            PacketSwap(p);
+            PacketSwap(p);                /* CASE3: 如有必要, 调整流方向 */
             FlowSwap(f);
             SWAP_FLAGS(flags, STREAM_TOSERVER, STREAM_TOCLIENT);
             if (*stream == &ssn->client) {
@@ -391,7 +391,7 @@ static int TCPProtoDetect(ThreadVars *tv,
          * will now call shortly for the opposing direction. */
         if ((ssn->data_first_seen_dir & (STREAM_TOSERVER | STREAM_TOCLIENT)) &&
                 !(flags & ssn->data_first_seen_dir))
-        {
+        {                                 /* CASE4: 先收到数据的方向, 先上解析器 */
             SCLogDebug("protocol %s needs first data in other direction",
                     AppProtoToString(*alproto));
 
@@ -420,7 +420,7 @@ static int TCPProtoDetect(ThreadVars *tv,
          *       flow, it shows something's fishy.
          */
         if (ssn->data_first_seen_dir != APP_LAYER_DATA_ALREADY_SENT_TO_APP_LAYER) {
-            uint8_t first_data_dir;
+            uint8_t first_data_dir;       /* CASE5: 查看是否必须先看到某个方向的数据 */
             first_data_dir = AppLayerParserGetFirstDataDir(f->proto, f->alproto);
 
             if (first_data_dir && !(first_data_dir & ssn->data_first_seen_dir)) {
@@ -445,18 +445,18 @@ static int TCPProtoDetect(ThreadVars *tv,
                 SCReturnInt(-1);
             }
         }
-
+                                          /* */
         /* Set a value that is neither STREAM_TOSERVER, nor STREAM_TOCLIENT */
         ssn->data_first_seen_dir = APP_LAYER_DATA_ALREADY_SENT_TO_APP_LAYER;
 
-        /* finally, invoke the parser */
+        /* finally, invoke the parser */  /* CASE6: 协议识别后, 首次协议解析 */
         PACKET_PROFILING_APP_START(app_tctx, f->alproto);
         int r = AppLayerParserParse(tv, app_tctx->alp_tctx, f, f->alproto,
                 flags, data, data_len);
         PACKET_PROFILING_APP_END(app_tctx, f->alproto);
         if (r < 0) {
             SCReturnInt(-1);
-        } else if (r == 0) {
+        } else if (r == 0) {              /* 更新消耗数据 */
             StreamTcpUpdateAppLayerProgress(ssn, direction, data_len);
         }
     } else {
@@ -564,7 +564,7 @@ static int TCPProtoDetect(ThreadVars *tv,
  *
  *  \param stream ptr-to-ptr to stream object. Might change if flow dir is
  *                reversed.
- */
+ *//* 应用识别入口: 处理应用协议的tcp数据, 应用识别、应用解析 */
 int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                           Packet *p, Flow *f,
                           TcpSession *ssn, TcpStream **stream,
@@ -588,7 +588,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
 
     const int direction = (flags & STREAM_TOSERVER) ? 0 : 1;
 
-    if (flags & STREAM_TOSERVER) {
+    if (flags & STREAM_TOSERVER) {        /* 已识别的结果 */
         alproto = f->alproto_ts;
     } else {
         alproto = f->alproto_tc;
@@ -596,15 +596,15 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
 
     /* 处理空洞数据，If a gap notification, relay the notification on to the
      * app-layer if known. */
-    if (flags & STREAM_GAP) {
-        if (alproto == ALPROTO_UNKNOWN) {
+    if (flags & STREAM_GAP) {        
+        if (alproto == ALPROTO_UNKNOWN) { /* 如果双向均未识别则结束识别 */
             StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);
             SCLogDebug("ALPROTO_UNKNOWN flow %p, due to GAP in stream start", f);
             /* if the other side didn't already find the proto, we're done */
             if (f->alproto == ALPROTO_UNKNOWN) {
                 goto failure;
             }
-        }
+        }                                 /* 跳过数据空洞的协议解析结果 */
         PACKET_PROFILING_APP_START(app_tctx, f->alproto);
         r = AppLayerParserParse(tv, app_tctx->alp_tctx, f, f->alproto,
                 flags, data, data_len);
@@ -619,13 +619,13 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
      * We receive 2 stream init msgs (one for each direction) but we
      * only run the proto detection once. */
     if (alproto == ALPROTO_UNKNOWN && (flags & STREAM_START)) {
-        /* run protocol detection */
+        /* run protocol detection */    /* CASE1: 流起始状态, 协议识别 */
         if (TCPProtoDetect(tv, ra_ctx, app_tctx, p, f, ssn, stream,
                            data, data_len, flags) != 0) {
             goto failure;
         }
     } else if (alproto != ALPROTO_UNKNOWN && FlowChangeProto(f)) {
-        f->alproto_orig = f->alproto;
+        f->alproto_orig = f->alproto;   /* CASE2: 协议发生变更, 重新协议识别 */
         SCLogDebug("protocol change, old %s", AppProtoToString(f->alproto_orig));
         void *alstate_orig = f->alstate;
         AppLayerParserState *alparser = f->alparser;
@@ -642,7 +642,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
             f->alproto = f->alproto_orig;
             f->alproto_tc = f->alproto_orig;
             f->alproto_ts = f->alproto_orig;
-        } else {
+        } else {                        /* 重新协议识别完成, 清理旧识别资源 */
             FlowUnsetChangeProtoFlag(f);
             AppLayerParserStateProtoCleanup(f->protomap, f->alproto_orig, alstate_orig, alparser);
             if (alstate_orig == f->alstate) {
@@ -650,13 +650,13 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                 f->alstate = NULL;
             }
         }
-        if (rd != 0) {    /* 基于规则、端口的协议识别 */
+        if (rd != 0) {
             SCLogDebug("proto detect failure");
             goto failure;
         }
         SCLogDebug("protocol change, old %s, new %s",
                 AppProtoToString(f->alproto_orig), AppProtoToString(f->alproto));
-
+                                        /* 识别协议不符合预期, 添加事件 */
         if (f->alproto_expect != ALPROTO_UNKNOWN &&
                 f->alproto != f->alproto_expect)
         {
@@ -669,7 +669,7 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
 
             }
         }
-    } else {
+    } else {                            /* CASE3: 协议识别完成, 协议解析 */
         SCLogDebug("stream data (len %" PRIu32 " alproto "
                    "%"PRIu16" (flow %p)", data_len, f->alproto, f);
 #ifdef PRINT
@@ -686,9 +686,9 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         if (f->alproto != ALPROTO_UNKNOWN) {
             PACKET_PROFILING_APP_START(app_tctx, f->alproto);
             r = AppLayerParserParse(tv, app_tctx->alp_tctx, f, f->alproto,
-                                    flags, data, data_len);  /* 应用协议解析 */
+                                    flags, data, data_len);  /* 应用协议解析入口 */
             PACKET_PROFILING_APP_END(app_tctx, f->alproto);
-            if (r == 0) {
+            if (r == 0) {                                    /* 解析完毕, 更新流重组数据消耗 */
                 StreamTcpUpdateAppLayerProgress(ssn, direction, data_len);
             }
         }
@@ -826,9 +826,9 @@ int AppLayerSetup(void)
     AppLayerParserSetup();       /* 初始化应用层协议环境, alp_ctx */
 
     AppLayerParserRegisterProtocolParsers();  /* 注册协议解析函数, 注册识别关键字，构建单模式引擎 */
-    AppLayerProtoDetectPrepareState();        /* 根据单模规则构建多模引擎 */
+    AppLayerProtoDetectPrepareState();        /* 根据注册的单模规则构建多模引擎 */
                                  
-    AppLayerSetupCounters();     /* 初始化统计计数器名 */
+    AppLayerSetupCounters();     /* 初始化统计计数器 */
 
     SCReturnInt(0);
 }

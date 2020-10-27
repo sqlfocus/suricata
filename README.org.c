@@ -83,25 +83,53 @@ SCLogConfig *sc_log_config         日志配置信息结构
     --SCLogInitLogModule()
     
 
-* 应用层协议解析环境初始化 AppLayerSetup()
-本函数构建应用层协议解析环境
+* 应用层协议解析 - HTTP
     
---AppLayerSetup()
+--AppLayerSetup()                  应用协议解析环境初始化
   --AppLayerProtoDetectSetup()     初始化 alpd_ctx/AppLayerProtoDetectCtx
   --AppLayerParserSetup()          初始化 alp_ctx/AppLayerParserCtx
   --AppLayerParserRegisterProtocolParsers()
-    --RegisterHTPParsers()
+    --RegisterHTPParsers()         注册HTTP识别关键字/解析函数
       --HTPRegisterPatternsForProtocolDetection()
-        --AppLayerProtoDetectPMRegisterPatternCI()  注册GET等关键字，单模引擎
+        --AppLayerProtoDetectPMRegisterPatternCI()  注册请求/应答关键字(如GET)，单模引擎
           --AppLayerProtoDetectPMRegisterPattern()  更新 alpd_ctx->ctx_ipp[].ctx_pm[].head
       --AppLayerParserRegisterParser()              报文解析操作, 更新 alp_ctx.ctxs[]
-      --HTPConfigure()             分析http配置信息, 存储到 cfgtree/cfglist构建多模匹配引擎
+      --HTPConfigure()             注册libhtp回调; 分析http配置信息, 存储到 cfgtree/cfglist
       --AppLayerProtoDetectPPParseConfPorts()
         --AppLayerProtoDetectPPRegister()           注册知名端口号(SSL为例), alpd_ctx->ctx_pp[]
   --AppLayerProtoDetectPrepareState()               
     --AppLayerProtoDetectPMSetContentIDs()
     --AppLayerProtoDetectPMMapSignatures()          将上述注册的单模规则，编译构建为多模引擎
     --AppLayerProtoDetectPMPrepareMpm()             alpd_ctx.ctx_ipp[].ctx_pm[].mpm_ctx
+
+
+--AppLayerHandleTCPData()     应用识别入口
+  --TCPProtoDetect()
+    --AppLayerProtoDetectGetProto()     协议识别
+      --AppLayerProtoDetectPMGetProto()     基于规则
+      --AppLayerProtoDetectPPGetProto()     基于端口
+      --AppLayerProtoDetectPEGetProto()     基于特殊配置
+  --AppLayerParserParse()               协议解析
+    --AppLayerParserProtoCtx->Parser()
+      ==HTPHandleRequestData()              http请求解析
+      ==HTPHandleResponseData()             http应答解析
+
+--HTPConfigSetDefaultsPhase1()各阶段回调
+  --HTPCallbackRequestStart()
+  --HTPCallbackRequestHeaderData()      收到请求头
+  --HTPCallbackRequestBodyData()        收到请求体
+    --HtpRequestBodyHandleMultipart()
+    --HtpRequestBodyHandlePOSTorPUT()
+      --HTPFileOpen()                       缓存文件
+      --HTPFileStoreChunk()
+      --HTPFileClose()
+  --HTPCallbackRequest()                请求结束
+  --HTPCallbackResponseStart()          应答开始
+  --HTPCallbackResponseHeaderData()     收到应答头
+  --HTPCallbackResponseBodyData()
+  --HTPCallbackResponse()
+
+--OutputFilestoreLogger()     日志阶段, 输出缓存文件
 
 
 * 检测环境初始化

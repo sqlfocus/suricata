@@ -534,11 +534,11 @@ static void AppLayerHtpSetStreamDepthFlag(void *tx, uint8_t flags)
         }
     }
 }
-
+/* 重组数据量是否已达上限 */
 static bool AppLayerHtpCheckDepth(const HTPCfgDir *cfg, HtpBody *body, uint8_t flags)
 {
     if (flags & HTP_STREAM_DEPTH_SET) {
-        uint32_t stream_depth = FileReassemblyDepth();
+        uint32_t stream_depth = FileReassemblyDepth();  /* 文件缓存需求 & 流重组配置需求 */
         if (body->content_len_so_far < (uint64_t)stream_depth || stream_depth == 0) {
             return true;
         }
@@ -1344,7 +1344,7 @@ static void HtpRequestBodySetupBoundary(HtpTxUserData *htud,
     memset(boundary, '-', boundary_len);
     memcpy(boundary + 2, htud->boundary, htud->boundary_len);
 }
-
+/* 处理multipart的POST请求 */
 static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, void *tx,
         const uint8_t *chunks_buffer, uint32_t chunks_buffer_len)
 {
@@ -1359,15 +1359,15 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
     PrintRawDataFp(stdout, chunks_buffer, chunks_buffer_len);
     printf("CHUNK END: \n");
 #endif
-
+    /* 利用解析的multipart字段, 初始化本地栈数组, boundary[] */
     HtpRequestBodySetupBoundary(htud, boundary, htud->boundary_len + 4);
 
-    /* search for the header start, header end and form end */
+    /* 搜索multipart头, search for the header start, header end and form end */
     const uint8_t *header_start = Bs2bmSearch(chunks_buffer, chunks_buffer_len,
             boundary, expected_boundary_len);
     /* end of the multipart form */
     const uint8_t *form_end = NULL;
-    /* end marker belonging to header_start */
+    /* 搜索multipart尾, end marker belonging to header_start */
     const uint8_t *header_end = NULL;
     if (header_start != NULL) {
         header_end = Bs2bmSearch(header_start, chunks_buffer_len - (header_start - chunks_buffer),
@@ -1378,7 +1378,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
 
     SCLogDebug("header_start %p, header_end %p, form_end %p", header_start,
             header_end, form_end);
-
+    /* 读取文件名后, 存储数据到文件 */
     /* we currently only handle multipart for ts.  When we support it for tc,
      * we will need to supply right direction */
     tx_progress = AppLayerParserGetStateProgress(IPPROTO_TCP, ALPROTO_HTTP, tx, STREAM_TOSERVER);
@@ -1386,7 +1386,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
     if (htud->tsflags & HTP_FILENAME_SET) {
         if (header_start != NULL || (tx_progress > HTP_REQUEST_BODY)) {
             SCLogDebug("reached the end of the file");
-
+                                        /* CASE: 到达文件尾, 关闭文件 */
             const uint8_t *filedata = chunks_buffer;
             uint32_t filedata_len = 0;
             uint8_t flags = 0;
@@ -1430,7 +1430,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
             htud->tsflags &=~ HTP_FILENAME_SET;
 
             /* fall through */
-        } else {
+        } else {                        /* CASE: 还没有到达文件尾, 继续缓存数据 */
             SCLogDebug("not yet at the end of the file");
 
             if (chunks_buffer_len > expected_boundary_end_len) {
@@ -1461,7 +1461,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
             goto end;
         }
     }
-
+    /* 首次确定文件名, 并存储当前报文 */
     while (header_start != NULL && header_end != NULL &&
             header_end != form_end &&
             header_start < (chunks_buffer + chunks_buffer_len) &&
@@ -1484,10 +1484,10 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
             header_len -= (expected_boundary_len + 2);
             header = (uint8_t *)header_start + (expected_boundary_len + 2); // + for 0d 0a
         }
-
+        /* 获取文件名, 文件类型 */
         HtpRequestBodyMultipartParseHeader(hstate, htud, header, header_len,
                 &filename, &filename_len, &filetype, &filetype_len);
-
+        /* 创建文件 */
         if (filename != NULL) {
             const uint8_t *filedata = NULL;
             uint32_t filedata_len = 0;
@@ -1660,24 +1660,24 @@ end:
 
 /** \internal
  *  \brief Handle POST or PUT, no multipart body data
- */
+ *//* 非multipart POST/PUT处理函数入口 */
 static int HtpRequestBodyHandlePOSTorPUT(HtpState *hstate, HtpTxUserData *htud,
         htp_tx_t *tx, uint8_t *data, uint32_t data_len)
 {
     int result = 0;
-
-    /* see if we need to open the file */
+    /* <TK!!!>所有带body的请求, 都保存为文件 */
+    /* CASE: 首次处理请求体, 利用url-path作为文件名, see if we need to open the file */
     if (!(htud->tsflags & HTP_FILENAME_SET))
     {
         uint8_t *filename = NULL;
         size_t filename_len = 0;
 
-        /* get the name */
+        /* 获取url中的path部分(GET /path?arg=1); get the name */
         if (tx->parsed_uri != NULL && tx->parsed_uri->path != NULL) {
             filename = (uint8_t *)bstr_ptr(tx->parsed_uri->path);
             filename_len = bstr_len(tx->parsed_uri->path);
         }
-
+        /* 存在path, 则以path作为文件名 */
         if (filename != NULL) {
             result = HTPFileOpen(hstate, filename, (uint32_t)filename_len, data, data_len,
                     HtpGetActiveRequestTxID(hstate), STREAM_TOSERVER);
@@ -1695,7 +1695,7 @@ static int HtpRequestBodyHandlePOSTorPUT(HtpState *hstate, HtpTxUserData *htud,
     else
     {
         /* otherwise, just store the data */
-
+    /* CASE: 后续, 追加文件数据 */
         if (!(htud->tsflags & HTP_DONTSTORE)) {
             result = HTPFileStoreChunk(hstate, data, data_len, STREAM_TOSERVER);
             if (result == -1) {
@@ -1795,7 +1795,7 @@ end:
  * \brief Function callback to append chunks for Requests
  * \param d pointer to the htp_tx_data_t structure (a chunk from htp lib)
  * \retval int HTP_OK if all goes well
- *//* 请求数据的回调函数 */
+ *//* 请求体数据的回调函数 */
 static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
 {
     SCEnter();
@@ -1841,22 +1841,22 @@ static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
         }
     }
 
-    /* see if we can get rid of htp body chunks */
+    /* 试图释放请求体数据, see if we can get rid of htp body chunks */
     HtpBodyPrune(hstate, &tx_ud->request_body, STREAM_TOSERVER);
 
     SCLogDebug("tx_ud->request_body.content_len_so_far %"PRIu64, tx_ud->request_body.content_len_so_far);
     SCLogDebug("hstate->cfg->request.body_limit %u", hstate->cfg->request.body_limit);
 
-    /* within limits, add the body chunk to the state. */
+    /* 查看存储的数据量是否已达到上限, within limits, add the body chunk to the state. */
     if (AppLayerHtpCheckDepth(&hstate->cfg->request, &tx_ud->request_body, tx_ud->tsflags)) {
-        uint32_t stream_depth = FileReassemblyDepth();
+        uint32_t stream_depth = FileReassemblyDepth();  /* 计算仍需要存储的数据量 */
         uint32_t len = AppLayerHtpComputeChunkLength(tx_ud->request_body.content_len_so_far,
                                                      hstate->cfg->request.body_limit,
                                                      stream_depth,
                                                      tx_ud->tsflags,
                                                      (uint32_t)d->len);
         BUG_ON(len > (uint32_t)d->len);
-
+                                                        /* 存储数据 */
         HtpBodyAppendChunk(&hstate->cfg->request, &tx_ud->request_body, d->data, len);
 
         const uint8_t *chunks_buffer = NULL;
@@ -1877,16 +1877,16 @@ static int HTPCallbackRequestBodyData(htp_tx_data_t *d)
             PrintRawDataFp(stdout, chunks_buffer, chunks_buffer_len);
             printf("REASSCHUNK END: \n");
 #endif
-
+                                                        /* 处理multipart的POST请求 */
             HtpRequestBodyHandleMultipart(hstate, tx_ud, d->tx, chunks_buffer, chunks_buffer_len);
 
         } else if (tx_ud->request_body_type == HTP_BODY_REQUEST_POST ||
                    tx_ud->request_body_type == HTP_BODY_REQUEST_PUT) {
             HtpRequestBodyHandlePOSTorPUT(hstate, tx_ud, d->tx, (uint8_t *)d->data, len);
-        }
-
+        }                                               /* 处理非multipart的POST/PUT请求 */
+    /* 存储/解析的数据量已达到上限 */
     } else {
-        if (tx_ud->tsflags & HTP_FILENAME_SET) {
+        if (tx_ud->tsflags & HTP_FILENAME_SET) {        /* 关闭已缓存的文件 */
             SCLogDebug("closing file that was being stored");
             (void)HTPFileClose(hstate, NULL, 0, FILE_TRUNCATED, STREAM_TOSERVER);
             tx_ud->tsflags &= ~HTP_FILENAME_SET;
@@ -2070,18 +2070,18 @@ static int HTPCallbackResponseHasTrailer(htp_tx_t *tx)
 /**\internal
  * \brief called at start of request
  * Set min inspect size.
- */
+ *//* HTTP请求, 起始的回调函数 */
 static int HTPCallbackRequestStart(htp_tx_t *tx)
 {
     HtpState *hstate = htp_connp_get_user_data(tx->connp);
     if (hstate == NULL) {
         SCReturnInt(HTP_ERROR);
     }
-
+    /* 给TCP流设定解析深度 */
     if (hstate->cfg)
         StreamTcpReassemblySetMinInspectDepth(hstate->f->protoctx, STREAM_TOSERVER,
                 hstate->cfg->request.inspect_min_size);
-
+    /* 分配针对当前事务的自定义数据 */
     HtpTxUserData *tx_ud = (HtpTxUserData *) htp_tx_get_user_data(tx);
     if (tx_ud == NULL) {
         tx_ud = HTPCalloc(1, sizeof(HtpTxUserData));
@@ -2096,7 +2096,7 @@ static int HTPCallbackRequestStart(htp_tx_t *tx)
 /**\internal
  * \brief called at start of response
  * Set min inspect size.
- */
+ *//* 请求应答, 起始的回调函数 */
 static int HTPCallbackResponseStart(htp_tx_t *tx)
 {
     HtpState *hstate = htp_connp_get_user_data(tx->connp);
@@ -2125,7 +2125,7 @@ static int HTPCallbackResponseStart(htp_tx_t *tx)
             in to the recent_in_tx for the given htp state
  *  \param  connp   pointer to the current connection parser which has the htp
  *                  state in it as user data
- */
+ *//* HTTP请求结束后, 回调函数 */
 static int HTPCallbackRequest(htp_tx_t *tx)
 {
     SCEnter();
@@ -2143,9 +2143,9 @@ static int HTPCallbackRequest(htp_tx_t *tx)
                hstate->transaction_cnt, HTPStateGetTxCnt(hstate));
 
     SCLogDebug("HTTP request completed");
-
+    /* 记录解析失败事件 */
     HTPErrorCheckTxRequestFlags(hstate, tx);
-
+    /* 关闭仍然打开的缓存文件 */
     HtpTxUserData *htud = (HtpTxUserData *)htp_tx_get_user_data(tx);
     if (htud != NULL) {
         if (htud->tsflags & HTP_FILENAME_SET) {
@@ -2286,13 +2286,13 @@ static int HTPCallbackDoubleDecodePath(htp_tx_t *tx)
 
     return HTPCallbackDoubleDecodeUriPart(tx, tx->parsed_uri->path);
 }
-
+/* 请求头数据的回调函数 */
 static int HTPCallbackRequestHeaderData(htp_tx_data_t *tx_data)
 {
     void *ptmp;
     if (tx_data->len == 0 || tx_data->tx == NULL)
         return HTP_OK;
-
+    /* 存储原始请求头 */
     HtpTxUserData *tx_ud = htp_tx_get_user_data(tx_data->tx);
     if (tx_ud == NULL) {
         return HTP_OK;
@@ -2308,7 +2308,7 @@ static int HTPCallbackRequestHeaderData(htp_tx_data_t *tx_data)
     memcpy(tx_ud->request_headers_raw + tx_ud->request_headers_raw_len,
            tx_data->data, tx_data->len);
     tx_ud->request_headers_raw_len += tx_data->len;
-
+    /* 设定解析错误事件 */
     if (tx_data->tx && tx_data->tx->flags) {
         HtpState *hstate = htp_connp_get_user_data(tx_data->tx->connp);
         HTPErrorCheckTxRequestFlags(hstate, tx_data->tx);
@@ -2321,7 +2321,7 @@ static int HTPCallbackResponseHeaderData(htp_tx_data_t *tx_data)
     void *ptmp;
     if (tx_data->len == 0 || tx_data->tx == NULL)
         return HTP_OK;
-
+    /* 保存原始应答 */
     HtpTxUserData *tx_ud = htp_tx_get_user_data(tx_data->tx);
     if (tx_ud == NULL) {
         return HTP_OK;
@@ -2360,28 +2360,28 @@ static void HTPConfigSetDefaultsPhase1(HTPCfgRec *cfg_prec)
         cfg_prec->randomize = 0;
     }
     cfg_prec->randomize_range = HTP_CONFIG_DEFAULT_RANDOMIZE_RANGE;
+    /* 注册libhtp库处理回调 */
+    htp_config_register_request_header_data(cfg_prec->cfg, HTPCallbackRequestHeaderData);     /* 收到请求头数据, 包括属性头; 请求行处理完毕后触发 */
+    htp_config_register_request_trailer_data(cfg_prec->cfg, HTPCallbackRequestHeaderData);    /* 每次收到块数据/chunked触发 */
+    htp_config_register_response_header_data(cfg_prec->cfg, HTPCallbackResponseHeaderData);   /* 收到应答头数据 */
+    htp_config_register_response_trailer_data(cfg_prec->cfg, HTPCallbackResponseHeaderData);  /* 应答块数据 */
 
-    htp_config_register_request_header_data(cfg_prec->cfg, HTPCallbackRequestHeaderData);
-    htp_config_register_request_trailer_data(cfg_prec->cfg, HTPCallbackRequestHeaderData);
-    htp_config_register_response_header_data(cfg_prec->cfg, HTPCallbackResponseHeaderData);
-    htp_config_register_response_trailer_data(cfg_prec->cfg, HTPCallbackResponseHeaderData);
-
-    htp_config_register_request_trailer(cfg_prec->cfg, HTPCallbackRequestHasTrailer);
+    htp_config_register_request_trailer(cfg_prec->cfg, HTPCallbackRequestHasTrailer);         /* 处理完所有的块数据 */
     htp_config_register_response_trailer(cfg_prec->cfg, HTPCallbackResponseHasTrailer);
 
-    htp_config_register_request_body_data(cfg_prec->cfg, HTPCallbackRequestBodyData);
+    htp_config_register_request_body_data(cfg_prec->cfg, HTPCallbackRequestBodyData);         /* 请求体数据, 参数传入前块数据首先被be dechunked */
     htp_config_register_response_body_data(cfg_prec->cfg, HTPCallbackResponseBodyData);
 
-    htp_config_register_request_start(cfg_prec->cfg, HTPCallbackRequestStart);
-    htp_config_register_request_complete(cfg_prec->cfg, HTPCallbackRequest);
+    htp_config_register_request_start(cfg_prec->cfg, HTPCallbackRequestStart);                /* 收到请求后触发 */
+    htp_config_register_request_complete(cfg_prec->cfg, HTPCallbackRequest);                  /* 请求处理完毕后触发 */
 
     htp_config_register_response_start(cfg_prec->cfg, HTPCallbackResponseStart);
     htp_config_register_response_complete(cfg_prec->cfg, HTPCallbackResponse);
 
-    htp_config_set_parse_request_cookies(cfg_prec->cfg, 0);
+    htp_config_set_parse_request_cookies(cfg_prec->cfg, 0);                                   /* 不解析cookie */
 
     /* don't convert + to space by default */
-    htp_config_set_plusspace_decode(cfg_prec->cfg, HTP_DECODER_URLENCODED, 0);
+    htp_config_set_plusspace_decode(cfg_prec->cfg, HTP_DECODER_URLENCODED, 0);                /* 解析URL时, 不将+看作空格 */
 #ifdef HAVE_HTP_CONFIG_SET_LZMA_LAYERS
     // disable by default
     htp_config_set_lzma_layers(cfg_prec->cfg, HTP_CONFIG_DEFAULT_LZMA_LAYERS);
@@ -2400,7 +2400,7 @@ static void HTPConfigSetDefaultsPhase1(HTPCfgRec *cfg_prec)
      * config, we have to set the soft limit as well. If libhtp starts using
      * the soft limit in the future, we at least make sure we control what
      * it's value is. */
-    htp_config_set_field_limits(cfg_prec->cfg,
+    htp_config_set_field_limits(cfg_prec->cfg,                                                /* 设定libhtp的buffer上限 */
             (size_t)HTP_CONFIG_DEFAULT_FIELD_LIMIT_SOFT,
             (size_t)HTP_CONFIG_DEFAULT_FIELD_LIMIT_HARD);
     return;
@@ -2488,7 +2488,7 @@ static void HTPConfigSetDefaultsPhase2(const char *name, HTPCfgRec *cfg_prec)
     cfg_prec->response.sbcfg.Free = HTPFree;
     return;
 }
-
+/* 解析http解析, 及libhtp库配置信息 */
 static void HTPConfigParseParameters(HTPCfgRec *cfg_prec, ConfNode *s,
                                      SCRadixTree *tree)
 {
@@ -2836,14 +2836,14 @@ static void HTPConfigParseParameters(HTPCfgRec *cfg_prec, ConfNode *s,
 void HTPConfigure(void)
 {
     SCEnter();
-
+    /* 初始化存放配置的链表/radix树 */
     cfglist.next = NULL;
 
     cfgtree = SCRadixCreateRadixTree(NULL, NULL);
     if (NULL == cfgtree)
         exit(EXIT_FAILURE);
 
-    /* Default Config */
+    /* 初始化默认配置: Default Config */
     cfglist.cfg = htp_config_create();
     if (NULL == cfglist.cfg) {
         FatalError(SC_ERR_FATAL, "Failed to create HTP default config");
@@ -2853,12 +2853,12 @@ void HTPConfigure(void)
     if (ConfGetNode("app-layer.protocols.http.libhtp") == NULL) {
         HTPConfigParseParameters(&cfglist, ConfGetNode("libhtp.default-config"),
                                  cfgtree);
-    } else {                                    /* 利用配置文件初始化 */
+    } else {                                    /* 解析配置文件 */
         HTPConfigParseParameters(&cfglist, ConfGetNode("app-layer.protocols.http.libhtp.default-config"), cfgtree);
-    }
+    }                                           /* 初始化缓存相关信息 */
     HTPConfigSetDefaultsPhase2("default", &cfglist);
 
-    HTPParseMemcap();
+    HTPParseMemcap();                           /* 内存限制 */
 
     /* Read server config and create a parser for each IP in radix tree */
     ConfNode *server_config = ConfGetNode("app-layer.protocols.http.libhtp.server-config");
@@ -2872,7 +2872,7 @@ void HTPConfigure(void)
     SCLogDebug("LIBHTP Configuring %p", server_config);
 
     ConfNode *si;
-    /* 解析server节点配置，Server Nodes */
+    /* 初始化server节点/目的IP的专有配置，Server Nodes */
     TAILQ_FOREACH(si, &server_config->head, next) {
         /* Need the named node, not the index */
         ConfNode *s = TAILQ_FIRST(&si->head);
@@ -3060,7 +3060,7 @@ static int HTPRegisterPatternsForProtocolDetection(void)
         "COPY", "MOVE", "LOCK", "UNLOCK", "CHECKOUT", "UNCHECKOUT", "CHECKIN",
         "UPDATE", "LABEL", "REPORT", "MKWORKSPACE", "MKACTIVITY", "MERGE",
         "INVALID", "VERSION-CONTROL", "BASELINE-CONTROL", NULL};  
-    const char *spacings[] = { "|20|", "|09|", NULL };            /* 16进制表示的空格 */
+    const char *spacings[] = { "|20|", "|09|", NULL };  /* 16进制表示的空格, 20/空格, 09/水平定位符号 */
     const char *versions[] = { "HTTP/0.9", "HTTP/1.0", "HTTP/1.1", NULL };  
 
     int methods_pos;
@@ -3115,15 +3115,15 @@ void RegisterHTPParsers(void)
     if (AppLayerProtoDetectConfProtoDetectionEnabled("tcp", proto_name)) { /* 检测是否使能协议检测 */
         AppLayerProtoDetectRegisterProtocol(ALPROTO_HTTP, proto_name);     /* 赋值 alpd_ctx.alproto_names[] */
         if (HTPRegisterPatternsForProtocolDetection() < 0)
-            return;
-    } else {            /* 注册检测关键，构建单模引擎 */
+            return;     /* 注册检测关键，构建单模引擎 */
+    } else {
         SCLogInfo("Protocol detection and parser disabled for %s protocol",
                   proto_name);
         return;
     }
                         /* 添加http对应的解析操控函数 */
     if (AppLayerParserConfParserEnabled("tcp", proto_name)) {
-        AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);  /* 管理http解析状态 */
+        AppLayerParserRegisterStateFuncs(IPPROTO_TCP, ALPROTO_HTTP, HTPStateAlloc, HTPStateFree);  /* http解析状态结构的分配/释放 */
         AppLayerParserRegisterTxFreeFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTransactionFree);      /* 释放事务 */
         AppLayerParserRegisterGetFilesFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetFiles);           /* 获取数据流中的文件列表 */
         AppLayerParserRegisterGetStateProgressFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetAlstateProgress);  /* 获取libhtp库处理状态 */
@@ -3145,15 +3145,15 @@ void RegisterHTPParsers(void)
 
         AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOSERVER,                   /* 将request重组数据填喂到libhtp的入口 */
                                      HTPHandleRequestData);
-        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOCLIENT,                   /* 将response重组数据填喂到libhpt的入口 */
+        AppLayerParserRegisterParser(IPPROTO_TCP, ALPROTO_HTTP, STREAM_TOCLIENT,                   /* 将response重组数据填喂到libhtp的入口 */
                                      HTPHandleResponseData);
         SC_ATOMIC_INIT(htp_config_flags);
         /* This parser accepts gaps. */
         AppLayerParserRegisterOptionFlags(
                 IPPROTO_TCP, ALPROTO_HTTP, APP_LAYER_PARSER_OPT_ACCEPT_GAPS);
-        AppLayerParserRegisterParserAcceptableDataDirection(IPPROTO_TCP,
+        AppLayerParserRegisterParserAcceptableDataDirection(IPPROTO_TCP,                           /* 设置标识: 接受带间隙数据, 处理双向数据 */
                 ALPROTO_HTTP, STREAM_TOSERVER|STREAM_TOCLIENT);
-        HTPConfigure(); /* 初始化http解析配置 */
+        HTPConfigure();                                  /* 初始化http解析配置, cfglist/cfgtree */
     } else {
         SCLogInfo("Parsed disabled for %s protocol. Protocol detection"
                   "still on.", proto_name);

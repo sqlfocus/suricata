@@ -316,8 +316,8 @@ static void SignalHandlerSigHup(/*@unused@*/ int sig)
 void GlobalsInitPreConfig(void)
 {
     TimeInit();      /* 设置时区 */
-    SupportFastPatternForSigMatchTypes(); /* 快速模式匹配，注册关键字 */
-    SCThresholdConfGlobalInit();          /* threshold配置pcre匹配规则 */
+    SupportFastPatternForSigMatchTypes(); /* DETECT_SM_LIST_PMATCH 注册为快速模式匹配 */
+    SCThresholdConfGlobalInit();          /* 初始化threshold配置的pcre匹配规则 */
 }
 
 static void GlobalsDestroy(SCInstance *suri)
@@ -2418,7 +2418,7 @@ static void SetupUserMode(SCInstance *suri)
 {
     /* apply 'user mode' config updates here */
     if (suri->system == false) {   /* 用户模式下，修正日志、数据目录为当前路径 */
-        if (suri->set_logdir == false) {
+        if (suri->set_logdir == false) {  /* 未通过命令行指定日志路径 */
             /* override log dir to current work dir" */
             if (ConfigSetLogDirectory((char *)".") != TM_ECODE_OK) {
                 FatalError(SC_ERR_LOGDIR_CONFIG, "could not set USER mode logdir");
@@ -2478,7 +2478,7 @@ int PostConfLoadedSetup(SCInstance *suri)
             break;
     }
 
-    if (suri->runmode_custom_mode) {/* single|autofp|workers, 更新运行模式类型，由命令行--runmode指定 */
+    if (suri->runmode_custom_mode) {/* single|autofp|workers, 命令行--runmode指定了运行模式, 则更新配置文件runmode字段 */
         ConfSet("runmode", suri->runmode_custom_mode);
     }
 
@@ -2770,7 +2770,7 @@ int SuricataMain(int argc, char **argv)
 
     if (ParseInterfacesList(suricata.aux_run_mode, suricata.pcap_dev) != TM_ECODE_OK) {
         exit(EXIT_FAILURE);              /* 如果命令行-i未指定接口，则从配置文件读取并加入 pre_live_devices */
-    }                                    /*             指定接口，则设置配置文件解析结果，如 pfring..live-interface */
+    }
 
     if (PostConfLoadedSetup(&suricata) != TM_ECODE_OK) {
         exit(EXIT_FAILURE);              /* 读取配置文件后，程序运行前必要的初始化流程，如注册模式匹配器、初始化协议识别引擎等 */

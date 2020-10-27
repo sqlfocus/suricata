@@ -86,7 +86,7 @@ int HtpBodyAppendChunk(const HTPCfgDir *hcfg, HtpBody *body,
     if (len == 0 || data == NULL) {
         SCReturnInt(0);
     }
-
+    /* 分配数据缓存 */
     if (body->sb == NULL) {
         const StreamingBufferConfig *cfg = hcfg ? &hcfg->sbcfg : &default_cfg;
         body->sb = StreamingBufferInit(cfg);
@@ -94,17 +94,17 @@ int HtpBodyAppendChunk(const HTPCfgDir *hcfg, HtpBody *body,
             SCReturnInt(-1);
     }
 
-    /* New chunk */
+    /* 分配数据块描述结构, 每次缓存分配一个此结构, New chunk */
     bd = (HtpBodyChunk *)HTPCalloc(1, sizeof(HtpBodyChunk));
     if (bd == NULL) {
         SCReturnInt(-1);
     }
-
+    /* 缓存数据, 并初始化描述块结构 */
     if (StreamingBufferAppend(body->sb, &bd->sbseg, data, len) != 0) {
         HTPFree(bd, sizeof(HtpBodyChunk));
         SCReturnInt(-1);
     }
-
+    /* 更新计数 */
     if (body->first == NULL) {
         body->first = body->last = bd;
     } else {

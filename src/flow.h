@@ -415,7 +415,7 @@ typedef struct Flow_
      *  packets with the correct tenant id set */
     uint32_t tenant_id;
 
-    uint32_t probing_parser_toserver_alproto_masks;
+    uint32_t probing_parser_toserver_alproto_masks; /* to server方向端口识别结果, 位掩码 */
     uint32_t probing_parser_toclient_alproto_masks;
 
     uint32_t flags;         /* FLOW_DIR_REVERSED: midstream建流时反向了 */
@@ -424,7 +424,7 @@ typedef struct Flow_
 
     /** destination port to be used in protocol detection. This is meant
      *  for use with STARTTLS and HTTP CONNECT detection */
-    uint16_t protodetect_dp; /**< 0 if not used */
+    uint16_t protodetect_dp;/* 用于协议检测的端口, *< 0 if not used */
 
     /* Parent flow id for protocol like ftp */
     int64_t parent_id;
@@ -472,8 +472,8 @@ typedef struct Flow_
     /** application level storage ptrs.
      *
      */
-    AppLayerParserState *alparser;  /* 当前解析状态, *< parser internal state */
-    void *alstate;                  /* 应用（HTTP）状态, HTTP -> HtpState, *< application layer state */
+    AppLayerParserState *alparser;  /* 应用协议解析状态, *< parser internal state */
+    void *alstate;                  /* 外挂库应用（HTTP）状态, HTTP -> HtpState, *< application layer state */
 
     /** toclient sgh for this flow. Only use when FLOW_SGH_TOCLIENT flow flag
      *  has been set. */            /* 匹配到的基于端口的规则集，保存下来 */

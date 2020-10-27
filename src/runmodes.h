@@ -40,7 +40,7 @@ enum RunModes {
     RUNMODE_NAPATECH,
     RUNMODE_UNIX_SOCKET,
     RUNMODE_WINDIVERT,
-    RUNMODE_PLUGIN,
+    RUNMODE_PLUGIN,           /* 插件运行模式 */
     RUNMODE_USER_MAX,         /* 以上为合法的引擎运行模式，Last standard running mode */
     RUNMODE_LIST_KEYWORDS,    /* 以下为内部模式，在函数 StartInternalRunMode() 执行后进程退出 */
     RUNMODE_LIST_APP_LAYERS,

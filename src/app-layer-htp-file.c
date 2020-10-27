@@ -90,7 +90,7 @@ int HTPFileOpen(HtpState *s, const uint8_t *filename, uint16_t filename_len,
     if (s == NULL) {
         SCReturnInt(-1);
     }
-
+    /* 获取文件标志, 如计算hash方式 */
     if (direction & STREAM_TOCLIENT) {
         if (s->files_tc == NULL) {
             s->files_tc = FileContainerAlloc();
@@ -136,7 +136,7 @@ int HTPFileOpen(HtpState *s, const uint8_t *filename, uint16_t filename_len,
 
         sbcfg = &s->cfg->request.sbcfg;
     }
-
+    /* 创建文件 */
     if (FileOpenFileWithId(files, sbcfg, s->file_track_id++,
                 filename, filename_len,
                 data, data_len, flags) != 0)

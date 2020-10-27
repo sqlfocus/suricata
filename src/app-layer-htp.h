@@ -149,8 +149,8 @@ typedef struct HTPCfgDir_ {
     uint32_t body_limit;
     uint32_t inspect_min_size;
     uint32_t inspect_window;
-    StreamingBufferConfig sbcfg;
-} HTPCfgDir;
+    StreamingBufferConfig sbcfg;    /* 缓存配置 */
+} HTPCfgDir;         /* libhtp库方向性配置 */
 
 /** Need a linked list in order to keep track of these */
 typedef struct HTPCfgRec_ {
@@ -183,13 +183,13 @@ typedef struct HtpBodyChunk_ HtpBodyChunk;
 
 /** Struct used to hold all the chunks of a body on a request */
 typedef struct HtpBody_ {
-    HtpBodyChunk *first; /**< Pointer to the first chunk */
-    HtpBodyChunk *last;  /**< Pointer to the last chunk */
+    HtpBodyChunk *first;          /* 缓存数据块描述结构, *< Pointer to the first chunk */
+    HtpBodyChunk *last;           /* 每次回调函数调用分配1个此结构, *< Pointer to the last chunk */
 
-    StreamingBuffer *sb;
+    StreamingBuffer *sb;          /* 缓存的原始数据; 类似于流重组的操作 */
 
     /* Holds the length of the htp request body seen so far */
-    uint64_t content_len_so_far;
+    uint64_t content_len_so_far;  /* 截止当前时刻, 看到的数据量长度 */
     /* parser tracker */
     uint64_t body_parsed;
     /* inspection tracker */
@@ -207,23 +207,23 @@ typedef struct HtpBody_ {
   * the tx user data */
 typedef struct HtpTxUserData_ {
     /* Body of the request (if any) */
-    uint8_t request_body_init;
+    uint8_t request_body_init;      /* 是否已经初始化 ->request_body_type */
     uint8_t response_body_init;
 
     uint8_t request_has_trailers;
     uint8_t response_has_trailers;
 
-    HtpBody request_body;
+    HtpBody request_body;           /* 存储请求体相关信息, 如原始数据 */
     HtpBody response_body;
 
     bstr *request_uri_normalized;
 
-    uint8_t *request_headers_raw;
+    uint8_t *request_headers_raw;   /* 存储解析后libhtp传回的数据, malloc */
     uint8_t *response_headers_raw;
     uint32_t request_headers_raw_len;
     uint32_t response_headers_raw_len;
 
-    AppLayerDecoderEvents *decoder_events;          /**< per tx events */
+    AppLayerDecoderEvents *decoder_events;   /* 解码事件 *//**< per tx events */
 
     /** Holds the boundary identification string if any (used on
      *  multipart/form-data only)
@@ -234,11 +234,11 @@ typedef struct HtpTxUserData_ {
     uint8_t tsflags;
     uint8_t tcflags;
 
-    uint8_t request_body_type;
+    uint8_t request_body_type;      /* 记录POST请求的类型, HTP_BODY_REQUEST_POST */
 
     DetectEngineState *de_state;
     AppLayerTxData tx_data;
-} HtpTxUserData;                   /* 记录在libhtp中，此http解析的suricata私有数据 */
+} HtpTxUserData;    /* 记录在libhtp中，此http解析的suricata私有数据 */
 
 typedef struct HtpState_ {
     /* Connection parser structure for each connection */
@@ -248,7 +248,7 @@ typedef struct HtpState_ {
     Flow *f;                /**< Needed to retrieve the original flow when using HTPLib callbacks */
     uint64_t transaction_cnt;
     uint64_t store_tx_id;
-    FileContainer *files_ts;
+    FileContainer *files_ts;    /* 文件列表, to server */
     FileContainer *files_tc;
     const struct HTPCfgRec_ *cfg;
     uint16_t flags;
@@ -257,7 +257,7 @@ typedef struct HtpState_ {
     uint32_t file_track_id;           /**< used to assign file track ids to files */
     uint64_t last_request_data_stamp;
     uint64_t last_response_data_stamp;
-} HtpState;    /* HTTP解析状态结构 */
+} HtpState;    /* HTTP解析状态结构, Flow->alstate */
 
 /** part of the engine needs the request body (e.g. http_client_body keyword) */
 #define HTP_REQUIRE_REQUEST_BODY        (1 << 0)

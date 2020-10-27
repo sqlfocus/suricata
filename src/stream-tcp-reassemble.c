@@ -1082,17 +1082,17 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
         TcpSession *ssn, TcpStream **stream,
         Packet *p, enum StreamUpdateDir dir)
 {
-    uint64_t app_progress = STREAM_APP_PROGRESS(*stream);
+    uint64_t app_progress = STREAM_APP_PROGRESS(*stream);  /* 已处理数据偏移 */
 
     SCLogDebug("app progress %"PRIu64, app_progress);
     SCLogDebug("last_ack %u, base_seq %u", (*stream)->last_ack, (*stream)->base_seq);
 
     const uint8_t *mydata;
     uint32_t mydata_len;
-    bool gap_ahead = false;
+    bool gap_ahead = false;                                /* 获取当前流状态/标志 */
     const uint8_t flags = StreamGetAppLayerFlags(ssn, *stream, p);
 
-    while (1) {         /* 获取数据 */
+    while (1) {         /* 获取缓存的应用数据 */
         bool check_for_gap_ahead = ((*stream)->data_required > 0);
         gap_ahead = GetAppBuffer(*stream, &mydata, &mydata_len,
                 app_progress, check_for_gap_ahead);
@@ -1190,7 +1190,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
  *  stream opposing the stream it is called with.  This shouldn't cause
  *  any issues, since processing of each stream is independent of the
  *  other stream.
- *//* 应用识别入口 */
+ */
 int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                                  TcpSession *ssn, TcpStream *stream,
                                  Packet *p, enum StreamUpdateDir dir)

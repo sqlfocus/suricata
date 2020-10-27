@@ -67,8 +67,6 @@ typedef struct FlowWorkerThreadData_ {
     SC_ATOMIC_DECLARE(DetectEngineThreadCtxPtr, detect_thread);
                                  /* 检测线程信息结构 */
     void *output_thread;         /* 支持日志输出, LoggerThreadStore, Output thread data. */
-
-    void *output_thread; /* Output thread data. */
     void *output_thread_flow; /* Output thread data. */
 
     uint16_t local_bypass_pkts;  /* 计数量ID */

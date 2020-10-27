@@ -95,11 +95,11 @@ struct AppLayerParserThreadCtx_ {   /* 局部存储需求 */
 typedef struct AppLayerParserProtoCtx_
 {
     /* 0 - to_server, 1 - to_client. */
-    AppLayerParserFPtr Parser[2]; /* 如 HTPHandleRequestData()/HTPHandleResponseData() */
+    AppLayerParserFPtr Parser[2];          /* libhtp= HTPHandleRequestData()/HTPHandleResponseData() */
     bool logger;
     uint32_t logger_bits;   /* 参考 logger_bits[], registered loggers for this proto */
 
-    void *(*StateAlloc)(void *, AppProto);
+    void *(*StateAlloc)(void *, AppProto); /* libhtp= HTPStateAlloc() */
     void (*StateFree)(void *);
     void (*StateTransactionFree)(void *, uint64_t);
     void *(*LocalStorageAlloc)(void);
@@ -167,7 +167,7 @@ struct AppLayerParserState_ {
 
     /* Used to store decoder events. */
     AppLayerDecoderEvents *decoder_events;
-};
+};             /* 维护应用协议解析的状态 */
 
 #ifdef UNITTESTS
 void UTHAppLayerParserStateGetIds(void *ptr, uint64_t *i1, uint64_t *i2, uint64_t *log, uint64_t *min)
@@ -355,7 +355,7 @@ int AppLayerParserConfParserEnabled(const char *ipproto,
 }
 
 /***** Parser related registration *****/
-
+/* 注册应用协议解析入口函数 */
 int AppLayerParserRegisterParser(uint8_t ipproto, AppProto alproto,
                       uint8_t direction,
                       AppLayerParserFPtr Parser)
@@ -395,7 +395,7 @@ uint32_t AppLayerParserGetOptionFlags(uint8_t protomap, AppProto alproto)
     SCReturnUInt(alp_ctx.ctxs[protomap][alproto].option_flags);
 }
 
-/* 注册应用层协议的状态结构操控函数 */
+/* 注册应用层协议的状态结构操控函数, ALPROTO_HTTP -> HTPStateAlloc */
 void AppLayerParserRegisterStateFuncs(uint8_t ipproto, AppProto alproto,
         void *(*StateAlloc)(void *, AppProto), void (*StateFree)(void *))
 {
@@ -1200,7 +1200,7 @@ static inline void SetEOFFlags(AppLayerParserState *pstate, const uint8_t flags)
 
 /** \retval int -1 in case of unrecoverable error. App-layer tracking stops for this flow.
  *  \retval int 0 ok: we did not update app_progress
- *  \retval int 1 ok: we updated app_progress */
+ *  \retval int 1 ok: we updated app_progress *//* 应用协议解析入口 */
 int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow *f, AppProto alproto,
                         uint8_t flags, const uint8_t *input, uint32_t input_len)
 {
@@ -1216,7 +1216,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     const int direction = (flags & STREAM_TOSERVER) ? 0 : 1;
 
     /* we don't have the parser registered for this protocol */
-    if (p->StateAlloc == NULL)
+    if (p->StateAlloc == NULL)      /* CASE: 未注册应用解析 */
         goto end;
 
     if (flags & STREAM_GAP) {       /* CASE: 不接受数据存在间隙 */
@@ -1230,8 +1230,8 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* 如有必要分配解析状态结构, Get the parser state (if any) */
-    if (pstate == NULL) {
+    /* Get the parser state (if any) */
+    if (pstate == NULL) {         /* 分配应用解析信息结构 */
         f->alparser = pstate = AppLayerParserStateAlloc();
         if (pstate == NULL)
             goto error;
@@ -1239,7 +1239,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
 
     SetEOFFlags(pstate, flags);   /* CASE: 流结束了，设置标识 */
 
-    alstate = f->alstate;         /* 如有必要分配HTTP状态信息结构 */
+    alstate = f->alstate;         /* 分配libhtp库信息结构 */
     if (alstate == NULL || FlowChangeProto(f)) {   /* HtpState, HTTP -> HTPStateAlloc() */
         f->alstate = alstate = p->StateAlloc(alstate, f->alproto_orig);
         if (alstate == NULL)
@@ -1250,17 +1250,17 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         SCLogDebug("using existing app layer state %p (name %s))",
                    alstate, AppLayerGetProtoName(f->alproto));
     }
-
+                                  /* 获取事务数 */
     p_tx_cnt = AppLayerParserGetTxCnt(f, f->alstate);
-    /* 引入协议解析器，解析输入数据 *//* AppLayerResult 参考 rust/src/applayer.rs */
+    /* CASE: 协议解析, ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
     /* invoke the recursive parser, but only on data. We may get empty msgs on EOF */
     if (input_len > 0 || (flags & STREAM_EOF)) {
-        /* invoke the parser *//* 解析, ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
+        /* invoke the parser */
         AppLayerResult res = p->Parser[direction](f, alstate, pstate,
                 input, input_len,
                 alp_tctx->alproto_local_storage[f->protomap][alproto],
                 flags);
-        if (res.status < 0) {             /* 解析错误 */
+        if (res.status < 0) {             /* 解析错误 *//* AppLayerResult 参考 rust/src/applayer.rs */
             goto error;
         } else if (res.status > 0) {      /* 数据消耗完，仍需要额外数据 */
             DEBUG_VALIDATE_BUG_ON(res.consumed > input_len);
@@ -1282,8 +1282,8 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
                 if (direction == 0) {
                     /* parser told us how much data it needs on top of what it
                      * consumed. So we need tell stream engine how much we need
-                     * before the next call */
-                    ssn->client.data_required = res.needed;  /* 记录下次启动解析需要的数据量 */
+                     * before the next call *//* 记录下次启动解析需要的数据量 */
+                    ssn->client.data_required = res.needed;
                     SCLogDebug("setting data_required %u", ssn->client.data_required);
                 } else {
                     /* parser told us how much data it needs on top of what it
@@ -1297,17 +1297,17 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
         }
     }
 
-    /* 不需要检测的情形，后续不再数据重组; set the packets to no inspection and reassembly if required */
+    /* CASE: 不需要检测的情形，后续不再数据重组; set the packets to no inspection and reassembly if required */
     if (pstate->flags & APP_LAYER_PARSER_NO_INSPECTION) {
-        AppLayerParserSetEOF(pstate);
-        FlowSetNoPayloadInspectionFlag(f);
+        AppLayerParserSetEOF(pstate);       /* 设置解析结束标识 */
+        FlowSetNoPayloadInspectionFlag(f);  /* 设置检测结束标识 */
 
         if (f->proto == IPPROTO_TCP) {
-            StreamTcpDisableAppLayer(f);
+            StreamTcpDisableAppLayer(f);    /* tcp各个结构设置结束标识 */
 
             /* Set the no reassembly flag for both the stream in this TcpSession */
             if (pstate->flags & APP_LAYER_PARSER_NO_REASSEMBLY) {
-                /* Used only if it's TCP */
+                /* Used only if it's TCP */ /* 不再流重组 */
                 TcpSession *ssn = f->protoctx;
                 if (ssn != NULL) {
                     StreamTcpSetSessionNoReassemblyFlag(ssn, 0);
@@ -1318,14 +1318,14 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
             if (pstate->flags & APP_LAYER_PARSER_BYPASS_READY) {
                 /* Used only if it's TCP */
                 TcpSession *ssn = f->protoctx;
-                if (ssn != NULL) {
+                if (ssn != NULL) {          /* 设置bypass标识 */
                     StreamTcpSetSessionBypassFlag(ssn);
                 }
             }
         }
     }
 
-    /* 不需要检测负载的情形，后续不再数据重组; In cases like HeartBleed for TLS we need to inspect AppLayer but not Payload */
+    /* CASE: 不需要检测负载的情形，后续不再数据重组; In cases like HeartBleed for TLS we need to inspect AppLayer but not Payload */
     if (!(f->flags & FLOW_NOPAYLOAD_INSPECTION) && pstate->flags & APP_LAYER_PARSER_NO_INSPECTION_PAYLOAD) {
         FlowSetNoPayloadInspectionFlag(f);        /* 会话设置不检测负载 */
         /* Set the no reassembly flag for both the stream in this TcpSession */
@@ -1616,7 +1616,7 @@ void AppLayerParserRegisterProtocolParsers(void)
     RegisterMQTTParsers();
     RegisterTemplateParsers();
     RegisterRdpParsers();
-    RegisterHTTP2Parsers();
+    RegisterHTTP2Parsers();        /* 注册HTTP2 */
 
     /** IMAP */
     AppLayerProtoDetectRegisterProtocol(ALPROTO_IMAP, "imap");
@@ -1632,7 +1632,7 @@ void AppLayerParserRegisterProtocolParsers(void)
                   "imap");
     }
 
-    ValidateParsers();
+    ValidateParsers();             /* 验证有效性 */
     return;
 }
 

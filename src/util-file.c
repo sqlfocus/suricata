@@ -606,11 +606,11 @@ static int FileStoreNoStoreCheck(File *ff)
 }
 
 static int AppendData(File *file, const uint8_t *data, uint32_t data_len)
-{
+{   /* 保存数据 */
     if (StreamingBufferAppendNoTrack(file->sb, data, data_len) != 0) {
         SCReturnInt(-1);
     }
-
+    /* 计算hash */
 #ifdef HAVE_NSS
     if (file->md5_ctx) {
         HASH_Update(file->md5_ctx, data, data_len);
@@ -850,14 +850,14 @@ static File *FileOpenFile(FileContainer *ffc, const StreamingBufferConfig *sbcfg
     if (ff == NULL) {
         SCReturnPtr(NULL, "File");
     }
-
+    /* 分配缓存 */
     ff->sb = StreamingBufferInit(sbcfg);
     if (ff->sb == NULL) {
         FileFree(ff);
         SCReturnPtr(NULL, "File");
     }
     SCLogDebug("ff->sb %p", ff->sb);
-
+    /* 赋值标志位 */
     if (flags & FILE_STORE || g_file_force_filestore) {
         FileStore(ff);
     } else if (flags & FILE_NOSTORE) {
@@ -884,7 +884,7 @@ static File *FileOpenFile(FileContainer *ffc, const StreamingBufferConfig *sbcfg
         SCLogDebug("considering content_inspect tracker when pruning");
         ff->flags |= FILE_USE_DETECT;
     }
-
+    /* hash初始化 */
 #ifdef HAVE_NSS
     if (!(ff->flags & FILE_NOMD5) || g_file_force_md5) {
         ff->md5_ctx = HASH_Create(HASH_AlgMD5);
@@ -910,9 +910,9 @@ static File *FileOpenFile(FileContainer *ffc, const StreamingBufferConfig *sbcfg
     SCLogDebug("flowfile state transitioned to FILE_STATE_OPENED");
 
     ff->fd = -1;
-
+    /* 添加到文件列表 */
     FileContainerAdd(ffc, ff);
-
+    /* 复制数据到文件缓存 */
     if (data != NULL) {
         ff->size += data_len;
         if (AppendData(ff, data, data_len) != 0) {
