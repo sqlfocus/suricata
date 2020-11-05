@@ -52,7 +52,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_TCP_REUSED                 BIT_U32(2)
 
 /** Flow was inspected against IP-Only sigs in the toserver direction */
-#define FLOW_TOSERVER_IPONLY_SET        BIT_U32(3)
+#define FLOW_TOSERVER_IPONLY_SET        BIT_U32(3)  /* toserver方向, IPONLY已检测过 */
 /** Flow was inspected against IP-Only sigs in the toclient direction */
 #define FLOW_TOCLIENT_IPONLY_SET        BIT_U32(4)
 
@@ -219,7 +219,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_PKT_TOSERVER               0x01
 #define FLOW_PKT_TOCLIENT               0x02
 #define FLOW_PKT_ESTABLISHED            0x04
-#define FLOW_PKT_TOSERVER_IPONLY_SET    0x08
+#define FLOW_PKT_TOSERVER_IPONLY_SET    0x08  /* toserver方向, IPONLY已检测过 */
 #define FLOW_PKT_TOCLIENT_IPONLY_SET    0x10
 #define FLOW_PKT_TOSERVER_FIRST         0x20
 #define FLOW_PKT_TOCLIENT_FIRST         0x40

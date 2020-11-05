@@ -42,7 +42,7 @@ typedef struct LiveDevice_ {
     char dev_short[MAX_DEVNAME + 1];
     bool tenant_id_set;
 
-    int id;
+    int id;              /* 在 live_devices 链表的索引ID */
 
     SC_ATOMIC_DECLARE(uint64_t, pkts);
     SC_ATOMIC_DECLARE(uint64_t, drop);

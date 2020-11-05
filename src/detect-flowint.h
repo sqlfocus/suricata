@@ -62,22 +62,22 @@ typedef struct TargetVar_ {
 typedef struct DetectFlowintData_ {
     /* This is the main var we are going to use
     * against the target */
-    char *name;
+    char *name;           /* 变量名, 如 "http.anomaly.count" */
     /* Internal id of the var */
-    uint32_t idx;
+    uint32_t idx;         /* 变量名在变量空间 g_varnamestore_staging 的序号 */
 
     /* The modifier/operation/condition we are
     * going to execute */
-    uint8_t modifier;
-    uint8_t targettype;
+    uint8_t modifier;     /* FLOWINT_MODIFIER_ADD */
+    uint8_t targettype;   /* FLOWINT_TARGET_VAL */
 
     union {
         /* the target value */
-        uint32_t value;
+        uint32_t value;   /* 对应FLOWINT_TARGET_VAL的值 */
         /* or the target var */
-        TargetVar tvar;
+        TargetVar tvar;      
     } target;
-} DetectFlowintData;
+} DetectFlowintData;  /* flowint关键字解析结果, 如”flowint:http.anomaly.count,+,1;“ */
 
 /* prototypes */
 void DetectFlowintRegister (void);

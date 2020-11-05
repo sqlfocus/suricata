@@ -35,7 +35,7 @@ static int g_bypass_storage_id = -1;
  *  \brief Utility functions to handle device list
  */
 
-/** 初始化完成后，对应的网卡列表，private device list */
+/** 初始化完成后, 最终对应的网卡列表; private device list */
 static TAILQ_HEAD(, LiveDevice_) live_devices =
     TAILQ_HEAD_INITIALIZER(live_devices);
 
@@ -44,8 +44,8 @@ static TAILQ_HEAD(, LiveDevice_) live_devices =
  * As we don't know the size of the Storage on devices
  * before the parsing we need to wait and use this list
  * to create later the LiveDevice via LiveDeviceFinalize()
- *//* 解析命令行参数、配置文件时，获取的网卡列表 */
-static TAILQ_HEAD(, LiveDeviceName_) pre_live_devices =
+ *//* 解析命令行参数、配置文件时, 获取的网卡列表; 初始化完毕后为NULL,  */
+static TAILQ_HEAD(, LiveDeviceName_) pre_live_devices = /* 结果赋值到 live_devices */
     TAILQ_HEAD_INITIALIZER(pre_live_devices);
 
 typedef struct BypassInfo_ {

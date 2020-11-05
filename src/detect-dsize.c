@@ -437,13 +437,13 @@ void SigParseSetDsizePair(Signature *s)
 /**
  *  \brief Apply dsize as depth to content matches in the rule
  *  \param s signature to get dsize value from
- *//* 如果指定了数据长度，则内容检测的最大长度为此 */
+ *//* 如果指定了数据匹配长度，则内容检测的最大长度为此 */
 void SigParseApplyDsizeToContent(Signature *s)/* 据此更新检测长度，以加快MPM */
 {
     SCEnter();
 
     if (s->flags & SIG_FLAG_DSIZE) {
-        SigParseSetDsizePair(s);             /* 初始化规则的内容匹配范围 */
+        SigParseSetDsizePair(s);             /* 初始化规则的内容长度匹配范围 */
 
         int dsize = SigParseGetMaxDsize(s);
         if (dsize < 0) {                     /* 获取范围的上限 */

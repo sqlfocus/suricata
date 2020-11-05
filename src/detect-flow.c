@@ -232,7 +232,7 @@ static DetectFlowData *DetectFlowParse (DetectEngineCtx *de_ctx, const char *flo
                 if (fd->flags & DETECT_FLOW_FLAG_NOT_ESTABLISHED) {
                     SCLogError(SC_ERR_FLAGS_MODIFIER, "DETECT_FLOW_FLAG_NOT_ESTABLISHED flag is already set");
                     goto error;
-                } else if (fd->flags & DETECT_FLOW_FLAG_NOT_ESTABLISHED) {
+                } else if (fd->flags & DETECT_FLOW_FLAG_ESTABLISHED) {
                     SCLogError(SC_ERR_FLAGS_MODIFIER, "cannot set DETECT_FLOW_FLAG_NOT_ESTABLISHED, DETECT_FLOW_FLAG_ESTABLISHED already set");
                     goto error;
                 }
@@ -402,7 +402,7 @@ int DetectFlowSetup (DetectEngineCtx *de_ctx, Signature *s, const char *flowstr)
     } else {
         s->init_data->init_flags |= SIG_FLAG_INIT_FLOW;
     }
-    /* 将匹配环境添加到 ->init_data->smlists[DETECT_SM_LIST_MATCH] */
+    /* 将匹配sigmatch添加到 ->init_data->smlists[DETECT_SM_LIST_MATCH] */
     if (sm != NULL) {
         SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
     }

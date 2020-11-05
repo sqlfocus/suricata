@@ -310,7 +310,7 @@ void SigTableApplyStrictCommandlineOption(const char *str)
         return;
     }
 
-    /* "all" just sets the flag for each keyword */
+    /* “all”代表全部关键字设置严格解析标识; "all" just sets the flag for each keyword */
     if (strcmp(str, "all") == 0) {
         for (int i = 0; i < DETECT_TBLSIZE; i++) {
             SigTableElmt *st = &sigmatch_table[i];
@@ -318,7 +318,7 @@ void SigTableApplyStrictCommandlineOption(const char *str)
         }
         return;
     }
-
+    /* 提取需要设定严格解析的关键字, 并设置其标志 */
     char *copy = SCStrdup(str);
     if (copy == NULL)
         FatalError(SC_ERR_MEM_ALLOC, "could not duplicate opt string");
@@ -536,7 +536,7 @@ SigMatch *DetectGetLastSMByListPtr(const Signature *s, SigMatch *sm_list, ...)
  * \param va_args list of keyword types terminated by -1
  *
  * \retval sm_last to last sm.
- */
+ *//* 在list_id列表, "..."指定的类型, 最后注册的SigMatch */
 SigMatch *DetectGetLastSMByListId(const Signature *s, int list_id, ...)
 {
     SigMatch *sm_last = NULL;
@@ -640,7 +640,7 @@ int SigMatchListSMBelongsTo(const Signature *s, const SigMatch *key_sm)
                "sm lists");
     return -1;
 }
-
+/* 解析规则的选项部分, 'base (option)' */
 static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, char *output, size_t output_size)
 {
     SigTableElmt *st = NULL;
@@ -888,7 +888,7 @@ static int SigParseProto(Signature *s, const char *protostr)
     SCEnter();
 
     int r = DetectProtoParse(&s->proto, (char *)protostr);
-    if (r < 0) {                             /* 解析L3-L4协议 */
+    if (r < 0) {      /* 解析L3-L4协议 */
         s->alproto = AppLayerGetProtoByName((char *)protostr);
         /* indicate that the signature is app-layer */
         if (s->alproto != ALPROTO_UNKNOWN) { /* 如果无法匹配L3-L4，解析L7协议 */
@@ -908,7 +908,7 @@ static int SigParseProto(Signature *s, const char *protostr)
     }
 
     /* if any of these flags are set they are set in a mutually exclusive
-     * manner */  /* 更具协议设置检测标志 */
+     * manner */      /* 更具协议设置检测标志 */
     if (s->proto.flags & DETECT_PROTO_ONLY_PKT) {
         s->flags |= SIG_FLAG_REQUIRE_PACKET;
     } else if (s->proto.flags & DETECT_PROTO_ONLY_STREAM) {
@@ -929,7 +929,7 @@ static int SigParseProto(Signature *s, const char *protostr)
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- */
+ *//* 解析规则的端口配置 */
 static int SigParsePort(const DetectEngineCtx *de_ctx,
         Signature *s, const char *portstr, char flag)
 {
@@ -1109,7 +1109,7 @@ static inline int SigParseList(char **input, char *output,
 }
 
 /**
- *  \internal
+ *  \internal 解析配置规则‘base (option)’中的base部分
  *  \brief split a signature string into a few blocks for further parsing
  *//* 示例 --- alert ip any any -> any any (msg:"SURICATA Applayer Mismatch protocol both directions"; flow:established; app-layer-event:applayer_mismatch_protocol_both_directions; flowint:applayer.anomaly.count,+,1; classtype:protocol-command-decode; sid:2260000; rev:1;) */
 static int SigParseBasics(DetectEngineCtx *de_ctx,
@@ -1502,7 +1502,7 @@ int DetectSignatureSetAppProto(Signature *s, AppProto alproto)
  *  \brief build address match array for cache efficient matching
  *
  *  \param s the signature
- */
+ *//* 将规则的源、目的IP转存位数组, 以加速匹配 */
 static void SigBuildAddressMatchArray(Signature *s)
 {
     /* source addresses */
@@ -1916,14 +1916,14 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     de_ctx->signum++;
 
     if (sig->alproto != ALPROTO_UNKNOWN) {
-        int override_needed = 0;  /* 解析规则时，以赋值应用层协议 */
+        int override_needed = 0;  /* 解析规则时，已赋值应用层协议 */
         if (sig->proto.flags & DETECT_PROTO_ANY) { /* 例如option中包含 http.protocol */
-            sig->proto.flags &= ~DETECT_PROTO_ANY;
+            sig->proto.flags &= ~DETECT_PROTO_ANY; /* 未明确指定协议的, 需要重新指定 */
             memset(sig->proto.proto, 0x00, sizeof(sig->proto.proto));
             override_needed = 1;
         } else {
             override_needed = 1;
-            size_t s = 0;
+            size_t s = 0;                          /* 已明确指定协议的, 则不需要重新指定 */
             for (s = 0; s < sizeof(sig->proto.proto); s++) {
                 if (sig->proto.proto[s] != 0x00) {
                     override_needed = 0;
@@ -1978,7 +1978,7 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
         sig->id, sig->flags & SIG_FLAG_APPLAYER ? "set" : "not set",
         sig->init_data->init_flags & SIG_FLAG_INIT_PACKET ? "set" : "not set");
 
-    SigBuildAddressMatchArray(sig);/* 为加速五元组IP匹配，将链表变更为数组 */
+    SigBuildAddressMatchArray(sig);/* 为加速规则源、目的IP匹配，将链表变更为数组 */
 
     /* run buffer type callbacks if any */
     for (uint32_t x = 0; x < sig->init_data->smlists_array_size; x++) {
@@ -2052,7 +2052,7 @@ static bool SigHasSameSourceAndDestination(const Signature *s)
  *               parsed.
  *
  * \retval Pointer to the Signature instance on success; NULL on failure.
- */
+ *//* 检测规则行解析 */
 Signature *SigInit(DetectEngineCtx *de_ctx, const char *sigstr)
 {
     SCEnter();
@@ -2072,7 +2072,7 @@ Signature *SigInit(DetectEngineCtx *de_ctx, const char *sigstr)
                 "treating the rule as unidirectional", sig->id);
 
             sig->init_data->init_flags &= ~SIG_FLAG_INIT_BIDIREC;
-        } else {      /* 双向，则解析反向规则 */
+        } else {      /* 双向: 则解析反向规则, 并将两个sig接在一起 */
             sig->next = SigInitHelper(de_ctx, sigstr, SIG_DIREC_SWITCHED);
             if (sig->next == NULL) {
                 goto error;
@@ -2379,7 +2379,7 @@ Signature *DetectEngineAppendSig(DetectEngineCtx *de_ctx, const char *sigstr)
     }
 
     if (sig->init_data->init_flags & SIG_FLAG_INIT_BIDIREC) {
-        if (sig->next != NULL) {
+        if (sig->next != NULL) {  /* 如果五元组方向为'<>', 则一次性生成两个sig, 需要一次性插入到链表 */
             sig->next->next = de_ctx->sig_list;
         } else {
             goto error;
@@ -2389,7 +2389,7 @@ Signature *DetectEngineAppendSig(DetectEngineCtx *de_ctx, const char *sigstr)
         sig->next = de_ctx->sig_list;
     }
 
-    de_ctx->sig_list = sig;     /* 插入到引擎结构的规则列表 */
+    de_ctx->sig_list = sig;       /* 插入到引擎结构的规则列表 */
 
     /**
      * In DetectEngineAppendSig(), the signatures are prepended and we always return the first one

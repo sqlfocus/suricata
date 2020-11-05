@@ -442,10 +442,10 @@ void SigTableSetup(void)
     DetectContentRegister();     /* 关键字content */
     DetectUricontentRegister();
 
-    /* NOTE: the order of these currently affects inspect
-     * engine registration order and ultimately the order
-     * of inspect engines in the rule. Which in turn affects
-     * state keeping */
+    /* NOTE: the order of these currently affects inspect 此区间的代码顺序顺序将影响监测引擎的注册顺序
+     * engine registration order and ultimately the order 并最终影响监测引擎规则的配置顺序;
+     * of inspect engines in the rule. Which in turn affects 此区间注册的关键字, 还会单独保存为独立的检测类型
+     * state keeping *//* 存储在 g_buffer_type_hash, 其ID排在 DETECT_SM_LIST_DYNAMIC_START 之后, 为动态注册类型 */
     DetectHttpUriRegister();     /* 关键字http_uri */
     DetectHttpRequestLineRegister();
     DetectHttpClientBodyRegister();
@@ -496,7 +496,7 @@ void SigTableSetup(void)
     DetectTlsJa3SStringRegister();
 
     DetectAppLayerEventRegister();    /* 注册应用协议检测事件处理句柄 */
-    /* end of order dependent regs */
+    /* 以上区域的代码需保持排序状态, end of order dependent regs */
 
     DetectPcreRegister();
     DetectDepthRegister();
@@ -637,7 +637,7 @@ void SigTableSetup(void)
     DetectTransformUrlDecodeRegister();
 
     /* close keyword registration */
-    DetectBufferTypeCloseRegistration();
+    DetectBufferTypeCloseRegistration();     /* 检测关键字注册完毕 */
 }
 
 #ifdef UNITTESTS

@@ -96,28 +96,28 @@ void DetectRunPrefilterTx(DetectEngineThreadCtx *det_ctx,
         void *alstate,
         DetectTransaction *tx)
 {
-    /* reset rule store */
+    /* 重置临时存储匹配规则结果的数组, reset rule store */
     det_ctx->pmq.rule_id_array_cnt = 0;
 
     SCLogDebug("tx %p progress %d", tx->tx_ptr, tx->tx_progress);
-
+    /* 提取事务引擎列表, 并依次运行 */
     PrefilterEngine *engine = sgh->tx_engines;
     do {
         if (engine->alproto != alproto)
-            goto next;
+            goto next;        /* 匹配应用协议 */
         if (engine->tx_min_progress > tx->tx_progress)
-            goto next;
+            goto next;        /* 匹配解析阶段 */
         if (tx->tx_progress > engine->tx_min_progress) {
             if (tx->prefilter_flags & (1<<(engine->local_id))) {
-                goto next;
+                goto next;    /* 是否已运行过？不重复运行 */
             }
         }
 
-        PREFILTER_PROFILING_START;
+        PREFILTER_PROFILING_START;  /* 运行回调 */
         engine->cb.PrefilterTx(det_ctx, engine->pectx,
                 p, p->flow, tx->tx_ptr, tx->tx_id, flow_flags);
         PREFILTER_PROFILING_END(det_ctx, engine->gid);
-
+                              /* 标记已运行, 后续不再运行 */
         if (tx->tx_progress > engine->tx_min_progress) {
             tx->prefilter_flags |= (1<<(engine->local_id));
         }
@@ -126,7 +126,7 @@ void DetectRunPrefilterTx(DetectEngineThreadCtx *det_ctx,
             break;
         engine++;
     } while (1);
-
+    /* 运行结束后, 按规则ID排序运行结果 */
     /* Sort the rule list to lets look at pmq.
      * NOTE due to merging of 'stream' pmqs we *MAY* have duplicate entries */
     if (likely(det_ctx->pmq.rule_id_array_cnt > 1)) {
@@ -239,7 +239,7 @@ int PrefilterAppendPayloadEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
 
     if (sgh->init->payload_engines == NULL) {
         sgh->init->payload_engines = e;
-    } else {
+    } else {             /* 挂接到链表 ->init->payload_engines */
         PrefilterEngineList *t = sgh->init->payload_engines;
         while (t->next != NULL) {
             t = t->next;
@@ -249,7 +249,7 @@ int PrefilterAppendPayloadEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         e->id = t->id + 1;
     }
 
-    e->name = name;      /* 缓存如hash表 */
+    e->name = name;      /* 缓存入hash表, DetectEngineCtx->prefilter_hash_table */
     e->gid = PrefilterStoreGetId(de_ctx, e->name, e->Free);
     return 0;
 }
@@ -346,12 +346,12 @@ void PrefilterCleanupRuleGroup(const DetectEngineCtx *de_ctx, SigGroupHead *sgh)
 }
 /* 构建prefilter规则组 */
 void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
-{   /* 构建 SigGroupHead 的多模引擎 */
+{   /* 构建 SigGroupHead 的多模引擎, 本规则组 + 全局关键字 */
     int r = PatternMatchPrepareGroup(de_ctx, sgh);
     if (r != 0) {
         FatalError(SC_ERR_INITIALIZATION, "failed to set up pattern matching");
     }
-    /* 按注册需求构建多模引擎 */
+    /* 按注册需求构建多模引擎: 特定关键字“prefilter” */
     /* set up engines if needed - when prefilter is set to auto we run
      * all engines, otherwise only those that have been forced by the
      * prefilter keyword. */

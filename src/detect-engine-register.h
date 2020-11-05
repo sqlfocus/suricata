@@ -31,7 +31,7 @@ enum DetectKeywordId {
     DETECT_CLASSTYPE,
 
     /* sorted by prefilter priority. Higher in this list means it will be
-     * picked over ones lower in the list */
+     * picked over ones lower in the list *//* 此区间关键字按prefilter优先级排序, 由高到低 */
     DETECT_AL_APP_LAYER_PROTOCOL,
     DETECT_ACK,
     DETECT_SEQ,

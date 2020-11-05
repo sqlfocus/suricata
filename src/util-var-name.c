@@ -60,10 +60,10 @@ static SCMutex g_varnamestore_staging_m = SCMUTEX_INITIALIZER;
 
 /** \brief Name2idx mapping structure for flowbits, flowvars and pktvars. */
 typedef struct VariableName_ {
-    char *name;
-    uint8_t type; /* flowbit, pktvar, etc */
+    char *name;       /* */
+    uint8_t type;     /* VAR_TYPE_FLOW_BIT, flowbit, pktvar, etc */
     uint32_t idx;
-} VariableName;
+} VariableName;   /* 变量 */
 
 #define VARNAME_HASHSIZE 0x1000
 #define VARID_HASHSIZE 0x1000
@@ -258,7 +258,7 @@ int VarNameStoreSetupStaging(uint32_t de_ctx_version)
         SCMutexUnlock(&g_varnamestore_staging_m);
         return 0;
     }
-
+    /* 初始化命名空间 */
     VarNameStore *nv = VarNameStoreInit();
     if (nv == NULL) {
         SCMutexUnlock(&g_varnamestore_staging_m);
@@ -266,7 +266,7 @@ int VarNameStoreSetupStaging(uint32_t de_ctx_version)
     }
     g_varnamestore_staging = nv;
     nv->de_ctx_version = de_ctx_version;
-
+    /* 将当前命名空间变量 g_varnamestore_current 拷贝到此 */
     VarNameStore *current = SC_ATOMIC_GET(g_varnamestore_current);
     if (current) {
         /* add all entries from the current hash into this new one. */
@@ -336,7 +336,7 @@ char *VarNameStoreSetupLookup(uint32_t idx, const enum VarTypes type)
     SCMutexUnlock(&g_varnamestore_staging_m);
     return name;
 }
-
+/* 设定当前变量命名空间 */
 void VarNameStoreActivateStaging(void)
 {
     SCMutexLock(&g_varnamestore_staging_m);

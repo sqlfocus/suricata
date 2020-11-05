@@ -54,7 +54,7 @@ int mpm_default_matcher;                  /* 默认多模算法 */
  * \param name A new profile to be registered to store this MpmCtx.
  *
  * \retval id Return the id created for the new MpmCtx profile.
- *//* 注册MPM工厂环境 */
+ *//* 注册共享MPM工厂环境 */
 int32_t MpmFactoryRegisterMpmCtxProfile(DetectEngineCtx *de_ctx, const char *name)
 {
     void *ptmp;

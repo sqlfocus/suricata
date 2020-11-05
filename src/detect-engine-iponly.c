@@ -1045,9 +1045,9 @@ void IPOnlyMatchPacket(ThreadVars *tv,
             /* We have a match :) Let's see from which signum's */
             uint8_t bitarray = io_tctx->sig_match_array[u];
             uint8_t i = 0;
-
+            /* 遍历匹配的规则/Signature */
             for (; i < 8; i++, bitarray = bitarray >> 1) {
-                if (bitarray & 0x01) {  /* 找到对应的规则/Signature */
+                if (bitarray & 0x01) {  
                     Signature *s = de_ctx->sig_array[u * 8 + i];
                     /* L3协议匹配 */
                     if ((s->proto.flags & DETECT_PROTO_IPV4) && !PKT_IS_IPV4(p)) {
@@ -1058,13 +1058,13 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                         SCLogDebug("ip version didn't match");
                         continue;
                     }
-
+                    /* L4协议匹配 */
                     if (DetectProtoContainsProto(&s->proto, IP_GET_IPPROTO(p)) == 0) {
                         SCLogDebug("proto didn't match");
                         continue;
                     }
 
-                    /* L4协议匹配，check the source & dst port in the sig */
+                    /* 端口匹配，check the source & dst port in the sig */
                     if (p->proto == IPPROTO_TCP || p->proto == IPPROTO_UDP || p->proto == IPPROTO_SCTP) {
                         if (!(s->flags & SIG_FLAG_DP_ANY)) {
                             if (p->flags & PKT_IS_FRAGMENT)     /* 碎片报文不匹配 */
@@ -1090,7 +1090,7 @@ void IPOnlyMatchPacket(ThreadVars *tv,
                         SCLogDebug("port-less protocol and sig needs ports");
                         continue;
                     }
-                    /* 匹配非正则式列表, Signature->sm_arrays[DETECT_SM_LIST_MATCH] */
+                    /* 匹配非正则列表, 逐个匹配, Signature->sm_arrays[DETECT_SM_LIST_MATCH] */
                     if (!IPOnlyMatchCompatSMs(tv, det_ctx, s, p)) {
                         continue;
                     }
@@ -1564,7 +1564,7 @@ void IPOnlyAddSignature(DetectEngineCtx *de_ctx, DetectEngineIPOnlyCtx *io_ctx,
     if (!(s->flags & SIG_FLAG_IPONLY))
         return;
 
-    /* 设置对应的规则ID，Set the internal signum to the list before merging */
+    /* 设置IP地址对应的规则ID，Set the internal signum to the list before merging */
     IPOnlyCIDRListSetSigNum(s->CidrSrc, s->num);
 
     IPOnlyCIDRListSetSigNum(s->CidrDst, s->num);

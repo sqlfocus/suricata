@@ -241,7 +241,7 @@ static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char
         return NULL;
     }
 
-    /* Get our flowint varname */
+    /* 获取变量名, 如 applayer.anomaly.count , Get our flowint varname */
     res = pcre_get_substring((char *) rawstr, ov, MAX_SUBSTRINGS, 1, &str_ptr);
     if (res < 0 || str_ptr == NULL) {
         SCLogError(SC_ERR_PCRE_GET_SUBSTRING, "pcre_get_substring failed");
@@ -256,7 +256,7 @@ static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char
     }
     modstr = (char *)str_ptr;
 
-    /* Get the modifier */
+    /* 获取运算符, 如 +, Get the modifier */
     if (strcmp("=", modstr) == 0)
         modifier = FLOWINT_MODIFIER_SET;
     if (strcmp("+", modstr) == 0)
@@ -290,7 +290,7 @@ static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char
     if (unlikely(sfd == NULL))
         goto error;
 
-    /* If we need another arg, check it out(isset doesn't need another arg) */
+    /* 获取运算符对应的操作值, If we need another arg, check it out(isset doesn't need another arg) */
     if (modifier != FLOWINT_MODIFIER_ISSET && modifier != FLOWINT_MODIFIER_NOTSET) {
         if (ret < 4)
             goto error;
@@ -323,12 +323,12 @@ static DetectFlowintData *DetectFlowintParse(DetectEngineCtx *de_ctx, const char
         sfd->targettype = FLOWINT_TARGET_SELF;
     }
 
-    /* Set the name of the origin var to modify/compared with the target */
+    /* 将变量名添加到变量命名空间, g_varnamestore_staging, Set the name of the origin var to modify/compared with the target */
     sfd->name = SCStrdup(varname);
     if (unlikely(sfd->name == NULL)) {
         SCLogError(SC_ERR_MEM_ALLOC, "malloc from strdup failed");
         goto error;
-    }      /* 添加到变量名空间, g_varnamestore_staging_m */
+    }
     sfd->idx = VarNameStoreSetupAdd(varname, VAR_TYPE_FLOW_INT);
     SCLogDebug("sfd->name %s id %u", sfd->name, sfd->idx);
     sfd->modifier = modifier;

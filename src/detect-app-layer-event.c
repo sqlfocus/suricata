@@ -60,7 +60,7 @@ static int DetectEngineAptEventInspect(ThreadVars *tv,
         const Signature *s, const SigMatchData *smd,
         Flow *f, uint8_t flags, void *alstate,
         void *tx, uint64_t tx_id);
-static int g_applayer_events_list_id = 0;
+static int g_applayer_events_list_id = 0; /* "app-layer-events"对应的检测类型ID */
 
 /**
  * \brief Registers the keyword handlers for the "app-layer-event" keyword.

@@ -237,7 +237,7 @@ typedef struct HtpTxUserData_ {
     uint8_t request_body_type;      /* 记录POST请求的类型, HTP_BODY_REQUEST_POST */
 
     DetectEngineState *de_state;
-    AppLayerTxData tx_data;
+    AppLayerTxData tx_data;         /* 记录事务相关标识, 定义在rust/src/applayer.rs */
 } HtpTxUserData;    /* 记录在libhtp中，此http解析的suricata私有数据 */
 
 typedef struct HtpState_ {

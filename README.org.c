@@ -132,12 +132,14 @@ SCLogConfig *sc_log_config         日志配置信息结构
 --OutputFilestoreLogger()     日志阶段, 输出缓存文件
 
 
-* 检测环境初始化
-单独摘录检测环境初始化流程，以更清晰展现
-    
+* 基于规则的安全检测
+配置文件目录: /path/to/suricata/etc/
+规则文件目录: /path/to/suricata/rules/
+日志输出控制: /path/to/suricata/threshold.config
+                                                       
 --SuricataMain()
   --PostConfLoadedSetup()
-    --SigTableSetup()              注册检测规则关键字及处理函数
+    --SigTableSetup()              注册检测规则关键字及处理函数, 如sid/rev, SigTableElmt
       --DetectSidRegister()                       sigmatch_table[DETECT_SID]
       --DetectHttpUriRegister()
         --DetectAppLayerInspectEngineRegister2()  应用检测引擎, 加入 g_app_inspect_engines
@@ -147,7 +149,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
       --DetectAppLayerEventRegister()             注册应用层检测/识别产生的事件的处理句柄
   --PostConfLoadedDetectSetup()
     --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
-      --DetectEngineCtxLoadConf()                 加载配置文件
+      --DetectEngineCtxLoadConf()                 加载配置文件, "detect:"配置
       --SRepInit()                                加载IP信誉库
         --SRepLoadCatFile()
         --SRepLoadFile()
@@ -157,7 +159,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
       --VarNameStoreSetupStaging()                初始化变量名空间, g_varnamestore_staging
     --LoadSignatures()
       --SigLoadSignatures()
-        --ProcessSigFiles()        加载检测规则文件, suricata.rules等
+        1--ProcessSigFiles()       加载检测规则文件, suricata.rules等
           --DetectLoadSigFile()
             --DetectEngineAppendSig()             解析检测规则, Signature
               --SigInit()
@@ -165,28 +167,30 @@ SCLogConfig *sc_log_config         日志配置信息结构
                   --SigParse()
                     --SigParseBasics()
                     --SigParseOptions()           调用 sigmatch_table[].Setup()
+                    --DetectIPProtoRemoveAllSMs() 去除 DETECT_IPPROTO 类型的SigMatch
                   --DetectAppLayerEventPrepare()
                     --DetectAppLayerEventSetupP2()"app-layer-events"阶段2
-                  --SigBuildAddressMatchArray()   规则五元组变更为数组，以加速匹配
+                  --SigBuildAddressMatchArray()   规则源/目的IP列表变更为数组，以加速匹配
                   --DetectBufferRunSetupCallback()进一步构建检测类型环境
                     --DetectBufferType->SetupCallback()
                   --SignatureSetType()
                   --IPOnlySigParseAddress()       构建IPonly加速查找数据结构
-        --SCSigRegisterSignatureOrderingFuncs()   注册规则优先级函数
+        1--SCSigRegisterSignatureOrderingFuncs()  注册规则优先级函数
         --SCSigOrderSignatures()                  按优先级排序规则列表
-        --SCThresholdConfInitContext()            解析threshold.config文件
+        --SCThresholdConfInitContext()            解析threshold.config文件: 限制“嘈杂”规则的日志输出速率
         --SigGroupBuild()          调整规则列表为运行时刻需要的结构
-          --DetectSetFastPatternAndItsId()
+          2--DetectSetFastPatternAndItsId()
           --SigInitStandardMpmFactoryContexts()
           --SigAddressPrepareStage1()
-            --SignatureCreateMask()               计算规则标识，如 SIG_MASK_REQUIRE_PAYLOAD 等
+            --SignatureCreateMask()               初始化规则标志位, 如 SIG_MASK_REQUIRE_PAYLOAD 等
             --RuleSetWhitelist()
             --DetectFlowbitsAnalyze()
           --SigAddressPrepareStage2()
             --RulesGroupByPorts()                 构建基于端口的规则组
+            --RulesGroupByProto()                 非TCP/UDP协议的规则组
             --IPOnlyPrepare()                     构建IPonly检测规则组
           --SigAddressPrepareStage3()
-            --DetectEngineBuildDecoderEventSgh()  构建基于事件的规则组
+            --DetectEngineBuildDecoderEventSgh()  构建基于事件的规则组/SIG_FLAG_INIT_DEONLY
           --SigAddressPrepareStage4()
             --PrefilterSetupRuleGroup()           构建规则组的prefilter多模环境
               --PatternMatchPrepareGroup()
@@ -198,11 +202,59 @@ SCLogConfig *sc_log_config         日志配置信息结构
                 --PreparePktMpms()
               --sigmatch_table[].SetupPrefilter()
             --SigGroupHeadBuildNonPrefilterArray()汇总规则组的非prefilter的规则
-          --DetectMpmPrepareBuiltinMpms()
+          2--DetectMpmPrepareBuiltinMpms()
           --DetectMpmPrepareAppMpms()             共享环境构建多模引擎
           --DetectMpmPreparePktMpms()
           --SigMatchPrepare()                     初始化单规则的检测引擎
           --VarNameStoreActivateStaging()         激活变量命名空间
+
+                                                       
+--TmThreadsSlotPktAcqLoop()
+  --TmSlot->SlotThreadInit()    初始化PIPELINE处理函数环境
+    --FlowWorkerThreadInit()    初始化 TMM_FLOWWORKER 运行环境
+      --DetectEngineThreadCtxInit()     检测环境
+        --ThreadCtxDoInit()
+          --PatternMatchThreadPrepare() 初始化多模匹配环境
+          --PmqSetup()                  prefilter引擎匹配结果存储地
+          --SpmMakeThreadCtx()          初始化单模匹配环境
+
+                                                       
+--FlowWorker()
+  --Detect()                    DetectEngineThreadCtx
+    --DetectFlow()              基于流的检测
+      --DetectRun()
+    --DetectNoFlow()            无流检测
+      --DetectRun()
+        --DetectRunInspectIPOnly()   IPonly规则引擎, DetectEngineIPOnlyCtx->tree_ipv4src
+          --IPOnlyMatchPacket()
+            --搜索DetectEngineCtx->io_ctx->tree_ipv4src/tree_ipv4dst
+            --IP/端口匹配/
+            --匹配 Signature->sm_arrays[DETECT_SM_LIST_MATCH]
+            --匹配 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
+        --DetectRunGetRuleGroup()    获取基于端口的规则组
+          --SigMatchSignaturesGetSgh()
+        --DetectRunPrefilterPkt()    运行prefilters引擎
+          --Prefilter()
+            --匹配 SigGroupHead->pkt_engines
+            --匹配 SigGroupHead->payload_engines
+          --合并匹配结果 + 非prefilter规则, 作为后续逐条匹配的规则集
+        --DetectRulePacketRules()    prefilter结果规则, 运行逐报文规则
+          --DetectEnginePktInspectionRun()
+            --匹配 Signature->pkt_engines
+            --运行 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
+        --DetectRunTx()              上一步结果, 运行事务检测
+          --DetectRunPrefilterTx()
+            --匹配 SigGroupHead->tx_engines
+          --加入前置已匹配规则 DetectEngineThreadCtx->match_array[]
+          --加入保留规则 htp_tx_t->user_data->de_state->dir_state[]->head
+          --DetectRunTxInspectRule()
+            --匹配 Signature->app_inspect
+          --匹配后 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
+        --DetectRunPostRules()       检测后处理, 匹配Threshold规则，去掉部分告警
+          --PacketAlertFinalize()
+            --PacketAlertHandle()
+            --TagHandlePacket()
+            --FlowSetHasAlertsFlag()
 
     
     
@@ -393,28 +445,6 @@ tcp协议上的应用层协议检测时，需要做数据重组
     --StreamTcpReassembleInsertSegment()
       --DoInsertSegment()
       --InsertSegmentDataCustom()
-
-
-* 基于规则的检测
---FlowWorker()
-  --Detect()                    DetectEngineThreadCtx
-    --DetectFlow()              基于流的检测
-      --DetectRun()
-    --DetectNoFlow()            无流检测
-      --DetectRun()
-        --DetectRunInspectIPOnly()   IPonly规则引擎, DetectEngineIPOnlyCtx->tree_ipv4src
-          --IPOnlyMatchPacket()
-        --DetectRunPrefilterPkt()    运行prefilters引擎
-          --Prefilter()
-        --DetectRulePacketRules()    运行逐报文规则, Signature->pkt_inspect
-          --DetectEnginePktInspectionRun()
-        --DetectRunTx()              运行事务检测
-        --DetectRunPostRules()       检测后处理, 匹配Threshold规则，去掉部分告警
-          --PacketAlertFinalize()
-            --PacketAlertHandle()
-              --PacketAlertHandle()
-              --TagHandlePacket()
-              --FlowSetHasAlertsFlag()
 
 
 * 事件日志输出模块

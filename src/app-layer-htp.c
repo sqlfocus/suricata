@@ -3024,7 +3024,7 @@ static void HTPStateTruncate(void *state, uint8_t direction)
         FileTruncateAllOpenFiles(fc);
     }
 }
-
+/* 获取http事务检测引擎状态 */
 static DetectEngineState *HTPGetTxDetectState(void *vtx)
 {
     htp_tx_t *tx = (htp_tx_t *)vtx;

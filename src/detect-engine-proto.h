@@ -34,8 +34,8 @@
 #define DETECT_PROTO_IPV6           (1 << 4) /**< IPv6 only */
 
 typedef struct DetectProto_ {
-    uint8_t proto[256/8]; /* IPPROTO_TCP */
-    uint8_t flags;        /* DETECT_PROTO_ONLY_PKT */
+    uint8_t proto[256/8]; /* 协议位掩码, IPPROTO_TCP */
+    uint8_t flags;        /* 标识, DETECT_PROTO_ONLY_PKT */
 } DetectProto;
 
 /* prototypes */

@@ -121,7 +121,7 @@ typedef struct MpmCtxFactoryItem_ {
 
 typedef struct MpmCtxFactoryContainer_ {
     MpmCtxFactoryItem *items;
-    int32_t no_of_items;
+    int32_t no_of_items; /* items[]数组大小 */
 } MpmCtxFactoryContainer;
 
 /** pattern is case insensitive */

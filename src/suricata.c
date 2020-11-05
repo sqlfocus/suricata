@@ -2322,8 +2322,8 @@ void PostConfLoadedDetectSetup(SCInstance *suri)
 {
     DetectEngineCtx *de_ctx = NULL;
     if (!suri->disabled_detect) {
-        SCClassConfInit();
-        SCReferenceConfInit();
+        SCClassConfInit();         /* 初始化classification.config的匹配引擎 */
+        SCReferenceConfInit();     /* 初始化reference.config的匹配引擎 */
         SetupDelayedDetect(suri);  /* 确认是否设置延迟检测，以减少IPS模式下机器down time时长 */
         int mt_enabled = 0;
         (void)ConfGetBool("multi-detect.enabled", &mt_enabled);

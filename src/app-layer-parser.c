@@ -641,7 +641,7 @@ void AppLayerParserDestroyProtocolParserLocalStorage(uint8_t ipproto, AppProto a
  *  keep track of where it left off.
  *
  *  \retval txptr or NULL if no more txs in list
- */
+ *//* 默认的事务遍历函数 */
 static AppLayerGetTxIterTuple AppLayerDefaultGetTxIterator(
         const uint8_t ipproto, const AppProto alproto,
         void *alstate, uint64_t min_tx_id, uint64_t max_tx_id,
@@ -672,7 +672,7 @@ static AppLayerGetTxIterTuple AppLayerDefaultGetTxIterator(
 AppLayerGetTxIteratorFunc AppLayerGetTxIterator(const uint8_t ipproto,
         const AppProto alproto)
 {
-    AppLayerGetTxIteratorFunc Func =
+    AppLayerGetTxIteratorFunc Func =    /* ALPROTO_HTTP -> NULL */
         alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].StateGetTxIterator;
     return Func ? Func : AppLayerDefaultGetTxIterator;
 }
@@ -870,7 +870,7 @@ FileContainer *AppLayerParserGetFiles(const Flow *f, const uint8_t direction)
 
     SCReturnPtr(ptr, "FileContainer *");
 }
-
+/* 已经达到检测深度，或数据存在间隙 */
 #define IS_DISRUPTED(flags) ((flags) & (STREAM_DEPTH | STREAM_GAP))
 
 extern int g_detect_disabled;
@@ -1036,10 +1036,10 @@ int AppLayerParserGetStateProgress(uint8_t ipproto, AppProto alproto,
 {
     SCEnter();
     int r = 0;
-    if (unlikely(IS_DISRUPTED(flags))) {
+    if (unlikely(IS_DISRUPTED(flags))) { /* 解析已完成, 或存在数据间隙 */
         r = alp_ctx.ctxs[FLOW_PROTO_DEFAULT][alproto].
             StateGetProgressCompletionStatus(flags);
-    } else {
+    } else {                             /* 获取解析状态: HTTP -> HTPStateGetAlstateProgress() */
         r = alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].
             StateGetProgress(alstate, flags);
     }
@@ -1058,7 +1058,7 @@ uint64_t AppLayerParserGetTxCnt(const Flow *f, void *alstate)
 void *AppLayerParserGetTx(uint8_t ipproto, AppProto alproto, void *alstate, uint64_t tx_id)
 {
     SCEnter();
-    void * r = NULL;
+    void * r = NULL;                            /* HTTP -> HTPStateGetTx() */
     r = alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].
                 StateGetTx(alstate, tx_id);
     SCReturnPtr(r, "void *");
@@ -1070,7 +1070,7 @@ int AppLayerParserGetStateProgressCompletionStatus(AppProto alproto,
     SCEnter();
     int r = alp_ctx.ctxs[FLOW_PROTO_DEFAULT][alproto].
                 StateGetProgressCompletionStatus(direction);
-    SCReturnInt(r);
+    SCReturnInt(r);   /* ALPROTO_HTTP -> HTPStateGetAlstateProgressCompletionStatus() */
 }
 
 int AppLayerParserGetEventInfo(uint8_t ipproto, AppProto alproto, const char *event_name,
@@ -1134,11 +1134,11 @@ int AppLayerParserSupportsTxDetectState(uint8_t ipproto, AppProto alproto)
         return TRUE;
     return FALSE;
 }
-
+/* 获取事务检测引擎状态 */
 DetectEngineState *AppLayerParserGetTxDetectState(uint8_t ipproto, AppProto alproto, void *tx)
 {
     SCEnter();
-    DetectEngineState *s;
+    DetectEngineState *s;          /* HTTP -> HTPGetTxDetectState() */
     s = alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].GetTxDetectState(tx);
     SCReturnPtr(s, "DetectEngineState");
 }
@@ -1164,10 +1164,10 @@ bool AppLayerParserSupportsTxDetectFlags(AppProto alproto)
     }
     SCReturnBool(false);
 }
-
+/* 获取事务对应的配置信息 */
 AppLayerTxData *AppLayerParserGetTxData(uint8_t ipproto, AppProto alproto, void *tx)
 {
-    SCEnter();
+    SCEnter();      /* HTTP -> HTPGetTxData() */
     if (alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].GetTxData) {
         AppLayerTxData *d = alp_ctx.ctxs[FlowGetProtoMapping(ipproto)][alproto].GetTxData(tx);
         SCReturnPtr(d, "AppLayerTxData");

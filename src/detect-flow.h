@@ -35,8 +35,8 @@
 #define DETECT_FLOW_FLAG_ONLY_FRAG       BIT_U16(8)
 
 typedef struct DetectFlowData_ {
-    uint16_t flags;     /* flags to match */
-    uint8_t match_cnt;  /* number of matches we need */
+    uint16_t flags;     /* DETECT_FLOW_FLAG_ONLY_FRAG, flags to match */
+    uint8_t match_cnt;  /* 匹配项数目, "flow:established,to_server"对应数目为2, number of matches we need */
 } DetectFlowData;
 
 int DetectFlowSetupImplicit(Signature *s, uint32_t flags);

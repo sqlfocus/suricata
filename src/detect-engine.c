@@ -88,7 +88,7 @@ static DetectEngineThreadCtx *DetectEngineThreadCtxInitForReload(
         ThreadVars *tv, DetectEngineCtx *new_de_ctx, int mt);
 
 static int DetectEngineCtxLoadConf(DetectEngineCtx *);
-
+/* 当前运行的检测引擎链表 */
 static DetectEngineMasterCtx g_master_de_ctx = { SCMUTEX_INITIALIZER,
     0, 99, NULL, NULL, TENANT_SELECTOR_UNKNOWN, NULL, NULL, 0};
 
@@ -234,9 +234,9 @@ void DetectAppLayerInspectEngineRegister2(const char *name,
         InspectEngineFuncPtr2 Callback2,
         InspectionBufferGetDataPtr GetData)
 {
-    DetectBufferTypeRegister(name);
+    DetectBufferTypeRegister(name); /* 注册关键字为检测类型, g_buffer_type_hash/DETECT_SM_LIST_DYNAMIC_START */
     const int sm_list = DetectBufferTypeGetByName(name);
-    if (sm_list == -1) {    /* 注册+获取检测类型ID */
+    if (sm_list == -1) {            /* 获取检测类型ID */
         FatalError(SC_ERR_INITIALIZATION,
             "failed to register inspect engine %s", name);
     }
@@ -727,9 +727,9 @@ void DetectEngineAppInspectionEngineSignatureFree(DetectEngineCtx *de_ctx, Signa
 
 #include "util-hash-lookup3.h"
 
-static HashListTable *g_buffer_type_hash = NULL;   /* 保存动态注册的buffer检测类型，如"http_uri"等 */
+static HashListTable *g_buffer_type_hash = NULL;   /* 保存动态注册的buffer检测关键字，如"http_uri"等 */
 static int g_buffer_type_id = DETECT_SM_LIST_DYNAMIC_START;
-static int g_buffer_type_reg_closed = 0;
+static int g_buffer_type_reg_closed = 0;           /* 检测关键字是否注册完毕 */
 
 static DetectEngineTransforms no_transforms = {
     .transforms[0] = {0, NULL},
@@ -873,7 +873,7 @@ void DetectBufferTypeSupportsTransformations(const char *name)
     DetectBufferTypeRegister(name);
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
     BUG_ON(!exists);
-    exists->supports_transforms = true;  /* 此buffer检测类型支持转换 */
+    exists->supports_transforms = true;  /* 此buffer检测类型支持事务 */
     SCLogDebug("%p %s -- %d supports transformations", exists, name, exists->id);
 }
 
@@ -2000,7 +2000,7 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
         SCLogDebug("Unable to alloc SpmGlobalThreadCtx.");
         goto error;
     }
-                                    /* 加载配置文件相关配置 */
+                                    /* 加载配置文件相关配置, "detect:"节点 */
     if (DetectEngineCtxLoadConf(de_ctx) == -1) {
         goto error;
     }
@@ -2010,8 +2010,8 @@ static DetectEngineCtx *DetectEngineCtxInitReal(enum DetectEngineType type, cons
     ThresholdHashInit(de_ctx);
     DetectParseDupSigHashInit(de_ctx);
     DetectAddressMapInit(de_ctx);
-    DetectMetadataHashInit(de_ctx); /* 构建检测类型哈希表 */
-    DetectBufferTypeSetupDetectEngine(de_ctx);
+    DetectMetadataHashInit(de_ctx);
+    DetectBufferTypeSetupDetectEngine(de_ctx);   /* 将注册的检测类型, 全部copy到此 */
 
     /* init iprep... ignore errors for now */
     (void)SRepInit(de_ctx);         /* 加载IP信誉库 */
@@ -2049,7 +2049,8 @@ DetectEngineCtx *DetectEngineCtxInit(void)
 {
     return DetectEngineCtxInitReal(DETECT_ENGINE_TYPE_NORMAL, NULL);
 }
-
+/* 前缀的命名规则: "detect-engine-reloads.%d", %d为重新加载的计数 */
+/*                 "multi-detect.%d", %d为租户ID */
 DetectEngineCtx *DetectEngineCtxInitWithPrefix(const char *prefix)
 {
     if (prefix == NULL || strlen(prefix) == 0)
@@ -2168,7 +2169,7 @@ void DetectEngineCtxFree(DetectEngineCtx *de_ctx)
  *          used by the engine
  *  \retval 0 if no config provided, 1 if config was provided
  *          and loaded successfully
- */
+ *//* 解析配置文件, 检测相关 */
 static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
 {
     uint8_t profile = ENGINE_PROFILE_MEDIUM;
@@ -2183,7 +2184,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
     ConfNode *de_ctx_custom = ConfGetNode("detect-engine");
     ConfNode *opt = NULL;
 
-    if (de_ctx_custom != NULL) {   /* 读取自定义引擎配置 */
+    if (de_ctx_custom != NULL) {   /* 读取自定义引擎配置, "detect-engine" */
         TAILQ_FOREACH(opt, &de_ctx_custom->head, next) {
             if (de_ctx_profile == NULL) {
                 if (opt->val && strcmp(opt->val, "profile") == 0) {
@@ -2199,7 +2200,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         }
     }
 
-    if (de_ctx_profile != NULL) {  /* 设置profile/性能级别 */
+    if (de_ctx_profile != NULL) {  /* 设置profile/性能级别: 越高越消耗内存 */
         if (strcmp(de_ctx_profile, "low") == 0 ||
             strcmp(de_ctx_profile, "lowest") == 0) {        // legacy
             profile = ENGINE_PROFILE_LOW;
@@ -2708,7 +2709,7 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
         BUG_ON(det_ctx->non_pf_id_array == NULL);
     }
 
-    /* 初始化IP-ONLY */
+    /* 初始化IP-ONLY结果存放 */
     DetectEngineIPOnlyThreadInit(de_ctx,&det_ctx->io_ctx);
 
     /* 分配匹配规则、事务信息内存，DeState */

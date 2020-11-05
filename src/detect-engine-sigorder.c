@@ -708,7 +708,7 @@ static inline SCSigSignatureWrapper *SCSigAllocSignatureWrapper(Signature *sig)
     sw->sig = sig;
 
     /* Process data from the signature into a cache for further use by the
-     * sig_ordering module */  /* 计算辅助值，用于排序 */
+     * sig_ordering module */
     SCSigProcessUserDataForFlowbits(sw);
     SCSigProcessUserDataForFlowvar(sw);
     SCSigProcessUserDataForFlowint(sw);
@@ -735,7 +735,7 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
     SCLogDebug("ordering signatures in memory");
 
     sig = de_ctx->sig_list;
-    while (sig != NULL) {   /* 预处理规则 */
+    while (sig != NULL) {   /* 预处理规则, 计算排序所需的“材料” */
         sigw = SCSigAllocSignatureWrapper(sig);
         /* Push signature wrapper onto a list, order doesn't matter here. */
         sigw->next = sigw_list;
@@ -784,19 +784,19 @@ void SCSigOrderSignatures(DetectEngineCtx *de_ctx)
  *
  * \param de_ctx Pointer to the detection engine context from which the
  *               signatures have to be ordered.
- *//* 注册信号优先级函数 */
-void SCSigRegisterSignatureOrderingFuncs(DetectEngineCtx *de_ctx)
-{
+ *//* 注册信号优先级函数, 排序原理: 除开最高优先级的执行动作, 最低优先级的"规则优先级", 及没有注册的最最低优先级"规则序号"/规则文件的排序; */
+void SCSigRegisterSignatureOrderingFuncs(DetectEngineCtx *de_ctx) /* 其余几个关注范围逐渐变宽, 由 流 -> 报文 -> 主机 -> IP范围 */
+{                                                                 /* 每个独立的关注范围, 如流, 其优先级 "变量赋值 > 变量赋值+读取 > 变量读取" */
     SCLogDebug("registering signature ordering functions");
-    /* 初始化 DetectEngineCtx->sc_sig_order_funcs 列表 */
+    /* 初始化 DetectEngineCtx->sc_sig_order_funcs 列表; 注册函数的顺序代表了比较顺序, 优先级由高到低 */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByActionCompare);     /* 按照执行动作 */
-    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowbitsCompare);   /* */
+    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowbitsCompare);   /* 按照 DETECT_FLOWBITS 的计算结果, SC_RADIX_USER_DATA_FLOWBITS */
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowintCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByFlowvarCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByPktvarCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByHostbitsCompare);
     SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByIPPairbitsCompare);
-    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByPriorityCompare);
+    SCSigRegisterSignatureOrderingFunc(de_ctx, SCSigOrderByPriorityCompare);   /* 优先级 */
 }
 
 /**

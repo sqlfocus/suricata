@@ -298,7 +298,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
 
     /* ok, let's load signature files from the general config */
     if (!(sig_file != NULL && sig_file_exclusive == TRUE)) {
-        rule_files = ConfGetNode(varname);  /* CASE: 命令行未指定规则文件，搜索默认路径 */
+        rule_files = ConfGetNode(varname);  /* CASE: 如有必要, 加载配置文件指定的规则文件: “rule-files:”列表 */
         if (rule_files != NULL) {
             if (!ConfNodeIsSequence(rule_files)) {
                 SCLogWarning(SC_ERR_INVALID_ARGUMENT,
@@ -367,7 +367,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
     SCThresholdConfInitContext(de_ctx);           /* 解析 /etc/suricata/threshold.config */
 
     /* Setup the signature group lookup structure and pattern matchers */
-    if (SigGroupBuild(de_ctx) < 0)      /* 调整规则链表，变更为运行时所需结构 */
+    if (SigGroupBuild(de_ctx) < 0)                /* 调整规则链表，变更为运行时所需结构 */
         goto end;
 
     ret = 0;
@@ -383,7 +383,7 @@ int SigLoadSignatures(DetectEngineCtx *de_ctx, char *sig_file, int sig_file_excl
         }
     }
 
-    DetectParseDupSigHashFree(de_ctx);  /* 抛弃去重检测hash表 */
+    DetectParseDupSigHashFree(de_ctx);            /* 抛弃去重检测hash表 */
     SCReturnInt(ret);
 }
 

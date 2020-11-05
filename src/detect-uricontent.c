@@ -62,7 +62,7 @@ static void DetectUricontentRegisterTests(void);
 #endif
 static void DetectUricontentFree(DetectEngineCtx *de_ctx, void *);
 
-static int g_http_uri_buffer_id = 0;
+static int g_http_uri_buffer_id = 0;   /* 对应"http_uri"的检测类型索引 */
 
 /**
  * \brief Registration function for uricontent: keyword

@@ -102,8 +102,8 @@ void DetectAppLayerMpmRegister2(const char *name,
         abort();
     }
 
-    DetectBufferTypeSupportsMpm(name);             /* 设置支持多模引擎 */
-    DetectBufferTypeSupportsTransformations(name); /* 支持转换 */
+    DetectBufferTypeSupportsMpm(name);             /* 支持多模引擎, 注册到 g_app_inspect_engines */
+    DetectBufferTypeSupportsTransformations(name); /* 支持事务 */
     int sm_list = DetectBufferTypeGetByName(name);
     if (sm_list == -1) {
         FatalError(SC_ERR_INITIALIZATION,
@@ -840,7 +840,7 @@ static SigMatch *GetMpmForList(const Signature *s, const int list, SigMatch *mpm
     }
     return mpm_sm;
 }
-/* 选择支持fast pattern的规则匹配 */
+/* 选择支持fast pattern的规则匹配, 赋值到 Signature->init->mpm_sm */
 void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 {
     if (s->init_data->mpm_sm != NULL)  /* 已提取了fast pattern，返回 */
@@ -904,9 +904,9 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
     int priority;
 
     const SCFPSupportSMList *tmp = sm_fp_support_smlist_list;
-    while (tmp != NULL) {            /* 从全局快速匹配链表中，按优先级查找 */
-        for (priority = tmp->priority;  /* 如果和上述记录结果一致，则找到 */
-             tmp != NULL && priority == tmp->priority; /* 支持快速匹配列表 */
+    while (tmp != NULL) {            /* 从已注册的全局快速匹配链表中，按优先级查找 */
+        for (priority = tmp->priority;  /* 如果存在上述普通匹配，则找到 */
+             tmp != NULL && priority == tmp->priority;
              tmp = tmp->next)
         {
             if (tmp->list_id >= nlists)
@@ -1199,7 +1199,7 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
     const Signature *s = NULL;
     uint32_t sig;
     int dir = 0;
-                              /* 获取数据方向 */
+    /* 获取数据方向 */
     if (ms->buffer != MPMB_MAX) {
         BUG_ON(ms->sm_list != DETECT_SM_LIST_PMATCH);
 
@@ -1228,14 +1228,14 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
         else
             dir = 0;
     }
-
+    /* 分配上下文内存 */
     ms->mpm_ctx = MpmFactoryGetMpmCtxForProfile(de_ctx, ms->sgh_mpm_context, dir);
-    if (ms->mpm_ctx == NULL)  /* 构建上下文 */
+    if (ms->mpm_ctx == NULL)
         return;
-                              /* 初始化上下文 */
+    /* 初始化上下文 */
     MpmInitCtx(ms->mpm_ctx, de_ctx->mpm_matcher);
 
-    /* add the patterns */    /* 添加pattern */
+    /* 添加匹配pattern, add the patterns */
     for (sig = 0; sig < (ms->sid_array_size * 8); sig++) {
         if (ms->sid_array[sig / 8] & (1 << (sig % 8))) {
             s = de_ctx->sig_array[sig];
@@ -1274,7 +1274,7 @@ static void MpmStoreSetup(const DetectEngineCtx *de_ctx, MpmStore *ms)
             }
         }
     }
-
+    /* 构建多模环境 */
     if (ms->mpm_ctx->pattern_cnt == 0) {
         MpmFactoryReClaimMpmCtx(de_ctx, ms->mpm_ctx);
         ms->mpm_ctx = NULL;
@@ -1303,8 +1303,8 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
     memset(sids_array, 0x00, max_sid);
     int sgh_mpm_context = 0;
     int sm_list = DETECT_SM_LIST_PMATCH;
-
-    switch (buf) {        /* 获取对应的工厂ID、方向等 */
+    /* 获取对协议应的引擎工厂ID */
+    switch (buf) {
         case MPMB_TCP_PKT_TS:
         case MPMB_TCP_PKT_TC:
             sgh_mpm_context = de_ctx->sgh_mpm_context_proto_tcp_packet;
@@ -1323,7 +1323,7 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         default:
             break;
     }
-
+    /* 获取规则方向 */
     switch(buf) {
         case MPMB_TCP_PKT_TS:
         case MPMB_TCP_STREAM_TS:
@@ -1345,9 +1345,9 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
             BUG_ON(1);
             break;
     }
-
+    /* 遍历规则组, 收集符合要求的规则 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
-        s = sgh->match_array[sig];    /* 收集对应的 Signature */
+        s = sgh->match_array[sig];
         if (s == NULL)
             continue;
 
@@ -1355,17 +1355,17 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
             continue;      /* 必须支持fast pattern */
 
         int list = SigMatchListSMBelongsTo(s, s->init_data->mpm_sm);
-        if (list < 0)      /* 并且来自 DETECT_SM_LIST_PMATCH */
+        if (list < 0)      
             continue;
 
         if (list != DETECT_SM_LIST_PMATCH)
-            continue;
+            continue;      /* 并且来自 DETECT_SM_LIST_PMATCH */
 
         switch (buf) {
             case MPMB_TCP_PKT_TS:
             case MPMB_TCP_PKT_TC:
                 if (SignatureHasPacketContent(s) == 1)
-                {          /* 类型正确 */
+                {          /* 检测报文内容 */
                     sids_array[s->num / 8] |= 1 << (s->num % 8);
                     cnt++;
                 }
@@ -1373,7 +1373,7 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
             case MPMB_TCP_STREAM_TS:
             case MPMB_TCP_STREAM_TC:
                 if (SignatureHasStreamContent(s) == 1)
-                {
+                {          /* 检测流内容 */
                     sids_array[s->num / 8] |= 1 << (s->num % 8);
                     cnt++;
                 }
@@ -1396,7 +1396,7 @@ MpmStore *MpmStorePrepareBuffer(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         return NULL;
 
     MpmStore lookup = { sids_array, max_sid, direction, buf, sm_list, 0, NULL};
-
+    /* 构建多模环境 */
     MpmStore *result = MpmStoreLookup(de_ctx, &lookup);
     if (result == NULL) {              /* 查找hash表 */
         MpmStore *copy = SCCalloc(1, sizeof(MpmStore));
@@ -1662,20 +1662,20 @@ static void PreparePktMpms(DetectEngineCtx *de_ctx, SigGroupHead *sh)
  *
  */
 int PatternMatchPrepareGroup(DetectEngineCtx *de_ctx, SigGroupHead *sh)
-{
+{   /* 构建本规则组的多模匹配环境: 基于报文负载, 流负载 */
     MpmStore *mpm_store = NULL;
     if (SGH_PROTO(sh, IPPROTO_TCP)) {
-        if (SGH_DIRECTION_TS(sh)) {    /* 构建多模匹配环境 */
+        if (SGH_DIRECTION_TS(sh)) {
             mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_PKT_TS);
-            if (mpm_store != NULL) {   /* 加入 SigGroupHead->init->payload_engines */
+            if (mpm_store != NULL) {       /* 加入 SigGroupHead->init->payload_engines */
                 PrefilterPktPayloadRegister(de_ctx, sh, mpm_store->mpm_ctx);
             }
 
             mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_STREAM_TS);
-            if (mpm_store != NULL) {   /* 加入 SigGroupHead->init->payload_engines */
+            if (mpm_store != NULL) {       /* 加入 SigGroupHead->init->payload_engines */
                 PrefilterPktStreamRegister(de_ctx, sh, mpm_store->mpm_ctx);
             }
-                                       /* 打流缓存标识 */
+                                           /* 打流缓存标识 */
             SetRawReassemblyFlag(de_ctx, sh);
         }
         if (SGH_DIRECTION_TC(sh)) {
@@ -1710,7 +1710,7 @@ int PatternMatchPrepareGroup(DetectEngineCtx *de_ctx, SigGroupHead *sh)
             PrefilterPktPayloadRegister(de_ctx, sh, mpm_store->mpm_ctx);
         }
     }
-
+    /* 构建全局注册的关键字多模引擎(DetectEngineCtx->app_mpms_list/pkt_mpms_list), 并加入此规则组 */
     PrepareAppMpms(de_ctx, sh);    /* 构建 SigGroupHead->init->app_mpms[] */
     PreparePktMpms(de_ctx, sh);    /* 构建 SigGroupHead->init->pkt_mpms[] */
     return 0;
@@ -1733,7 +1733,7 @@ typedef struct DetectFPAndItsId_ {
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- *//* 找出快速匹配的个数，并记录下来 */
+ *//* 找出每个 Signature 支持快速匹配的 SigMatch; 最后去重计数此类 SigMatch  */
 int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
 {
     uint32_t struct_total_size = 0;
@@ -1773,7 +1773,7 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
     uint8_t *content_offset = ahb + struct_total_size;
 
     for (s = de_ctx->sig_list; s != NULL; s = s->next) {
-        if (s->init_data->mpm_sm != NULL) {
+        if (s->init_data->mpm_sm != NULL) {   /* 去重, 计数支持fast pattern的 SigMatch 数 */
             int sm_list = SigMatchListSMBelongsTo(s, s->init_data->mpm_sm);
             BUG_ON(sm_list == -1);
 
@@ -1843,7 +1843,7 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
         } /* if (s->mpm_sm != NULL) */
     } /* for */
 
-    de_ctx->max_fp_id = max_id;   /* 记录fast pattern的个数 */
+    de_ctx->max_fp_id = max_id;   /* 记录fast pattern且去重后的 SigMatch 个数 */
 
     SCFree(ahb);
 

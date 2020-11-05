@@ -712,7 +712,7 @@ int SigGroupHeadBuildNonPrefilterArray(DetectEngineCtx *de_ctx, SigGroupHead *sg
         }
     }
 
-    /* 跟踪规则组非prefilter的最大数量，track highest cnt for any sgh in our de_ctx */
+    /* 跟踪规则组非prefilter的多摸引擎的Signature最大数量，track highest cnt for any sgh in our de_ctx */
     uint32_t max = MAX(sgh->non_pf_other_store_cnt, sgh->non_pf_syn_store_cnt);
     if (max > de_ctx->non_pf_store_cnt_max)
         de_ctx->non_pf_store_cnt_max = max;

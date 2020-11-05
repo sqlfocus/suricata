@@ -72,7 +72,7 @@
 
 typedef struct DeStateStoreItem_ {
     uint32_t flags;
-    SigIntId sid;
+    SigIntId sid;    /* 命中的 Signature 索引 */
 } DeStateStoreItem;
 
 typedef struct DeStateStore_ {
@@ -83,28 +83,28 @@ typedef struct DeStateStore_ {
 typedef struct DetectEngineStateDirection_ {
     DeStateStore *head;
     DeStateStore *tail;
-    SigIntId cnt;
-    uint16_t filestore_cnt;
+    SigIntId cnt;           /* 已匹配规则计数, head/tail链表长度 */
+    uint16_t filestore_cnt; /* */
     uint8_t flags;
     /* coccinelle: DetectEngineStateDirection:flags:DETECT_ENGINE_STATE_FLAG_ */
-} DetectEngineStateDirection;
+} DetectEngineStateDirection;  /* 某方向上, 事务检测引擎状态 */
 
 typedef struct DetectEngineState_ {
     DetectEngineStateDirection dir_state[2];
-} DetectEngineState;
+} DetectEngineState;           /* 事务检测引擎状态 */
 
 // TODO
 typedef struct DetectTransaction_ {
-    void *tx_ptr;
-    const uint64_t tx_id;
-    struct AppLayerTxData *tx_data_ptr;
-    DetectEngineStateDirection *de_state;
-    const uint64_t detect_flags;            /* detect flags get/set from/to applayer */
-    uint64_t prefilter_flags;               /* prefilter flags for direction, to be updated by prefilter code */
-    const uint64_t prefilter_flags_orig;    /* prefilter flags for direction, before prefilter has run */
-    const int tx_progress;
-    const int tx_end_state;
-} DetectTransaction;
+    void *tx_ptr;          /* 事务数据结构, htp_tx_t */
+    const uint64_t tx_id;  /* 事务索引 */
+    struct AppLayerTxData *tx_data_ptr;   /* 事务标识, 定义在 rust/src/applayer.rs */
+    DetectEngineStateDirection *de_state; /* 事务检测引擎状态 */
+    const uint64_t detect_flags;          /* detect flags get/set from/to applayer */
+    uint64_t prefilter_flags;             /* prefilter flags for direction, to be updated by prefilter code */
+    const uint64_t prefilter_flags_orig;  /* prefilter flags for direction, before prefilter has run */
+    const int tx_progress; /* 当前状态 */
+    const int tx_end_state;/* 事务结束状态码 */
+} DetectTransaction; /* 事务检测时的状态信息 */
 
 /**
  * \brief Alloc a DetectEngineState object.

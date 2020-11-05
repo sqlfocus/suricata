@@ -79,8 +79,8 @@ static InspectionBuffer *GetRawData(DetectEngineThreadCtx *det_ctx,
         void *txv, const int list_id);
 static int DetectHttpRawUriSetupSticky(DetectEngineCtx *de_ctx, Signature *s, const char *str);
 
-static int g_http_raw_uri_buffer_id = 0;
-static int g_http_uri_buffer_id = 0;
+static int g_http_raw_uri_buffer_id = 0; /* "http_raw_uri"对应的检测类型ID */
+static int g_http_uri_buffer_id = 0;     /* "http_uri"对应的检测类型ID/DetectBufferType->id */
 
 /**
  * \brief Registration function for keywords: http_uri and http.uri
@@ -114,15 +114,15 @@ void DetectHttpUriRegister (void)
             PrefilterGenericMpmRegister, GetData, ALPROTO_HTTP,
             HTP_REQUEST_LINE);
 
-    DetectBufferTypeSetDescriptionByName("http_uri",      /* 注册描述性语句 */
+    DetectBufferTypeSetDescriptionByName("http_uri",      /* 添加描述性语句 */
             "http request uri");
 
-    DetectBufferTypeRegisterSetupCallback("http_uri",     /* 注册初始化函数 */
+    DetectBufferTypeRegisterSetupCallback("http_uri",     /* 添加构建回调函数 */
             DetectHttpUriSetupCallback);
 
-    DetectBufferTypeRegisterValidateCallback("http_uri",  /* 注册验证函数 */
+    DetectBufferTypeRegisterValidateCallback("http_uri",  /* 添加验证回调函数 */
             DetectHttpUriValidateCallback);
-                                                          /* 注册检测缓存类型 */
+                                                          /* 存储检测类型 */
     g_http_uri_buffer_id = DetectBufferTypeGetByName("http_uri");
 
     /* http_raw_uri content modifier */

@@ -234,7 +234,7 @@ static const char *SCThresholdConfGetConfFilename(const DetectEngineCtx *de_ctx)
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- */
+ *//* threshold.config配置规则, 以限制日志输出速率, 以降低“嘈杂”规则的狂轰乱炸 */
 int SCThresholdConfInitContext(DetectEngineCtx *de_ctx)
 {
     const char *filename = NULL;
@@ -251,7 +251,7 @@ int SCThresholdConfInitContext(DetectEngineCtx *de_ctx)
         }
 #ifdef UNITTESTS
     }                                     /* 获取配置文件名, /etc/suricata/threshold.config */
-#endif
+#endif                                    /* 可参考/path/to/suricata/threshold.config */
 
     SCThresholdConfParseFile(de_ctx, fd); /* 解析配置文件 */
     SCThresholdConfDeInitContext(de_ctx, fd);
@@ -460,7 +460,7 @@ static int SetupThresholdRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid
     /* Install it */
     if (id == 0 && gid == 0) {
         for (s = de_ctx->sig_list; s != NULL; s = s->next) {
-            sm = DetectGetLastSMByListId(s,
+            sm = DetectGetLastSMByListId(s,    /* DETECT_SM_LIST_THRESHOLD 列表不能存在多个 DETECT_THRESHOLD 规则 */
                     DETECT_SM_LIST_THRESHOLD, DETECT_THRESHOLD, -1);
             if (sm != NULL) {
                 SCLogWarning(SC_ERR_EVENT_ENGINE, "signature sid:%"PRIu32 " has "
@@ -470,7 +470,7 @@ static int SetupThresholdRule(DetectEngineCtx *de_ctx, uint32_t id, uint32_t gid
                 continue;
             }
 
-            sm = DetectGetLastSMByListId(s,
+            sm = DetectGetLastSMByListId(s,    /* 不能存在多个 DETECT_THRESHOLD_FILTER 规则 */
                     DETECT_SM_LIST_THRESHOLD, DETECT_DETECTION_FILTER, -1);
             if (sm != NULL) {
                 SCLogWarning(SC_ERR_EVENT_ENGINE, "signature sid:%"PRIu32 " has "

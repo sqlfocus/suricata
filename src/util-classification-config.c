@@ -60,7 +60,7 @@ static const char *SCClassConfGetConfFilename(const DetectEngineCtx *de_ctx);
 static SCClassConfClasstype *SCClassConfAllocClasstype(uint16_t classtype_id,
         const char *classtype, const char *classtype_desc, int priority);
 static void SCClassConfDeAllocClasstype(SCClassConfClasstype *ct);
-
+/* 初始化classification.config的匹配引擎 */
 void SCClassConfInit(void)
 {
     const char *eb = NULL;
