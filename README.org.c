@@ -358,12 +358,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
                               
 --FlowWorker()
   --FlowHandlePacket()             查找流表
-    --FlowGetFlowFromHash()
-      --FlowGetNew()                 桶空/未找到则新建流
-      --FlowCompare()                n元组匹配查找
-      --TcpReuseReplace()            流重用
   --FlowUpdate()
-    --FlowHandlePacketUpdate()     更新流表项
   --------TCP处理-------
   --StreamTcp()                    流汇聚
   --Detect()                       流检测
@@ -380,24 +375,59 @@ SCLogConfig *sc_log_config         日志配置信息结构
   --AppLayerParserTransactionsCleanup()   释放检测环境
 
     
-* 流管理线程
+* 流
 线程主函数"management" <==> ThreadVars->tm_func = TmThreadsManagement()
 处理链"FlowManager" <==> tmm_modules[TMM_FLOWMANAGER]->Management = FlowManager()
-    
---FlowManagerThreadSpawn()
-  --TmThreadCreateMgmtThreadByName()
-    --TmThreadCreate()             确定入口函数, TmThreadsManagement()
-    --TmSlotSetFuncAppend()        确定槽函数, FlowManager()
+FlowConfig flow_config;            流全局配置信息
 
+--SuricataMain()
+  --PostConfLoadedSetup()
+    --PreRunInit()
+      --FlowInitConfig()           初始化流资源, 配置流超时等参数
+  --RunModeDispatch()
+    --FlowManagerThreadSpawn()
+      --TmThreadCreateMgmtThreadByName()
+        --TmThreadCreate()         确定入口函数, TmThreadsManagement()
+        --TmSlotSetFuncAppend()    确定槽函数, FlowManager()
+    --FlowRecyclerThreadSpawn()    执行函数 TmThreadsManagement()/FlowRecycler()
+
+                                       
+--DecodePcap()
+  --DecodeLinkLayer()
+    --DecodeEthernet()
+      --DecodeNetworkLayer()
+        --DecodeIPV4()
+          --DecodeTCP()
+            --FlowSetupPacket()    打标 PKT_WANTS_FLOW
+              --FlowGetHash()      计算hash值, 为建流/查询流准备
     
+--FlowWorker()                     线程中流全程加锁??? 不加锁的表, 流程中可能被强制征用
+  --FlowHandlePacket()
+    --FlowGetFlowFromHash()        新建/查找流, 设置 PKT_HAS_FLOW
+  --FlowUpdate()
+    --FlowHandlePacketUpdate()
+  --FlowWorkerProcessInjectedFlows() 处理本线程注入的超时的流
+  --FlowWorkerProcessLocalFlows()    处理本线程的移除的超时的流
+
+                                       
 --TmThreadsManagement()
   --FlowManagerThreadInit()
   --FlowManager()                  管理流/老化流入口
-    --FlowUpdateSpareFlows()         0号线程，平衡空闲流表量
-    --FlowTimeoutHash()              流老化
+    --FlowUpdateSpareFlows()         0号线程，平衡全局池流表量, 维持在预分配的90%~110%
+    --FlowTimeoutHash()
+      --ProcessAsideQueue()          流老化, 回收到 flow_recycle_q 队列
     --DefragTimeoutHash()            0号线程，老化其他hash表
     --HostTimeoutHash()
     --IPPairTimeoutHash()
+                                       
+  --FlowRecyclerThreadInit()
+  --FlowRecycler()                 调用注册的流日志输出模块, OutputFlowLogger
+    --Recycler()
+      --OutputFlowLog()              日志
+      --FlowClearMemory()            清理内存
+        --FLOW_RECYCLE()
+          --FlowCleanupAppLayer()    清理应用解析
+      --FlowSparePoolReturnFlow()    回收流对象
 
 
 * TCP流重组/应用协议识别

@@ -54,7 +54,7 @@ enum PktSrcEnum {   /* 报文来源 */
     PKT_SRC_DECODER_IPV6,
     PKT_SRC_DECODER_TEREDO,
     PKT_SRC_DEFRAG,         /* 报文重组 */
-    PKT_SRC_FFR,
+    PKT_SRC_FFR,            /* to客户端 检测 */
     PKT_SRC_STREAM_TCP_DETECTLOG_FLUSH,
     PKT_SRC_DECODER_VXLAN,
     PKT_SRC_DETECT_RELOAD_FLUSH,
@@ -680,20 +680,20 @@ typedef struct DecodeThreadVars_
 
     uint16_t counter_flow_memcap;
 
-    uint16_t counter_flow_tcp;
+    uint16_t counter_flow_tcp;                    /* tcp新建流 */
     uint16_t counter_flow_udp;
     uint16_t counter_flow_icmp4;
     uint16_t counter_flow_icmp6;
     uint16_t counter_flow_tcp_reuse;
-    uint16_t counter_flow_get_used;
+    uint16_t counter_flow_get_used;               /* 强制替换复用计数 */
     uint16_t counter_flow_get_used_eval;
     uint16_t counter_flow_get_used_eval_reject;
     uint16_t counter_flow_get_used_eval_busy;
     uint16_t counter_flow_get_used_failed;
 
-    uint16_t counter_flow_spare_sync;
-    uint16_t counter_flow_spare_sync_empty;
-    uint16_t counter_flow_spare_sync_incomplete;
+    uint16_t counter_flow_spare_sync;             /* 同步次数 */
+    uint16_t counter_flow_spare_sync_empty;       /* 全局池空, 线程未获得流表对象 */
+    uint16_t counter_flow_spare_sync_incomplete;  /* 线程获得的流表对象队列不满, 少于预分配时候的数量(100) */
     uint16_t counter_flow_spare_sync_avg;
 
     uint16_t counter_engine_events[DECODE_EVENT_MAX];
@@ -1106,7 +1106,7 @@ void DecodeUnregisterCounters(void);
 #define PKT_STREAM_ADD                  (1<<5)      /**< Packet payload was added to reassembled stream */
 #define PKT_STREAM_EST                  (1<<6)      /**< Packet is part of established stream */
 #define PKT_STREAM_EOF                  (1<<7)      /**< Stream is in eof state */
-#define PKT_HAS_FLOW                    (1<<8)
+#define PKT_HAS_FLOW                    (1<<8)      /* 查找到流后, 或创建pseudo报文, 一般会打上此标识 */
 #define PKT_PSEUDO_STREAM_END           (1<<9)      /**< Pseudo packet to end the stream */
 #define PKT_STREAM_MODIFIED             (1<<10)     /**< Packet is modified by the stream engine, we need to recalc the csum and reinject/replace */
 #define PKT_MARK_MODIFIED               (1<<11)     /**< Packet mark is modified */

@@ -938,7 +938,7 @@ TmEcode UnixManagerReloadRules(json_t *cmd,
 }
 #endif
 
-static UnixCommand command;
+static UnixCommand command;      /* 命令行全局数据结构 */
 
 /**
  * \brief Add a command to the list of commands

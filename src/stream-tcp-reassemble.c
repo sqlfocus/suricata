@@ -785,7 +785,7 @@ static int StreamTcpReassembleRawCheckLimit(const TcpSession *ssn,
 
 /**
  *  \brief see what if any work the TCP session still needs
- */
+ *//* 检测数据段是否仍然将被使用 */
 int StreamNeedsReassembly(const TcpSession *ssn, uint8_t direction)
 {
     const TcpStream *stream = NULL;
@@ -824,13 +824,13 @@ int StreamNeedsReassembly(const TcpSession *ssn, uint8_t direction)
             STREAM_APP_PROGRESS(stream), use_app ? "yes" : "no",
             STREAM_RAW_PROGRESS(stream), use_raw ? "yes" : "no",
             right_edge);
-    if (use_raw) {
+    if (use_raw) {  /* 是否还有数据段？？？  */
         if (right_edge > STREAM_RAW_PROGRESS(stream)) {
             SCLogDebug("%s: STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION", dirstr);
             return STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION;
         }
     }
-    if (use_app) {
+    if (use_app) {  /* 是否还有数据段未被检测 */
         if (right_edge > STREAM_APP_PROGRESS(stream)) {
             SCLogDebug("%s: STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION", dirstr);
             return STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION;

@@ -34,8 +34,8 @@
 /** Flow engine is in emergency mode. This means it doesn't have enough spare
  *  flows for new flows and/or it's memcap limit it reached. In this state the
  *  flow engine with evaluate flows with lower timeout settings. */
-#define FLOW_EMERGENCY   0x01
-
+#define FLOW_EMERGENCY   0x01   /* 进入紧急状态(没有空余的流缓存对象，或使用内存达到上限) */
+                                /* 流引擎后续将各个状态超时时限设置为较低的值 */
 /* Flow Time out values */
 #define FLOW_DEFAULT_NEW_TIMEOUT 30
 #define FLOW_DEFAULT_EST_TIMEOUT 300

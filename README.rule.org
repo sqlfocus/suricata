@@ -1,0 +1,14 @@
+本文档介绍至关重要的suricata规则，以期更加深入了解，并借此能够优
+化suricata的检测流程
+
+* 参考
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricata_Rules][官网规则简介]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Fast_pattern][fast pattern关键字]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Flowint][flowint关键字]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Pcre_(Perl_Compatible_Regular_Expressions)][pcre关键字]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricatayaml][suricata.yaml简介]]
+
+
+
+
+

@@ -168,10 +168,10 @@ static inline int StreamTcpCheckFlowDrops(Packet *p)
 
 enum {
     /* stream has no segments for forced reassembly, nor for detection */
-    STREAM_HAS_UNPROCESSED_SEGMENTS_NONE = 0,
+    STREAM_HAS_UNPROCESSED_SEGMENTS_NONE = 0,                 /* 流中没有数据段, 用于流重组、检测 */
     /* stream has no segments for forced reassembly, but only segments that
      * have been sent for detection, but are stuck in the detection queues */
-    STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION = 1,
+    STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION = 1,  /* 数据中, 有段数据, 卡在检测流程中 */
 };
 
 TmEcode StreamTcp (ThreadVars *, Packet *, void *, PacketQueueNoLock *);

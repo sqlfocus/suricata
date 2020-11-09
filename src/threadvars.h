@@ -131,7 +131,7 @@ typedef struct ThreadVars_ {
     SCCtrlMutex *ctrl_mutex;
     SCCtrlCondT *ctrl_cond;
 
-    struct FlowQueue_ *flow_queue;
+    struct FlowQueue_ *flow_queue;          /* */
 
 } ThreadVars;
 

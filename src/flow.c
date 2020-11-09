@@ -624,7 +624,7 @@ void FlowInitConfig(char quiet)
                   SC_ATOMIC_GET(flow_memuse), flow_config.hash_size,
                   (uintmax_t)sizeof(FlowBucket));
     }
-    FlowSparePoolInit();
+    FlowSparePoolInit();                /* 预分配流表缓存对象池 */
     if (quiet == FALSE) {
         SCLogConfig("flow memory usage: %"PRIu64" bytes, maximum: %"PRIu64,
                 SC_ATOMIC_GET(flow_memuse), SC_ATOMIC_GET(flow_config.memcap));
@@ -983,7 +983,7 @@ void FlowInitFlowProto(void)
         }
     }
 
-    /* validate and if needed update emergency timeout values */
+    /* 检测配置的有效性: emergency时长不应该比正常时长大; validate and if needed update emergency timeout values */
     for (int i = 0; i < FLOW_PROTO_MAX; i++) {
         const FlowProtoTimeout *n = &flow_timeouts_normal[i];
         FlowProtoTimeout *e = &flow_timeouts_emerg[i];
@@ -1063,16 +1063,16 @@ int FlowClearMemory(Flow* f, uint8_t proto_map)
 
     if (unlikely(f->flags & FLOW_HAS_EXPECTATION)) {
         AppLayerExpectationClean(f);
-    }
+    }                    /* */
 
     /* call the protocol specific free function if we have one */
     if (flow_freefuncs[proto_map].Freefunc != NULL) {
         flow_freefuncs[proto_map].Freefunc(f->protoctx);
-    }
+    }                    /* 清理协议相关, StreamTcpSessionClear() */
 
-    FlowFreeStorage(f);
+    FlowFreeStorage(f);  /* 回收流相关动态内存 */
 
-    FLOW_RECYCLE(f);
+    FLOW_RECYCLE(f);     /* 重置关键字, 清理应用协议相关 FlowCleanupAppLayer()   */
 
     SCReturnInt(1);
 }
@@ -1136,11 +1136,11 @@ void FlowUpdateState(Flow *f, const enum FlowState s)
 {
     if (s != f->flow_state) {
         /* set the state */
-        f->flow_state = s;
+        f->flow_state = s;                         /* 更新当前流状态 */
 
         /* update timeout policy and value */
         const uint32_t timeout_policy = FlowGetTimeoutPolicy(f);
-        if (timeout_policy != f->timeout_policy) {
+        if (timeout_policy != f->timeout_policy) { /* 更新超时, 比如进入、退出紧急状态 */
             f->timeout_policy = timeout_policy;
             const uint32_t timeout_at = (uint32_t)f->lastts.tv_sec + timeout_policy;
             if (timeout_at != f->timeout_at)
@@ -1152,7 +1152,7 @@ void FlowUpdateState(Flow *f, const enum FlowState s)
 #endif
         /* and reset the flow buckup next_ts value so that the flow manager
          * has to revisit this row */
-        SC_ATOMIC_SET(f->fb->next_ts, 0);
+        SC_ATOMIC_SET(f->fb->next_ts, 0);          /* 清理桶标识, 表示有流更新 */
 #ifdef UNITTESTS
     }
 #endif

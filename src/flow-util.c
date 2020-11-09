@@ -196,11 +196,11 @@ void FlowInit(Flow *f, const Packet *p)
     COPY_TIMESTAMP(&p->ts, &f->startts);
 
     f->protomap = FlowGetProtoMapping(f->proto);
-    f->timeout_policy = FlowGetTimeoutPolicy(f);
+    f->timeout_policy = FlowGetTimeoutPolicy(f);  /* 更新过期时限, flow_timeouts */
     const uint32_t timeout_at = (uint32_t)f->startts.tv_sec + f->timeout_policy;
-    f->timeout_at = timeout_at;
+    f->timeout_at = timeout_at;                   /* 设置老化时间戳 */
 
-    if (MacSetFlowStorageEnabled()) {
+    if (MacSetFlowStorageEnabled()) {             /* mac地址相关 */
         MacSet *ms = FlowGetStorageById(f, MacSetGetFlowStorageID());
         if (ms != NULL) {
             MacSetReset(ms);

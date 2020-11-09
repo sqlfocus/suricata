@@ -36,13 +36,13 @@
 #include "util-validate.h"
 
 typedef struct FlowSparePool {
-    FlowQueuePrivate queue;
+    FlowQueuePrivate queue;      /* 初始时, 每个队列 flow_spare_pool_block_size 流表对象 */
     struct FlowSparePool *next;
 } FlowSparePool;
 
-static uint32_t flow_spare_pool_flow_cnt = 0;
+static uint32_t flow_spare_pool_flow_cnt = 0;  /* 预分配 */
 static uint32_t flow_spare_pool_block_size = 100;
-static FlowSparePool *flow_spare_pool = NULL;
+static FlowSparePool *flow_spare_pool = NULL;  /* 流对象缓存池 */
 static SCMutex flow_spare_pool_m = SCMUTEX_INITIALIZER;
 
 uint32_t FlowSpareGetPoolSize(void)
@@ -124,9 +124,9 @@ void FlowSparePoolReturnFlows(FlowQueuePrivate *fqp)
 {
 
 }
-
+/* 从全局流表缓存池获取流表对象，加入到线程本地池中 */
 FlowQueuePrivate FlowSpareGetFromPool(void)
-{
+{   /* 无流表对象 */
     SCMutexLock(&flow_spare_pool_m);
     if (flow_spare_pool == NULL || flow_spare_pool_flow_cnt == 0) {
         SCMutexUnlock(&flow_spare_pool_m);
@@ -134,10 +134,10 @@ FlowQueuePrivate FlowSpareGetFromPool(void)
         return empty;
     }
 
-    /* top if full or its the only block we have */
+    /* 如果缓存池链表，首元素存放了过多流对象，或无后续元素，top if full or its the only block we have */
     if (flow_spare_pool->queue.len >= flow_spare_pool_block_size || flow_spare_pool->next == NULL) {
         FlowSparePool *p = flow_spare_pool;
-        flow_spare_pool = p->next;
+        flow_spare_pool = p->next;      /* 分配给线程一个元素, 而不是xx个流对象 */
         DEBUG_VALIDATE_BUG_ON(flow_spare_pool_flow_cnt < p->queue.len);
         flow_spare_pool_flow_cnt -= p->queue.len;
 #ifdef FSP_VALIDATE
@@ -148,7 +148,7 @@ FlowQueuePrivate FlowSpareGetFromPool(void)
         FlowQueuePrivate ret = p->queue;
         SCFree(p);
         return ret;
-    /* next should always be full if it exists */
+    /* 返回一个全局池, 初始化时每个池100个流对象, next should always be full if it exists */
     } else if (flow_spare_pool->next != NULL) {
         FlowSparePool *p = flow_spare_pool->next;
         flow_spare_pool->next = p->next;
@@ -172,7 +172,7 @@ FlowQueuePrivate FlowSpareGetFromPool(void)
 void FlowSparePoolUpdate(uint32_t size)
 {
     const int64_t todo = (int64_t)flow_config.prealloc - (int64_t)size;
-    if (todo < 0) {
+    if (todo < 0) {        /* CASE: 全局池有太多表对象(可能为动态分配) */
         /* remove one block at most at a time */
         uint32_t to_remove = (uint32_t)(todo * -1) / 10;
         if (to_remove < flow_spare_pool_block_size)
@@ -187,7 +187,7 @@ void FlowSparePoolUpdate(uint32_t size)
         }
         SCMutexUnlock(&flow_spare_pool_m);
 
-        if (p != NULL) {
+        if (p != NULL) {         /* 释放流表内存, 归还系统 */
             Flow *f;
             while ((f = FlowQueuePrivateGetFromTop(&p->queue))) {
                 FlowFree(f);
@@ -195,7 +195,7 @@ void FlowSparePoolUpdate(uint32_t size)
             SCFree(p);
         }
 
-    } else if (todo > 0) {
+    } else if (todo > 0) { /* CASE: 全局池表项过少 */
         FlowSparePool *head = NULL, *tail = NULL;
 
         uint32_t blocks = ((uint32_t)todo / flow_spare_pool_block_size) + 1;
@@ -203,7 +203,7 @@ void FlowSparePoolUpdate(uint32_t size)
         uint32_t flow_cnt = 0;
         for (uint32_t cnt = 0; cnt < blocks; cnt++) {
             FlowSparePool *p = FlowSpareGetPool();
-            if (p == NULL) {
+            if (p == NULL) {     /* 从系统分配内存 */
                 break;
             }
             const bool ok = FlowSparePoolUpdateBlock(p);
@@ -221,7 +221,7 @@ void FlowSparePoolUpdate(uint32_t size)
             if (!ok)
                 break;
         }
-        if (head) {
+        if (head) {              /* 放到全局池 */
             SCMutexLock(&flow_spare_pool_m);
             if (flow_spare_pool == NULL) {
                 flow_spare_pool = head;
@@ -251,7 +251,7 @@ void FlowSparePoolInit(void)
             FatalError(SC_ERR_FLOW_INIT, "failed to initialize flow pool");
         }
         FlowSparePoolUpdateBlock(p);
-        cnt += p->queue.len;
+        cnt += p->queue.len;         /* 预分配流表, 每个池100个, 总数由配置得到 */
 
         /* prepend to list */
         p->next = flow_spare_pool;

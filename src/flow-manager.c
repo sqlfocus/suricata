@@ -79,7 +79,7 @@ FlowQueue flow_recycle_q;            /* 待回收流队列 */
 /* multi flow mananger support */
 static uint32_t flowmgr_number = 1;  /* 流管理线程数 */   
 /* atomic counter for flow managers, to assign instance id */
-SC_ATOMIC_DECLARE(uint32_t, flowmgr_cnt);
+SC_ATOMIC_DECLARE(uint32_t, flowmgr_cnt); /* 流管理线程计数 */
 
 /* multi flow recycler support */
 static uint32_t flowrec_number = 1;
@@ -311,7 +311,7 @@ static inline void FMFlowLock(Flow *f)
 typedef struct FlowManagerTimeoutThread {
     /* used to temporarily store flows that have timed out and are
      * removed from the hash */
-    FlowQueuePrivate aside_queue;
+    FlowQueuePrivate aside_queue;  /* 临时遍历桶, 因超时而被移除的流表对象 */
 } FlowManagerTimeoutThread;
 
 static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCounters *counters)
@@ -331,7 +331,7 @@ static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCount
 #endif
                 f->flow_state != FLOW_STATE_LOCAL_BYPASSED &&
                 FlowForceReassemblyNeedReassembly(f) == 1)
-        {
+        {                           /* 仍需要流重组, 不能回收 */
             FlowForceReassemblyForFlow(f);
             /* flow ownership is passed to the worker thread */
 
@@ -342,7 +342,7 @@ static uint32_t ProcessAsideQueue(FlowManagerTimeoutThread *td, FlowTimeoutCount
         FLOWLOCK_UNLOCK(f);
 
         FlowQueuePrivateAppendFlow(&recycle, f);
-        if (recycle.len == 100) {
+        if (recycle.len == 100) {   /* 回收到 flow_recycle_q 链表, 以便于被后续recycle线程处理 */
             FlowQueueAppendPrivate(&flow_recycle_q, &recycle);
         }
         cnt++;
@@ -397,15 +397,15 @@ static void FlowManagerHashRowTimeout(FlowManagerTimeoutThread *td,
         /* never prune a flow that is used by a packet we
          * are currently processing in one of the threads */
         if (f->use_cnt > 0 || !FlowBypassedTimeout(f, ts, counters)) {
-            FLOWLOCK_UNLOCK(f);
+            FLOWLOCK_UNLOCK(f);        /* 正在使用的流不释放 */
             prev_f = f;
             counters->flows_timeout_inuse++;
             f = f->next;
             continue;
         }
 
-        RemoveFromHash(f, prev_f);
-
+        RemoveFromHash(f, prev_f);     /* 移除流 */
+                                       /* 存放到临时链表 */
         FlowQueuePrivateAppendFlow(&td->aside_queue, f);
         /* flow is still locked in the queue */
 
@@ -444,7 +444,7 @@ static void FlowManagerHashRowClearEvictedList(FlowManagerTimeoutThread *td,
  *  \param counters ptr to FlowTimeoutCounters structure
  *
  *  \retval cnt number of timed out flow
- */
+ *//* 遍历hash桶, 清理老化的流 */
 static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td,
         struct timeval *ts,
         const uint32_t hash_min, const uint32_t hash_max,
@@ -468,8 +468,8 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td,
     for (uint32_t idx = hash_min; idx < hash_max; idx+=BITS) {
         TYPE check_bits = 0;
         const uint32_t check = MIN(BITS, (hash_max - idx));
-        for (uint32_t i = 0; i < check; i++) {
-            FlowBucket *fb = &flow_hash[idx+i];
+        for (uint32_t i = 0; i < check; i++) {      /* 依据最早超时时间, 快速过滤 */
+            FlowBucket *fb = &flow_hash[idx+i];     /* 如果有流表状态变更, 此值为0, 会被检测 *//* 如果状态未变更, 且均不超时则不检测此桶 */
             check_bits |= (TYPE)(SC_ATOMIC_LOAD_EXPLICIT(fb->next_ts, SC_ATOMIC_MEMORY_ORDER_RELAXED) <= (int32_t)ts->tv_sec) << (TYPE)i;
         }
         if (check_bits == 0)
@@ -478,9 +478,9 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td,
         for (uint32_t i = 0; i < check; i++) {
             FlowBucket *fb = &flow_hash[idx+i];
             if ((check_bits & ((TYPE)1 << (TYPE)i)) != 0 && SC_ATOMIC_GET(fb->next_ts) <= (int32_t)ts->tv_sec) {
-                if (FMTryLockBucket(fb) == 0) {
+                if (FMTryLockBucket(fb) == 0) {   /* CASE: 加锁后, 再遍历桶 */
                     Flow *evicted = NULL;
-                    if (fb->evicted != NULL || fb->head != NULL) {
+                    if (fb->evicted != NULL || fb->head != NULL) { /* case: 非空 */
                         /* if evicted is set, we only process that list right now.
                          * Since its set we've had traffic that touched this row
                          * very recently, and there is a good chance more of it will
@@ -489,22 +489,22 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td,
                         if (fb->evicted != NULL) {
                             /* transfer out of bucket so we can do additional work outside
                              * of the bucket lock */
-                            evicted = fb->evicted;
+                            evicted = fb->evicted;                 /* 优先处理worker线程遍历出来的超时流, 且仅处理 */
                             fb->evicted = NULL;
                         } else if (fb->head != NULL) {
                             int32_t next_ts = 0;
-                            FlowManagerHashRowTimeout(td,
+                            FlowManagerHashRowTimeout(td,          /* 遍历桶 */
                                     fb->head, ts, emergency, counters, &next_ts);
 
                             if (SC_ATOMIC_GET(fb->next_ts) != next_ts)
-                                SC_ATOMIC_SET(fb->next_ts, next_ts);
+                                SC_ATOMIC_SET(fb->next_ts, next_ts);/* 更新最早超时 */
                         }
                         if (fb->evicted == NULL && fb->head == NULL) {
-                            SC_ATOMIC_SET(fb->next_ts, INT_MAX);
+                            SC_ATOMIC_SET(fb->next_ts, INT_MAX);   /* 无表项, 则下次不检测 */
                         } else if (fb->evicted != NULL && fb->head == NULL) {
-                            SC_ATOMIC_SET(fb->next_ts, 0);
+                            SC_ATOMIC_SET(fb->next_ts, 0);         /* 都加锁了, 会存在此情形么??? */
                         }
-                    } else {
+                    } else {                                       /* case: 无待处理项 */
                         SC_ATOMIC_SET(fb->next_ts, INT_MAX);
                         rows_empty++;
                     }
@@ -513,13 +513,13 @@ static uint32_t FlowTimeoutHash(FlowManagerTimeoutThread *td,
                     if (evicted) {
                         FlowManagerHashRowClearEvictedList(td, evicted, ts, counters);
                     }
-                } else {
+                } else {                          /* CASE: 掠过加锁的桶, 以免竞态操作 */
                     rows_busy++;
                 }
             } else {
                 rows_skipped++;
             }
-        }
+        } /* 将回收的流, 放入 flow_recycle_q 队列; 以便于流回收的日志输出 */
         if (td->aside_queue.len) {
             cnt += ProcessAsideQueue(td, counters);
         }
@@ -674,14 +674,14 @@ typedef struct FlowCounters_ {
 } FlowCounters;
 
 typedef struct FlowManagerThreadData_ {
-    uint32_t instance;
-    uint32_t min;
+    uint32_t instance;  /* 流管理线程的启动索引(第几个启动的) */
+    uint32_t min;       /* 负责的hash桶范围: 如果多个管理线程, 每个负责整体表的一部分 */
     uint32_t max;
 
     FlowCounters cnt;
 
-    FlowManagerTimeoutThread timeout;
-} FlowManagerThreadData;
+    FlowManagerTimeoutThread timeout;  /* 超时的流表对象 */
+} FlowManagerThreadData; /* 流管理线程信息 */
 
 static void FlowCountersInit(ThreadVars *t, FlowCounters *fc)
 {
@@ -706,7 +706,7 @@ static void FlowCountersInit(ThreadVars *t, FlowCounters *fc)
     fc->flow_bypassed_pkts = StatsRegisterCounter("flow_bypassed.pkts", t);
     fc->flow_bypassed_bytes = StatsRegisterCounter("flow_bypassed.bytes", t);
 }
-
+/* 流管理线程初始化 */
 static TmEcode FlowManagerThreadInit(ThreadVars *t, const void *initdata, void **data)
 {
     FlowManagerThreadData *ftd = SCCalloc(1, sizeof(FlowManagerThreadData));
@@ -849,7 +849,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         }
 
         if (SC_ATOMIC_GET(flow_flags) & FLOW_EMERGENCY) {
-            emerg = true;               /* 进入流紧急状态（空闲流表过少） */
+            emerg = true;               /* 提取进入流紧急状态标识（空闲流表过少） */
         }
 #ifdef FM_PROFILE
         struct timeval run_startts;
@@ -863,19 +863,19 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         const uint64_t ts_ms = ts.tv_sec * 1000 + ts.tv_usec / 1000;
         const uint32_t rt = (uint32_t)ts.tv_sec;
         const bool emerge_p = (emerg && !prev_emerg);
-        if (emerge_p) {
+        if (emerge_p) {                 /* 进入紧急状态, 打印告警消息 */
             next_run_ms = 0;
             prev_emerg = true;
             SCLogNotice("Flow emergency mode entered...");
             StatsIncr(th_v, ftd->cnt.flow_emerg_mode_enter);
         }
-        if (ts_ms >= next_run_ms) {
+        if (ts_ms >= next_run_ms) {     /* 紧急状态, 或到下一次执行时间, 则执行流老化 */
             if (ftd->instance == 0) {
                 const uint32_t sq_len = FlowSpareGetPoolSize();
                 const uint32_t spare_perc = sq_len * 100 / flow_config.prealloc;
                 /* see if we still have enough spare flows */
                 if (spare_perc < 90 || spare_perc > 110) {
-                    FlowSparePoolUpdate(sq_len);
+                    FlowSparePoolUpdate(sq_len); /* 0号线程平衡全局池对象数, 在预分配量的90%～110%之间 */
                 }
             }
             const uint32_t secs_passed = rt - flow_last_sec;
@@ -883,7 +883,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
             /* try to time out flows */
             FlowTimeoutCounters counters = { 0, 0, 0, 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-            if (emerg) {
+            if (emerg) {      /* 紧急状态, 遍历自己直辖范围的所有桶 */
                 /* in emergency mode, do a full pass of the hash table */
                 FlowTimeoutHash(&ftd->timeout, &ts, ftd->min, ftd->max, &counters);
                 hash_passes++;
@@ -892,7 +892,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
                 hash_passes++;
                 hash_row_checks += counters.rows_checked;
                 StatsIncr(th_v, ftd->cnt.flow_mgr_full_pass);
-            } else {
+            } else {          /* 非紧急状态, 仅便利部分直辖的桶 */
                 /* non-emergency mode: scan part of the hash */
                 const uint32_t chunks = MIN(secs_passed, pass_in_sec);
                 for (uint32_t i = 0; i < chunks; i++) {
@@ -908,7 +908,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
                 hash_passes++;
                 hash_row_checks += counters.rows_checked;
                 hash_passes_chunks += chunks;
-            }
+            }                 /* 更新遍历完成时间 */
             flow_last_sec = rt;
 
             /*
@@ -943,7 +943,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
              * clear emergency bit if we have at least xx flows pruned. */
             uint32_t len = FlowSpareGetPoolSize();
             StatsSetUI64(th_v, ftd->cnt.flow_mgr_spare, (uint64_t)len);
-            if (emerg == true) {            /* 如果流表释放够多，则清理紧急状态 */
+            if (emerg == true) {   /* 紧急状态特殊处理 */
                 SCLogDebug("flow_sparse_q.len = %"PRIu32" prealloc: %"PRIu32
                         "flow_spare_q status: %"PRIu32"%% flows at the queue",
                         len, flow_config.prealloc, len * 100 / flow_config.prealloc);
@@ -951,14 +951,14 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
             /* only if we have pruned this "emergency_recovery" percentage
              * of flows, we will unset the emergency bit */
             if (len * 100 / flow_config.prealloc > flow_config.emergency_recovery) {
-                emerg_over_cnt++;
+                emerg_over_cnt++;          /* 清理的表项足够多, */
             } else {
                 emerg_over_cnt = 0;
             }
 
-            if (emerg_over_cnt >= 30) {
+            if (emerg_over_cnt >= 30) {    /* 清理量够多, 且持续次数够多 */
                 SC_ATOMIC_AND(flow_flags, ~FLOW_EMERGENCY);
-                FlowTimeoutsReset();
+                FlowTimeoutsReset();       /* 清理紧急状态, 恢复正常超时时限 */
 
                 emerg = false;
                 prev_emerg = FALSE;
@@ -974,13 +974,13 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
             }
         }
         next_run_ms = ts_ms + 667;
-        if (emerg)
+        if (emerg)                 /* 更新下一次清理时间 */
             next_run_ms = ts_ms + 250;
         }
         if (flow_last_sec == 0) {
             flow_last_sec = rt;
         }
-
+        /* 第一个启动的流管理, 也负责其他hash表遍历, 如碎片表等 */
         if (ftd->instance == 0 &&
                 (other_last_sec == 0 || other_last_sec < (uint32_t)ts.tv_sec)) {
             DefragTimeoutHash(&ts);
@@ -1000,7 +1000,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         timersub(&run_endts, &run_startts, &run_time);
         timeradd(&active, &run_time, &active);
 #endif
-
+        /* 线程统计数据输出到公共部分 */
         if (TmThreadsCheckFlag(th_v, THV_KILL)) {
             StatsSyncCounters(th_v);
             break;
@@ -1010,7 +1010,7 @@ static TmEcode FlowManager(ThreadVars *th_v, void *thread_data)
         struct timeval sleep_startts;
         memset(&sleep_startts, 0, sizeof(sleep_startts));
         gettimeofday(&sleep_startts, NULL);
-#endif
+#endif  /* 睡眠等待 */
         usleep(100);
 
 #ifdef FM_PROFILE
@@ -1116,7 +1116,7 @@ static TmEcode FlowRecyclerThreadDeinit(ThreadVars *t, void *data)
 /** \brief Thread that manages timed out flows.
  *
  *  \param td ThreadVars casted to void ptr
- */
+ *//* 流回收线程的处理槽入口 */
 static TmEcode FlowRecycler(ThreadVars *th_v, void *thread_data)
 {
     struct timeval ts;
@@ -1170,7 +1170,7 @@ static TmEcode FlowRecycler(ThreadVars *th_v, void *thread_data)
         memset(&run_startts, 0, sizeof(run_startts));
         gettimeofday(&run_startts, NULL);
 #endif
-        SC_ATOMIC_ADD(flowrec_busy,1);
+        SC_ATOMIC_ADD(flowrec_busy,1);    /* 设置进入工作状态, 读取队列获取待回收的表链表 */
         FlowQueuePrivate list = FlowQueueExtractPrivate(&flow_recycle_q);
 
         const int bail = (TmThreadsCheckFlag(th_v, THV_KILL));
@@ -1183,7 +1183,7 @@ static TmEcode FlowRecycler(ThreadVars *th_v, void *thread_data)
         Flow *f;
         while ((f = FlowQueuePrivateGetFromTop(&list)) != NULL) {
             Recycler(th_v, ftd->output_thread_data, f);
-            recycled_cnt++;
+            recycled_cnt++;               /* 调用流日志处理 */
         }
         SC_ATOMIC_SUB(flowrec_busy,1);
 
@@ -1270,7 +1270,7 @@ void FlowRecyclerThreadSpawn()
     for (uint32_t u = 0; u < flowrec_number; u++) {
         char name[TM_THREAD_NAME_MAX];
         snprintf(name, sizeof(name), "%s#%02u", thread_name_flow_rec, u+1);
-
+        /* */
         ThreadVars *tv_flowrec = TmThreadCreateMgmtThreadByName(name,
                 "FlowRecycler", 0);
 

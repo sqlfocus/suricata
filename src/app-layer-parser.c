@@ -1483,7 +1483,7 @@ void AppLayerParserStateProtoCleanup(
     AppLayerParserProtoCtx *ctx = &alp_ctx.ctxs[protomap][alproto];
 
     if (ctx->StateFree != NULL && alstate != NULL)
-        ctx->StateFree(alstate);
+        ctx->StateFree(alstate);  /* HTTP -> HTPStateFree() */
 
     /* free the app layer parser api state */
     if (pstate != NULL)

@@ -404,7 +404,7 @@ void PacketDefragPktSetupParent(Packet *parent)
 
 /**
  *  \note if p->flow is set, the flow is locked
- */
+ *//* 设置流bypass状态 */
 void PacketBypassCallback(Packet *p)
 {
     if (PKT_IS_PSEUDOPKT(p))

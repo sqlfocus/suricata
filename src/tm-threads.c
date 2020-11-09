@@ -501,12 +501,12 @@ error:
     pthread_exit((void *) -1);
     return NULL;
 }
-/* 管理线程主入口函数 */
+/* 管理线程主入口函数, 包括流管理、流回收等线程 */
 static void *TmThreadsManagement(void *td)
 {
     ThreadVars *tv = (ThreadVars *)td;
-    TmSlot *s = (TmSlot *)tv->tm_slots;   /* tmm_modules[TMM_FLOWMANAGER]->Management = FlowManager() */
-    TmEcode r = TM_ECODE_OK;
+    TmSlot *s = (TmSlot *)tv->tm_slots;   /* TMM_FLOWMANAGER -> FlowManager() */
+    TmEcode r = TM_ECODE_OK;              /* TMM_FLOWRECYCLER -> FlowRecycler() */
 
     BUG_ON(s == NULL);
 
@@ -528,7 +528,7 @@ static void *TmThreadsManagement(void *td)
         r = s->SlotThreadInit(tv, s->slot_initdata, &slot_data);
         if (r != TM_ECODE_OK) {           /* TMM_FLOWMANAGER -> FlowManagerThreadInit() */
             TmThreadsSetFlag(tv, THV_CLOSED | THV_RUNNING_DONE);
-            pthread_exit((void *) -1);
+            pthread_exit((void *) -1);    /* TMM_FLOWRECYCLER -> FlowRecyclerThreadInit() */
             return NULL;
         }
         (void)SC_ATOMIC_SET(s->slot_data, slot_data);
@@ -539,7 +539,7 @@ static void *TmThreadsManagement(void *td)
     TmThreadsSetFlag(tv, THV_INIT_DONE);  /* 设置初始化完成标志 */
 
     r = s->Management(tv, SC_ATOMIC_GET(s->slot_data));
-    /* handle error */                    /* 处理循环, FlowManager() */
+    /* handle error */                    /* 处理循环, FlowManager()/FlowRecycler() */
     if (r == TM_ECODE_FAILED) {
         TmThreadsSetFlag(tv, THV_FAILED); /* 后续为线程循环退出后的清理工作 */
     }
@@ -1132,9 +1132,9 @@ ThreadVars *TmThreadCreateMgmtThreadByName(const char *name, const char *module,
         tv->id = TmThreadsRegisterThread(tv, tv->type);
         TmThreadSetCPU(tv, MANAGEMENT_CPU_SET);
         /* 注册"FlowManager"处理模块 */
-        TmModule *m = TmModuleGetByName(module);  /* "FlowManager" -> TMM_FLOWMANAGER  */
-        if (m) {                                  /* tmm_modules[]->Management = FlowManager() */
-            TmSlotSetFuncAppend(tv, m, NULL);
+        TmModule *m = TmModuleGetByName(module);  /* "FlowManager" -> TMM_FLOWMANAGER -> FlowManager() */
+        if (m) {
+            TmSlotSetFuncAppend(tv, m, NULL);     /* "FlowRecycler" -> TMM_FLOWRECYCLER -> FlowRecycler() */
         }
     }
 
@@ -2056,9 +2056,9 @@ typedef struct Thread_ {
     int type;           /* TVT_MGMT */
     int in_use;         /* 是否正在使用 */
 
-    struct timeval pktts;   /**< current packet time of this thread
+    struct timeval pktts;   /* 报文的时间 *< current packet time of this thread
                              *   (offline mode) */
-    uint32_t sys_sec_stamp; /**< timestamp in seconds of the real system
+    uint32_t sys_sec_stamp; /* 通过 gettimeofday() 拿到的当前系统时间, *< timestamp in seconds of the real system
                              *   time when the pktts was last updated. */
 } Thread;
 

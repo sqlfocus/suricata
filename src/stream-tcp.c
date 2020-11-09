@@ -5033,23 +5033,23 @@ static int TcpSessionPacketIsStreamStarter(const Packet *p)
 static int TcpSessionReuseDoneEnoughSyn(const Packet *p, const Flow *f, const TcpSession *ssn)
 {
     if (FlowGetPacketDirection(f, p) == TOSERVER) {        /* case: 方向从client -> server */
-        if (ssn == NULL) {
+        if (ssn == NULL) {                                        /* 还没有初始化状态, 不算重用 */
             SCLogDebug("steam starter packet %"PRIu64", ssn %p null. No reuse.", p->pcap_cnt, ssn);
             return 0;
         }
-        if (SEQ_EQ(ssn->client.isn, TCP_GET_SEQ(p))) {     /* syn序号与当前序号相等，不允许重用 */
+        if (SEQ_EQ(ssn->client.isn, TCP_GET_SEQ(p))) {            /* syn序号与当前序号相等, 不算重用(如syn重传) */
             SCLogDebug("steam starter packet %"PRIu64", ssn %p. Packet SEQ == Stream ISN. Retransmission. Don't reuse.", p->pcap_cnt, ssn);
             return 0;
         }
-        if (ssn->state >= TCP_LAST_ACK) {                  /* tcp状态已经到达 TCP_LAST_ACK, 允许重用 */
+        if (ssn->state >= TCP_LAST_ACK) {                         /* tcp状态已经到达 TCP_LAST_ACK, 是 重用 */
             SCLogDebug("steam starter packet %"PRIu64", ssn %p state >= TCP_LAST_ACK (%u). Reuse.", p->pcap_cnt, ssn, ssn->state);
             return 1;
         }
-        if (ssn->state == TCP_NONE) {                      /* 初始状态 */
+        if (ssn->state == TCP_NONE) {                             /* 初始状态 */
             SCLogDebug("steam starter packet %"PRIu64", ssn %p state == TCP_NONE (%u). Reuse.", p->pcap_cnt, ssn, ssn->state);
             return 1;
         }
-        if (ssn->state < TCP_LAST_ACK) {
+        if (ssn->state < TCP_LAST_ACK) {                          /* 中间状态 */
             SCLogDebug("steam starter packet %"PRIu64", ssn %p state < TCP_LAST_ACK (%u). Don't reuse.", p->pcap_cnt, ssn, ssn->state);
             return 0;
         }
@@ -5147,17 +5147,17 @@ static int TcpSessionReuseDoneEnough(const Packet *p, const Flow *f, const TcpSe
 
     return 0;
 }
-
+/* 判断流是否被重用: 即新的报文为syn, 但和当前流具有相同的五元组 */
 int TcpSessionPacketSsnReuse(const Packet *p, const Flow *f, const void *tcp_ssn)
 {
     if (p->proto == IPPROTO_TCP && p->tcph != NULL) {  /* 只有TCP有流重用的概念 */
         if (TcpSessionPacketIsStreamStarter(p) == 1) { /* syn报文，或syn+ack报文（需配置） */
             if (TcpSessionReuseDoneEnough(p, f, tcp_ssn) == 1) {
-                return 1;  /* 允许重用 */
+                return 1;  /* 流被重用, 此流将被废弃 */
             }
         }
     }
-    return 0;              /* 不允许重用 */
+    return 0;              /* 没有被重用, 认为报文属于此流 */
 }
 /* TCP流汇聚入口 */
 TmEcode StreamTcp (ThreadVars *tv, Packet *p, void *data, PacketQueueNoLock *pq)

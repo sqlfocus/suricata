@@ -279,7 +279,7 @@ Packet *FlowForceReassemblyPseudoPacketGet(int direction,
     }
 
     PACKET_PROFILING_START(p);
-
+    /* 构造pseudo报文 */
     return FlowForceReassemblyPseudoPacketSetup(p, direction, f, ssn);
 }
 
@@ -297,12 +297,12 @@ int FlowForceReassemblyNeedReassembly(Flow *f)
     if (f == NULL || f->protoctx == NULL) {
         SCReturnInt(0);
     }
-
+    /* 判断是否仍需要继续检测 */
     TcpSession *ssn = (TcpSession *)f->protoctx;
     int client = StreamNeedsReassembly(ssn, STREAM_TOSERVER);
     int server = StreamNeedsReassembly(ssn, STREAM_TOCLIENT);
 
-    /* if state is not fully closed we assume that we haven't fully
+    /* TCP未完全关闭, 默认需要继续检测; if state is not fully closed we assume that we haven't fully
      * inspected the app layer state yet */
     if (ssn->state >= TCP_ESTABLISHED && ssn->state != TCP_CLOSED)
     {
@@ -310,7 +310,7 @@ int FlowForceReassemblyNeedReassembly(Flow *f)
         server = STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION;
     }
 
-    /* if app layer still needs some love, push through */
+    /* 有一些事物仍然在处理中, if app layer still needs some love, push through */
     if (f->alproto != ALPROTO_UNKNOWN && f->alstate != NULL) {
         const uint64_t total_txs = AppLayerParserGetTxCnt(f, f->alstate);
 
@@ -329,7 +329,7 @@ int FlowForceReassemblyNeedReassembly(Flow *f)
         server == STREAM_HAS_UNPROCESSED_SEGMENTS_NONE) {
         SCReturnInt(0);
     }
-
+    /* 记录标识 */
     f->ffr_ts = client;
     f->ffr_tc = server;
     SCReturnInt(1);

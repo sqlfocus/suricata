@@ -40,12 +40,12 @@
  * to the list, the entire bucket is locked. */
 typedef struct FlowBucket_ {
     /** head of the list of active flows for this row. */
-    Flow *head;
+    Flow *head;      /* 属于此hash桶的, 链表组织的流 */
     /** head of the list of evicted flows for this row. Waiting to be
      *  collected by the Flow Manager. */
-    Flow *evicted;
+    Flow *evicted;   /* 将要释放的流列表 */
 #ifdef FBLOCK_MUTEX
-    SCMutex m;
+    SCMutex m;       /* 操作桶时的锁 */
 #elif defined FBLOCK_SPIN
     SCSpinlock s;
 #else
@@ -55,9 +55,9 @@ typedef struct FlowBucket_ {
      *  will time out in this row. Set by the flow manager. Cleared
      *  to 0 by workers, either when new flows are added or when a
      *  flow state changes. The flow manager sets this to INT_MAX for
-     *  empty buckets. */
-    SC_ATOMIC_DECLARE(int32_t, next_ts);   /* 桶内流表老化相关变量 */
-} __attribute__((aligned(CLS))) FlowBucket;
+     *  empty buckets. *//* 此桶中最早超时的流对应的时间; 当桶变更或流状态变更后, 被 */
+    SC_ATOMIC_DECLARE(int32_t, next_ts); /* worker线程置0; 被流管理线程设置 */
+} __attribute__((aligned(CLS))) FlowBucket;  /* 流表的hash桶 */
 
 #ifdef FBLOCK_SPIN
     #define FBLOCK_INIT(fb) SCSpinInit(&(fb)->s, 0)

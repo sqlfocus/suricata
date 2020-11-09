@@ -399,7 +399,7 @@ void RunModeDispatch(int runmode, const char *custom_mode,
     if (runmode != RUNMODE_UNIX_SOCKET) {
         /* spawn management threads */
         FlowManagerThreadSpawn();        /* 创建管理线程 */
-        FlowRecyclerThreadSpawn();             /* flow recycle */
+        FlowRecyclerThreadSpawn();       /* 创建流回收线程 */
         if (RunModeNeedsBypassManager()) {
             BypassedFlowManagerThreadSpawn();  /* flow bypass */
         }

@@ -67,7 +67,7 @@ typedef struct FlowWorkerThreadData_ {
     SC_ATOMIC_DECLARE(DetectEngineThreadCtxPtr, detect_thread);
                                  /* 检测线程信息结构 */
     void *output_thread;         /* 支持日志输出, LoggerThreadStore, Output thread data. */
-    void *output_thread_flow; /* Output thread data. */
+    void *output_thread_flow;    /* Output thread data. */
 
     uint16_t local_bypass_pkts;  /* 计数量ID */
     uint16_t local_bypass_bytes;
@@ -75,7 +75,7 @@ typedef struct FlowWorkerThreadData_ {
     uint16_t both_bypass_bytes;
 
     PacketQueueNoLock pq;        /* 汇聚队列 */
-    FlowLookupStruct fls;
+    FlowLookupStruct fls;        /* 流表信息相关结构 */
 
     struct {
         uint16_t flows_injected;
@@ -116,13 +116,13 @@ static int FlowFinish(ThreadVars *tv, Flow *f, FlowWorkerThreadData *fw, void *d
      * for server segment as well, in which case we will also need a p3 in the
      * toclient which is now dummy since all we need it for is detection */
 
-    /* insert a pseudo packet in the toserver direction */
+    /* 构造报文, insert a pseudo packet in the toserver direction */
     if (client == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
         p1 = FlowForceReassemblyPseudoPacketGet(0, f, ssn);
-        if (p1 == NULL) {
+        if (p1 == NULL) {             /* 构造报文 */
             return 0;
         }
-        PKT_SET_SRC(p1, PKT_SRC_FFR);
+        PKT_SET_SRC(p1, PKT_SRC_FFR); /* 设置源: 检测 */
 
         if (server == STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION) {
             p2 = FlowForceReassemblyPseudoPacketGet(1, f, ssn);
@@ -133,7 +133,7 @@ static int FlowFinish(ThreadVars *tv, Flow *f, FlowWorkerThreadData *fw, void *d
             }
             PKT_SET_SRC(p2, PKT_SRC_FFR);
             p2->flowflags |= FLOW_PKT_LAST_PSEUDO;
-        } else {
+        } else {                      /* 设置最后报文标识 */
             p1->flowflags |= FLOW_PKT_LAST_PSEUDO;
         }
     } else {
@@ -150,7 +150,7 @@ static int FlowFinish(ThreadVars *tv, Flow *f, FlowWorkerThreadData *fw, void *d
         }
     }
     f->flags |= FLOW_TIMEOUT_REASSEMBLY_DONE;
-
+    /* 走一遍检测流程 */
     FlowWorkerFlowTimeout(tv, p1, fw, detect_thread);
     PacketPoolReturnPacket(p1);
     if (p2) {
@@ -168,7 +168,7 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw,
 {
     Flow *f;
     while ((f = FlowQueuePrivateGetFromTop(fq)) != NULL) {
-        f->flow_end_flags |= FLOW_END_FLAG_TIMEOUT; //TODO emerg
+        f->flow_end_flags |= FLOW_END_FLAG_TIMEOUT; /* 设置超时标志 *///TODO emerg
 
         const FlowStateType state = f->flow_state;
         if (f->proto == IPPROTO_TCP) {
@@ -179,7 +179,7 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw,
                     state != FLOW_STATE_LOCAL_BYPASSED &&
                     FlowForceReassemblyNeedReassembly(f) == 1 &&
                     f->ffr != 0)
-            {
+            {/* 仍需要进一步检测, 构造伪报文, 走检测流程, 以释放第三方库的资源 */
                 int cnt = FlowFinish(tv, f, fw, detect_thread);
                 counters->flows_aside_pkt_inject += cnt;
                 counters->flows_aside_needs_work++;
@@ -194,14 +194,14 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw,
 #endif
         /* no one is referring to this flow, use_cnt 0, removed from hash
          * so we can unlock it and pass it to the flow recycler */
-
+        /* 日志 */
         if (fw->output_thread_flow != NULL)
             (void)OutputFlowLog(tv, fw->output_thread_flow, f);
-
+        /* 释放 */
         FlowClearMemory (f, f->protomap);
         FLOWLOCK_UNLOCK(f);
         if (fw->fls.spare_queue.len >= 200) { // TODO match to API? 200 = 2 * block size
-            FlowSparePoolReturnFlow(f);
+            FlowSparePoolReturnFlow(f);   /* 本地池缓存了太多流, 则释放会全局池 */
         } else {
             FlowQueuePrivatePrependFlow(&fw->fls.spare_queue, f);
         }
@@ -214,10 +214,10 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw,
  *  Handle flow creation/lookup
  */
 static inline TmEcode FlowUpdate(ThreadVars *tv, FlowWorkerThreadData *fw, Packet *p)
-{
-    FlowHandlePacketUpdate(p->flow, p, tv, fw->dtv);   /* 更新流表项 */
-
-    int state = p->flow->flow_state;    /* 更新bypass统计 */
+{   /* 更新流表项 */
+    FlowHandlePacketUpdate(p->flow, p, tv, fw->dtv);
+    /* 更新bypass统计 */
+    int state = p->flow->flow_state;    
     switch (state) {
 #ifdef CAPTURE_OFFLOAD
         case FLOW_STATE_CAPTURE_BYPASSED:
@@ -457,7 +457,7 @@ static inline void FlowWorkerProcessLocalFlows(ThreadVars *tv,
     FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_FLOW_EVICTED);
     if (fw->fls.work_queue.len) {
         StatsAddUI64(tv, fw->cnt.flows_removed, (uint64_t)fw->fls.work_queue.len);
-
+        /* 遍历桶, 查找报文所属的流时, 释放的超时的流 */
         FlowTimeoutCounters counters = { 0, 0, };
         CheckWorkQueue(tv, fw, detect_thread, &counters, &fw->fls.work_queue);
         UpdateCounters(tv, fw, &counters);
@@ -475,21 +475,21 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 
     SCLogDebug("packet %"PRIu64, p->pcap_cnt);
 
-    /* update time */
+    /* 离线模式更新线程时间: 用于离线模式的时间管理 */
     if (!(PKT_IS_PSEUDOPKT(p))) {
         TimeSetByThread(tv->id, &p->ts);
     }
 
     /* handle Flow */
-    if (p->flags & PKT_WANTS_FLOW) {      /* CASE: 查找/新建流 */
+    if (p->flags & PKT_WANTS_FLOW) {      /* CASE: 查找/新建流; <TK!!!>处理过程流一直加锁 */
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_FLOW);
 
         FlowHandlePacket(tv, &fw->fls, p);    /* 查找或建流 */
         if (likely(p->flow != NULL)) {
             DEBUG_ASSERT_FLOW_LOCKED(p->flow);
             if (FlowUpdate(tv, fw, p) == TM_ECODE_DONE) {
-                FLOWLOCK_UNLOCK(p->flow);    /* 更新流 */
-                return TM_ECODE_OK;
+                FLOWLOCK_UNLOCK(p->flow);     /* 更新流表项 */
+                return TM_ECODE_OK;           /* 流bypass, 如已到检测深度或配置了bypass关键字等: FLOW_STATE_LOCAL_BYPASSED */
             }
         }
         /* Flow is now LOCKED */
@@ -498,7 +498,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
 
     /* if PKT_WANTS_FLOW is not set, but PKT_HAS_FLOW is, then this is a
      * pseudo packet created by the flow manager. */
-    } else if (p->flags & PKT_HAS_FLOW) { /* CASE: 已经有对应的流，比如已经查找过了 */
+    } else if (p->flags & PKT_HAS_FLOW) { /* CASE: 已经有对应的流，比如pseudo报文建流 */
         FLOWLOCK_WRLOCK(p->flow);
         DEBUG_VALIDATE_BUG_ON(p->pkt_src != PKT_SRC_FFR);
     }
@@ -564,10 +564,10 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         FLOWLOCK_UNLOCK(f);
     }
 
-    /* take injected flows and process them */
+    /* 回收"注入的流", take injected flows and process them */
     FlowWorkerProcessInjectedFlows(tv, fw, p, detect_thread);
 
-    /* process local work queue */
+    /* 回收"匹配报文所属流表时, 移除的超时的流", process local work queue */
     FlowWorkerProcessLocalFlows(tv, fw, p, detect_thread);
 
     return TM_ECODE_OK;

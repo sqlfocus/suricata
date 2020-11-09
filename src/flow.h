@@ -49,7 +49,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 /** At least one packet from the destination address was seen */
 #define FLOW_TO_DST_SEEN                BIT_U32(1)
 /** Don't return this from the flow hash. It has been replaced. */
-#define FLOW_TCP_REUSED                 BIT_U32(2)
+#define FLOW_TCP_REUSED                 BIT_U32(2)  /* 此流废弃了, 因为新syn报文触发了相同的五元组 */
 
 /** Flow was inspected against IP-Only sigs in the toserver direction */
 #define FLOW_TOSERVER_IPONLY_SET        BIT_U32(3)  /* toserver方向, IPONLY已检测过 */
@@ -230,9 +230,9 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_END_FLAG_STATE_NEW         0x01
 #define FLOW_END_FLAG_STATE_ESTABLISHED 0x02
 #define FLOW_END_FLAG_STATE_CLOSED      0x04
-#define FLOW_END_FLAG_EMERGENCY         0x08
-#define FLOW_END_FLAG_TIMEOUT           0x10
-#define FLOW_END_FLAG_FORCED            0x20
+#define FLOW_END_FLAG_EMERGENCY         0x08   /* 紧急状态下, 被强制替换 */
+#define FLOW_END_FLAG_TIMEOUT           0x10   /* 超时标识 */
+#define FLOW_END_FLAG_FORCED            0x20   /* 紧急状态下, 被强制替换, FlowGetUsedFlow() */
 #define FLOW_END_FLAG_SHUTDOWN          0x40
 #define FLOW_END_FLAG_STATE_BYPASSED    0x80
 
@@ -284,17 +284,17 @@ typedef struct FlowCnf_
     uint32_t hash_rand;      /* hash种子 */
     uint32_t hash_size;      /* hash桶个数 */
     uint32_t max_flows;
-    uint32_t prealloc;       /* 预分配的hash表项数 */
+    uint32_t prealloc;       /* 预分配的hash表数 */
 
-    uint32_t timeout_new;
+    uint32_t timeout_new;    /* <TK!!!>未使用, 参考 flow_timeouts_normal; 正常模式下, 超时时限 */
     uint32_t timeout_est;
 
-    uint32_t emerg_timeout_new;
+    uint32_t emerg_timeout_new;  /* <TK!!!>未使用, 参考 flow_timeouts_emerg; "攻击模式下", 超时时限 */
     uint32_t emerg_timeout_est;
-    uint32_t emergency_recovery;
+    uint32_t emergency_recovery; /* 解除emergency模式前, 每次需要清理的流表比例下限(->prealloc); 还必须连续到达此一定次数 */
 
-    SC_ATOMIC_DECLARE(uint64_t, memcap);
-} FlowConfig;          /* 流全局配置信息 */
+    SC_ATOMIC_DECLARE(uint64_t, memcap); /* 达到此值后, 引擎会清理流表, 如果没有找到 */
+} FlowConfig;                            /* 可清理的表, 则进入emergency状态 */
 
 /* Hash key for the flow hash */
 typedef struct FlowKey_
@@ -377,8 +377,8 @@ typedef struct Flow_
     /* track toserver/toclient flow timeout needs */
     union {
         struct {
-            uint8_t ffr_ts:4;
-            uint8_t ffr_tc:4;
+            uint8_t ffr_ts:4;  /* STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION */
+            uint8_t ffr_tc:4;  /* 是否需要继续检测 */
         };
         uint8_t ffr;
     };
@@ -386,10 +386,10 @@ typedef struct Flow_
     /** timestamp in seconds of the moment this flow will timeout
      *  according to the timeout policy. Does *not* take emergency
      *  mode into account. */
-    uint32_t timeout_at;
+    uint32_t timeout_at;       /* 下次流超时的时间戳 */
 
     /** Thread ID for the stream/detect portion of this flow */
-    FlowThreadId thread_id[2];
+    FlowThreadId thread_id[2]; /* */
 
     struct Flow_ *next; /* (hash) list next */
     /** Incoming interface */
@@ -407,9 +407,9 @@ typedef struct Flow_
 
     /** timeout policy value in seconds to add to the lastts.tv_sec
      *  when a packet has been received. */
-    uint32_t timeout_policy;
+    uint32_t timeout_policy;   /* 当前流状态时的超时时限, */
 
-    FlowStateType flow_state;
+    FlowStateType flow_state;  /* 流当前状态, FLOW_STATE_LOCAL_BYPASSED */
 
     /** flow tenant id, used to setup flow timeout and stream pseudo
      *  packets with the correct tenant id set */
@@ -531,10 +531,10 @@ typedef struct FlowBypassInfo_ {
 typedef struct FlowLookupStruct_ // TODO name
 {
     /** thread store of spare queues */
-    FlowQueuePrivate spare_queue;
+    FlowQueuePrivate spare_queue;   /* 缓存在本线程的流表对象 */
     DecodeThreadVars *dtv;
-    FlowQueuePrivate work_queue;
-    uint32_t emerg_spare_sync_stamp;
+    FlowQueuePrivate work_queue;    /* 遍历桶时, 发现的超时的流(属于本线程), 临时存放至此 */
+    uint32_t emerg_spare_sync_stamp;/* */
 } FlowLookupStruct;
 
 /** \brief prepare packet for a life with flow
@@ -648,7 +648,7 @@ static inline void FlowReference(Flow **d, Flow *f)
         if (*d == f)
             return;
 #endif
-        FlowIncrUsecnt(f);
+        FlowIncrUsecnt(f);   /* 增加流引用计数 */
         *d = f;
     }
 }
