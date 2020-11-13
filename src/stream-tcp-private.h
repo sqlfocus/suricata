@@ -215,7 +215,7 @@ enum TcpState
 #define STREAMTCP_STREAM_FLAG_APPPROTO_DETECTION_SKIPPED    BIT_U16(8)
 /** Raw reassembly disabled for new segments */
 #define STREAMTCP_STREAM_FLAG_NEW_RAW_DISABLED              BIT_U16(9)
-/** Raw reassembly disabled completely */
+/* 被检测引擎用于内容检测, * Raw reassembly disabled completely */
 #define STREAMTCP_STREAM_FLAG_DISABLE_RAW                   BIT_U16(10)
 
 #define STREAMTCP_STREAM_FLAG_RST_RECV                      BIT_U16(11)
@@ -270,7 +270,7 @@ typedef struct TcpSession_ {
     uint32_t reassembly_depth;   /* 最大缓存深度, 0表示不限制缓存总量, reassembly depth for the stream */
     TcpStream server;            /* 服务器状态信息，跟踪服务器发出的报文 */
     TcpStream client;            /* 客户端状态信息 */
-    TcpStateQueue *queue;        /* list of SYN/ACK candidates */
+    TcpStateQueue *queue;        /* 存储的syn+ack报文, list of SYN/ACK candidates */
 } TcpSession;     /* TCP会话信息，用于跟踪流，流重组等 */
 
 #define StreamTcpSetStreamFlagAppProtoDetectionCompleted(stream) \

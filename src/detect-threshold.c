@@ -94,7 +94,7 @@ void DetectThresholdRegister(void)
 
 static int DetectThresholdMatch(DetectEngineThreadCtx *det_ctx, Packet *p,
         const Signature *s, const SigMatchCtx *ctx)
-{
+{   /* 一定会匹配上 */
     return 1;
 }
 
@@ -125,7 +125,7 @@ static DetectThresholdData *DetectThresholdParse(const char *rawstr)
     if (unlikely(copy_str == NULL)) {
         goto error;
     }
-
+    /* "threshold: type limit, track by_src, seconds 60, count 1;" */
     char *saveptr = NULL;
     for (pos = 0, threshold_opt = strtok_r(copy_str,",", &saveptr);
          pos < strlen(copy_str) && threshold_opt != NULL;
@@ -145,7 +145,7 @@ static DetectThresholdData *DetectThresholdParse(const char *rawstr)
 
     if(count_found != 1 || second_found != 1 || type_found != 1 || track_found != 1)
         goto error;
-
+    /* pcre匹配 */
     ret = DetectParsePcreExec(&parse_regex, rawstr, 0, 0, ov, MAX_SUBSTRINGS);
     if (ret < 5) {
         SCLogError(SC_ERR_PCRE_MATCH, "pcre_exec parse error, ret %" PRId32 ", string %s", ret, rawstr);
@@ -157,7 +157,7 @@ static DetectThresholdData *DetectThresholdParse(const char *rawstr)
         goto error;
 
     memset(de,0,sizeof(DetectThresholdData));
-
+    /* 解析 */
     for (i = 0; i < (ret - 1); i++) {
 
         res = pcre_get_substring((char *)rawstr, ov, MAX_SUBSTRINGS,i + 1, &str_ptr);
@@ -227,7 +227,7 @@ error:
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 解析"threshold: type limit, track by_src, seconds 60, count 1;" */
 static int DetectThresholdSetup(DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     DetectThresholdData *de = NULL;
@@ -236,7 +236,7 @@ static int DetectThresholdSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
 
     /* checks if there is a previous instance of detection_filter */
     tmpm = DetectGetLastSMFromLists(s, DETECT_THRESHOLD, DETECT_DETECTION_FILTER, -1);
-    if (tmpm != NULL) {
+    if (tmpm != NULL) {                  /* DETECT_THRESHOLD 和 DETECT_DETECTION_FILTER 不允许同时存在 */
         if (tmpm->type == DETECT_DETECTION_FILTER) {
             SCLogError(SC_ERR_INVALID_SIGNATURE, "\"detection_filter\" and "
                     "\"threshold\" are not allowed in the same rule");
@@ -247,11 +247,11 @@ static int DetectThresholdSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
         SCReturnInt(-1);
     }
 
-    de = DetectThresholdParse(rawstr);
+    de = DetectThresholdParse(rawstr);   /* 解析 */
     if (de == NULL)
         goto error;
 
-    if (de->track == TRACK_RULE)
+    if (de->track == TRACK_RULE)         /* 扩展 DetectEngineCtx->ths_ctx */
         ThresholdHashRealloc(de_ctx);
 
     sm = SigMatchAlloc();
@@ -260,7 +260,7 @@ static int DetectThresholdSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
 
     sm->type = DETECT_THRESHOLD;
     sm->ctx = (SigMatchCtx *)de;
-
+                                         /* 添加匹配 */
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_THRESHOLD);
 
     return 0;

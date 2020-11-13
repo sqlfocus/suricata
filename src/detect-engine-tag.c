@@ -47,15 +47,15 @@ SC_ATOMIC_DECLARE(unsigned int, num_tags);  /**< Atomic counter, to know if we
                                                  to avoid locking */
 static int host_tag_id = -1;                /**< Host storage id for tags */
 static int flow_tag_id = -1;                /**< Flow storage id for tags */
-
+/* 注册打标/“tag”关键字存储索引 */
 void TagInitCtx(void)
 {
     SC_ATOMIC_INIT(num_tags);
-
+       /* 主机打表 */
     host_tag_id = HostStorageRegister("tag", sizeof(void *), NULL, DetectTagDataListFree);
     if (host_tag_id == -1) {
         FatalError(SC_ERR_FATAL, "Can't initiate host storage for tag");
-    }
+    }  /* 流打标 */
     flow_tag_id = FlowStorageRegister("tag", sizeof(void *), NULL, DetectTagDataListFree);
     if (flow_tag_id == -1) {
         FatalError(SC_ERR_FATAL, "Can't initiate flow storage for tag");
@@ -176,10 +176,10 @@ int TagFlowAdd(Packet *p, DetectTagDataEntry *tde)
  * \param p packet
  *
  * \retval 0 if it was added, 1 if it was updated
- */
-int TagHashAddTag(DetectTagDataEntry *tde, Packet *p)
-{
-    SCEnter();
+ *//* 主机信息存在全局哈希表, hosh_hash, 以IP为键; “tag”注册的匹配信息注册在 */
+int TagHashAddTag(DetectTagDataEntry *tde, Packet *p) /* 主机信息中(指针数组) */
+{  /* 索引 host_tag_id; 并且匹配Signature后, 打标的信息以链表方式串接起来; */
+    SCEnter();  /* 此链表长度有限制, 链表中某个Signature的匹配信息也有数量限制 */
 
     uint8_t updated = 0;
     uint16_t ntags = 0;
@@ -188,7 +188,7 @@ int TagHashAddTag(DetectTagDataEntry *tde, Packet *p)
     /* Lookup host in the hash. If it doesn't exist yet it's
      * created. */
     if (tde->flags & TAG_ENTRY_FLAG_DIR_SRC) {
-        host = HostGetHostFromHash(&p->src);
+        host = HostGetHostFromHash(&p->src);   /* 从 host_hash 获取/新建打标信息结构 */
     } else if (tde->flags & TAG_ENTRY_FLAG_DIR_DST) {
         host = HostGetHostFromHash(&p->dst);
     }
@@ -197,12 +197,12 @@ int TagHashAddTag(DetectTagDataEntry *tde, Packet *p)
         SCLogDebug("host tag not added: no host");
         return -1;
     }
-
+                                               /* 获取某主机/IP的tag存储信息链表 */
     void *tag = HostGetStorageById(host, host_tag_id);
     if (tag == NULL) {
         /* get a new tde as the one we have is on the stack */
         DetectTagDataEntry *new_tde = DetectTagDataCopy(tde);
-        if (new_tde != NULL) {
+        if (new_tde != NULL) {                 /* 无则新建 */
             HostSetStorageById(host, host_tag_id, new_tde);
             (void) SC_ATOMIC_ADD(num_tags, 1);
             SCLogDebug("host tag added");
@@ -213,11 +213,11 @@ int TagHashAddTag(DetectTagDataEntry *tde, Packet *p)
 
         /* First iterate installed entries searching a duplicated sid/gid */
         DetectTagDataEntry *iter = NULL;
-
+                                               /* 遍历链表查找, 匹配 Signature */
         for (iter = tag; iter != NULL; iter = iter->next) {
             ntags++;
             if (iter->sid == tde->sid && iter->gid == tde->gid) {
-                iter->cnt_match++;
+                iter->cnt_match++;             /* 每个Signature仅允许一定数量的匹配 */
                 /* If so, update data, unless the maximum MATCH limit is
                  * reached. This prevents possible DOS attacks */
                 if (iter->cnt_match < DETECT_TAG_MATCH_LIMIT) {
@@ -238,7 +238,7 @@ int TagHashAddTag(DetectTagDataEntry *tde, Packet *p)
             if (new_tde != NULL) {
                 (void) SC_ATOMIC_ADD(num_tags, 1);
 
-                new_tde->next = tag;
+                new_tde->next = tag;           /* 未匹配到Signature, 则新建 */
                 HostSetStorageById(host, host_tag_id, new_tde);
             }
         } else if (ntags == DETECT_TAG_MAX_TAGS) {
@@ -371,7 +371,7 @@ static void TagHandlePacketFlow(Flow *f, Packet *p)
         iter = iter->next;
     }
 }
-
+/* 试图给报文打标, 主机标签 */
 static void TagHandlePacketHost(Host *host, Packet *p)
 {
     DetectTagDataEntry *tde = NULL;
@@ -381,10 +381,10 @@ static void TagHandlePacketHost(Host *host, Packet *p)
 
     iter = HostGetStorageById(host, host_tag_id);
     prev = NULL;
-    while (iter != NULL) {
+    while (iter != NULL) {      /* 遍历此主机的tag结构 */
         /* update counters */
         iter->last_ts = p->ts.tv_sec;
-        switch (iter->metric) {
+        switch (iter->metric) { /* 计数 */
             case DETECT_TAG_METRIC_PACKET:
                 iter->packets++;
                 break;
@@ -401,7 +401,7 @@ static void TagHandlePacketHost(Host *host, Packet *p)
             /* Update metrics; remove if tag expired; and set alerts */
             switch (iter->metric) {
                 case DETECT_TAG_METRIC_PACKET:
-                    if (iter->packets > iter->count) {
+                    if (iter->packets > iter->count) { /* 超过计数值, 标签失效, 删除 */
                         SCLogDebug("host tag expired: packets %u > %u", iter->packets, iter->count);
                         /* tag expired */
                         if (prev != NULL) {
@@ -419,7 +419,7 @@ static void TagHandlePacketHost(Host *host, Packet *p)
                             HostSetStorageById(host, host_tag_id, iter);
                             continue;
                         }
-                    } else if (flag_added == 0) {
+                    } else if (flag_added == 0) {      /* 给报文打标 */
                         /* It's matching the tag. Add it to be logged and
                          * update "flag_added" to add the packet once. */
                         p->flags |= PKT_HAS_TAG;
@@ -498,7 +498,7 @@ static void TagHandlePacketHost(Host *host, Packet *p)
  * \param det_ctx Detect thread context
  * \param p packet
  *
- */
+ *//* 试图给报文打标 */
 void TagHandlePacket(DetectEngineCtx *de_ctx,
                      DetectEngineThreadCtx *det_ctx, Packet *p)
 {
@@ -506,16 +506,16 @@ void TagHandlePacket(DetectEngineCtx *de_ctx,
 
     /* If there's no tag, get out of here */
     unsigned int current_tags = SC_ATOMIC_GET(num_tags);
-    if (current_tags == 0)
+    if (current_tags == 0)       /* 快捷方式, 无注册标签 */
         SCReturn;
 
     /* First update and get session tags */
-    if (p->flow != NULL) {
+    if (p->flow != NULL) {       /* 试图打流标签 */
         TagHandlePacketFlow(p->flow, p);
     }
 
     Host *src = HostLookupHostFromHash(&p->src);
-    if (src) {
+    if (src) {                   /* 试图打主机标签 */
         if (TagHostHasTag(src)) {
             TagHandlePacketHost(src,p);
         }

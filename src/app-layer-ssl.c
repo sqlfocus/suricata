@@ -2913,7 +2913,7 @@ static int SSLRegisterPatternsForProtocolDetection(void)
 
 /**
  * \brief Function to register the SSL protocol parser and other functions
- */
+ *//* 注册SSL应用解析、处理 */
 void RegisterSSLParsers(void)
 {
     const char *proto_name = "tls";

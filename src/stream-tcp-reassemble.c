@@ -879,12 +879,12 @@ static StreamingBufferBlock *GetBlock(StreamingBuffer *sb, const uint64_t offset
     StreamingBufferBlock *blk = sb->head;
     if (blk == NULL)
         return NULL;
-
+    /* 指定获取数据的起始位置offset, 获取其后(其上)的第一个数据块  */
     for ( ; blk != NULL; blk = SBB_RB_NEXT(blk)) {
         if (blk->offset >= offset)
-            return blk;
+            return blk;  /* 偏移地址在空洞上, 数据块位于其后 */
         else if ((blk->offset + blk->len) > offset) {
-            return blk;
+            return blk;  /* 偏移地址在(空洞后的第一个)数据块上 */
         }
     }
     return NULL;
@@ -905,9 +905,9 @@ static inline bool GapAhead(TcpStream *stream, StreamingBufferBlock *cur_blk)
     StreamingBufferBlock *nblk = SBB_RB_NEXT(cur_blk);
     if (nblk && (cur_blk->offset + cur_blk->len < nblk->offset) &&
             GetAbsLastAck(stream) >= (cur_blk->offset + cur_blk->len)) {
-        return true;
+        return true;      /* 在当前块后仍然存在空洞 */
     }
-    return false;
+    return false;         /* 后续不存在空洞 */
 }
 
 /** \internal
@@ -918,7 +918,7 @@ static inline bool GapAhead(TcpStream *stream, StreamingBufferBlock *cur_blk)
  *  \param offset stream offset
  *  \param check_for_gap check if there is a gap ahead. Optional as it is only
  *                       needed for app-layer incomplete support.
- *  \retval bool pkt loss ahead */
+ *  \retval bool pkt loss ahead *//* 获取已缓存数据 */
 static bool GetAppBuffer(TcpStream *stream, const uint8_t **data, uint32_t *data_len,
         uint64_t offset, const bool check_for_gap)
 {
@@ -935,27 +935,27 @@ static bool GetAppBuffer(TcpStream *stream, const uint8_t **data, uint32_t *data
         *data_len = mydata_len;
     } else {                              /* 有空洞，返回其中的块 */
         StreamingBufferBlock *blk = GetBlock(&stream->sb, offset);
-        if (blk == NULL) {
+        if (blk == NULL) {                         /* 在要求偏移, 无数据 */
             *data = NULL;
             *data_len = 0;
             return false;
         }
 
         /* block at expected offset */
-        if (blk->offset == offset) {
+        if (blk->offset == offset) {               /* 数据块起始为指定偏移, 返回(此数据块) */
 
             StreamingBufferSBBGetData(&stream->sb, blk, data, data_len);
 
             gap_ahead = check_for_gap && GapAhead(stream, blk);
 
         /* block past out offset */
-        } else if (blk->offset > offset) {
+        } else if (blk->offset > offset) {         /* 数据块在指定偏移后, 返回(NULL, 空洞长度) */
             SCLogDebug("gap, want data at offset %"PRIu64", "
                     "got data at %"PRIu64". GAP of size %"PRIu64,
                     offset, blk->offset, blk->offset - offset);
             *data = NULL;
             *data_len = blk->offset - offset;
-
+                                                   /* 数据块包含了指定偏移, 返回(部分数据) */
         /* block starts before offset, but ends after */
         } else if (offset > blk->offset && offset <= (blk->offset + blk->len)) {
             SCLogDebug("get data from offset %"PRIu64". SBB %"PRIu64"/%u",
@@ -965,12 +965,12 @@ static bool GetAppBuffer(TcpStream *stream, const uint8_t **data, uint32_t *data
 
             gap_ahead = check_for_gap && GapAhead(stream, blk);
 
-        } else {
+        } else {                                   /* */
             *data = NULL;
             *data_len = 0;
         }
     }
-    return gap_ahead;
+    return gap_ahead;      /* 返回的数据块后是否存在空洞 */
 }
 
 /** \internal
@@ -1047,7 +1047,7 @@ static inline uint32_t AdjustToAcked(const Packet *p,
                     (ssn->state == TCP_CLOSED &&
                      (ssn->flags & STREAMTCP_FLAG_CLOSED_BY_RST) != 0)) &&
                 (p->flags & PKT_PSEUDO_STREAM_END))
-        {
+        {   /* 对于伪造报文, 利用所有数据 */
             // fall through, we use all available data
         } else {
             uint64_t last_ack_abs = STREAM_BASE_OFFSET(stream);
@@ -1059,7 +1059,7 @@ static inline uint32_t AdjustToAcked(const Packet *p,
                 last_ack_abs += delta;
             }
 
-            /* see if the buffer contains unack'd data as well */
+            /* 如果包含未ack的数据, 则不处理, see if the buffer contains unack'd data as well */
             if (app_progress + data_len > last_ack_abs) {
                 uint32_t check = data_len;
                 adjusted = last_ack_abs - app_progress;
@@ -1092,16 +1092,16 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
     bool gap_ahead = false;                                /* 获取当前流状态/标志 */
     const uint8_t flags = StreamGetAppLayerFlags(ssn, *stream, p);
 
-    while (1) {         /* 获取缓存的应用数据 */
+    while (1) {                  /* 获取缓存的应用数据（可能存在空洞） */
         bool check_for_gap_ahead = ((*stream)->data_required > 0);
         gap_ahead = GetAppBuffer(*stream, &mydata, &mydata_len,
                 app_progress, check_for_gap_ahead);
-        /* make sure to only deal with ACK'd data */
+        /* make sure to only deal with ACK'd data */       /* 调整为ack的数据 */
         mydata_len = AdjustToAcked(p, ssn, *stream, app_progress, mydata_len);
         DEBUG_VALIDATE_BUG_ON(mydata_len > (uint32_t)INT_MAX);
         if (mydata == NULL && mydata_len > 0 && CheckGap(ssn, *stream, p)) {
             SCLogDebug("sending GAP to app-layer (size: %u)", mydata_len);
-
+            /* CASE: 向应用发送GAP, (NULL, gap长度) */
             int r = AppLayerHandleTCPData(tv, ra_ctx, p, p->flow, ssn, stream,
                     NULL, mydata_len,
                     StreamGetAppLayerFlags(ssn, *stream, p)|STREAM_GAP);
@@ -1116,27 +1116,27 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
 
             /* a GAP also consumes 'data required'. TODO perhaps we can use
              * this to skip post GAP data until the start of a next record. */
-            if ((*stream)->data_required > 0) {
+            if ((*stream)->data_required > 0) {            /* 应用程序也可能消耗gap, 调整需求数据 */
                 if ((*stream)->data_required > mydata_len) {
                     (*stream)->data_required -= mydata_len;
                 } else {
                     (*stream)->data_required = 0;
                 }
             }
-            if (r < 0)
+            if (r < 0)               /* 失败 */
                 return 0;
-            if (no_progress_update)
+            if (no_progress_update)  /* 未消耗数据 */
                 break;
-            continue;
+            continue;                /* 消耗了gap数据, 则继续 */
 
         } else if (flags & STREAM_DEPTH) {
             // we're just called once with this flag, so make sure we pass it on
-
+            /* CASE: 到达检测深度, 不再解析 */
         } else if (mydata == NULL || (mydata_len == 0 && ((flags & STREAM_EOF) == 0))) {
-            /* 无新数据 Possibly a gap, but no new data. */
+            /* CASE: 无新数据 Possibly a gap, but no new data. */
             if ((p->flags & PKT_PSEUDO_STREAM_END) == 0 || ssn->state < TCP_CLOSED)
                 SCReturnInt(0);
-
+            /* CASE: 流结束, 或伪结束报文 */
             mydata = NULL;
             mydata_len = 0;
             SCLogDebug("%"PRIu64" got %p/%u", p->pcap_cnt, mydata, mydata_len);
@@ -1145,10 +1145,10 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
 
         SCLogDebug("stream %p data in buffer %p of len %u and offset %"PRIu64,
                 *stream, &(*stream)->sb, mydata_len, app_progress);
-
+        /* CASE: 无间隙数据 */
         if ((p->flags & PKT_PSEUDO_STREAM_END) == 0 || ssn->state < TCP_CLOSED) {
-            if (mydata_len < (*stream)->data_required) {
-                if (gap_ahead) {
+            if (mydata_len < (*stream)->data_required) {     /* 数据长度未满足需求 */
+                if (gap_ahead) {                 /* 此数据段后存在GAP, 直接修改已处理??? */
                     SCLogDebug("GAP while expecting more data (expect %u, gap size %u)",
                             (*stream)->data_required, mydata_len);
                     (*stream)->app_progress_rel += mydata_len;
@@ -1156,7 +1156,7 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
                     // TODO send incomplete data to app-layer with special flag
                     // indicating its all there is for this rec?
                 } else {
-                    SCReturnInt(0);
+                    SCReturnInt(0);              /* 无间隙, 但数据长度不够, 先返回 */
                 }
                 app_progress = STREAM_APP_PROGRESS(*stream);
                 continue;
@@ -1164,15 +1164,15 @@ static int ReassembleUpdateAppLayer (ThreadVars *tv,
         }
         (*stream)->data_required = 0;
 
-        /* update the app-layer */
+        /* update the app-layer */               /* 向应用发送数据 */
         (void)AppLayerHandleTCPData(tv, ra_ctx, p, p->flow, ssn, stream,
                 (uint8_t *)mydata, mydata_len, flags);
         AppLayerProfilingStore(ra_ctx->app_tctx, p);
         uint64_t new_app_progress = STREAM_APP_PROGRESS(*stream);
         if (new_app_progress == app_progress || FlowChangeProto(p->flow))
-            break;
+            break;                               /* 应用未处理数据, 先返回 */
         app_progress = new_app_progress;
-        if (flags & STREAM_DEPTH)
+        if (flags & STREAM_DEPTH)                /* 应用处理掉了数据, 继续 */
             break;
     }
 
@@ -1212,9 +1212,9 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
     /* if no segments are in the list or all are already processed,
      * and state is beyond established, we send an empty msg */
     if (!STREAM_HAS_SEEN_DATA(stream) || STREAM_RIGHT_EDGE(stream) <= STREAM_APP_PROGRESS(stream))
-    {   /* 所有数据都已处理完毕 */
+    {   /* 所有数据都已处理完毕, 如果tcp链路关闭, 则向应用层发送一个空数据(NULL, 0) */
         /* send an empty EOF msg if we have no segments but TCP state
-         * is beyond ESTABLISHED */
+         * is beyond ESTABLISHED *//* 以期待应用层释放相应内存 */
         if (ssn->state >= TCP_CLOSING || (p->flags & PKT_PSEUDO_STREAM_END)) {
             SCLogDebug("sending empty eof message");
             /* send EOF to app layer */
@@ -1227,7 +1227,7 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
         }
     }
 
-    /* 更新应用层，with all that out of the way, lets update the app-layer */
+    /* 有待处理的数据, 更新应用层，with all that out of the way, lets update the app-layer */
     return ReassembleUpdateAppLayer(tv, ra_ctx, ssn, &stream, p, dir);
 }
 

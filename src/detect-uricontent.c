@@ -117,7 +117,7 @@ void DetectUricontentFree(DetectEngineCtx *de_ctx, void *ptr)
 int DetectUricontentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *contentstr)
 {
     SCEnter();
-
+    /* “uricontent”已过期, 使用"content:%s; http_uri;"替代 */
     const char *legacy = NULL;
     if (ConfGet("legacy.uricontent", &legacy) == 1) {
         if (strcasecmp("disabled", legacy) == 0) {
@@ -136,10 +136,10 @@ int DetectUricontentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *con
             goto error;
         }
     }
-
+    /* 构建对应的内容匹配 */
     if (DetectContentSetup(de_ctx, s, contentstr) < 0)
         goto error;
-
+    /* 构建"http_uri"修改关键字 */
     if (DetectHttpUriSetup(de_ctx, s, NULL) < 0)
         goto error;
 

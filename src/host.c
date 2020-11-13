@@ -46,7 +46,7 @@
 static Host *HostGetUsedHost(void);
 
 /** host hash table */
-HostHashRow *host_hash;
+HostHashRow *host_hash;          /* 存放主机打标信息 */
 /** queue with spare hosts */
 static HostQueue host_spare_q;
 HostConfig host_config;
@@ -565,7 +565,7 @@ Host *HostGetHostFromHash (Address *a)
                     h->hprev->hnext = h->hnext;
                 }
                 if (h == hb->tail) {
-                    hb->tail = h->hprev;
+                    hb->tail = h->hprev;   /* 移动到链表头, 显式激活 */
                 }
 
                 h->hnext = hb->head;
@@ -574,7 +574,7 @@ Host *HostGetHostFromHash (Address *a)
                 hb->head = h;
 
                 /* found our host, lock & return */
-                SCMutexLock(&h->m);
+                SCMutexLock(&h->m);        /* 加锁, 增加引用计数 */
                 (void) HostIncrUsecnt(h);
                 HRLOCK_UNLOCK(hb);
                 return h;

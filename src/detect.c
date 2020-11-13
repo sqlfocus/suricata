@@ -63,7 +63,7 @@ typedef struct DetectRunScratchpad {
     const AppProto alproto;   /* 已识别的应用层协议 */
     const uint8_t flow_flags; /* flow/state flags: STREAM_FLUSH */
     const bool app_decoder_events;  /* 存在应用解析事件 */
-    const SigGroupHead *sgh;  /* */
+    const SigGroupHead *sgh;  /* 基于端口的规则组 */
     SignatureMask pkt_mask;   /* 条件过滤掩码, PacketCreateMask() */
 } DetectRunScratchpad; /* 报文检测过程中, 记录相关信息 */
 
@@ -110,7 +110,7 @@ static void DetectRun(ThreadVars *th_v,
     /* 构建逐包信息结构, 存储检测过程的临时信息 */
     DetectRunScratchpad scratch = DetectRunSetup(de_ctx, det_ctx, p, pflow);
 
-    /* 运行IPonly检测引擎 */
+    /* 运行IPonly检测引擎: 匹配报文内容 */
     DetectRunInspectIPOnly(th_v, de_ctx, det_ctx, pflow, p);
 
     /* 获取基于端口的规则组 */

@@ -23,7 +23,7 @@ typedef union {
     uint16_t u16[8];
     uint32_t u32[4];
     uint64_t u64[2];
-} PrefilterPacketHeaderValue;
+} PrefilterPacketHeaderValue;  /* prefilter匹配所需要的通用数据结构 */
 
 #define PREFILTER_EXTRA_MATCH_UNUSED  0
 #define PREFILTER_EXTRA_MATCH_ALPROTO 1
@@ -31,13 +31,13 @@ typedef union {
 #define PREFILTER_EXTRA_MATCH_DSTPORT 3
 
 typedef struct PrefilterPacketHeaderCtx_ {
-    PrefilterPacketHeaderValue v1;
+    PrefilterPacketHeaderValue v1;  /* 匹配信息 */
 
-    uint16_t type;
-    uint16_t value;
+    uint16_t type;      /* 额外匹配类型, 如 PREFILTER_EXTRA_MATCH_ALPROTO */
+    uint16_t value;     /* 额外匹配值, 如 ALPROTO_UNKNOWN */
 
     /** rules to add when the flags are present */
-    uint32_t sigs_cnt;
+    uint32_t sigs_cnt;              /* 复用此结构的规则 */
     SigIntId *sigs_array;
 } PrefilterPacketHeaderCtx;
 
@@ -69,7 +69,7 @@ int PrefilterSetupPacketHeaderU8Hash(DetectEngineCtx *de_ctx,
         bool (*Compare)(PrefilterPacketHeaderValue v, void *),
         void (*Match)(DetectEngineThreadCtx *det_ctx,
             Packet *p, const void *pectx));
-
+/* 快速匹配的额外匹配 */
 static inline bool
 PrefilterPacketHeaderExtraMatch(const PrefilterPacketHeaderCtx *ctx,
                                 const Packet *p)

@@ -131,7 +131,13 @@ SCLogConfig *sc_log_config         日志配置信息结构
 
 --OutputFilestoreLogger()     日志阶段, 输出缓存文件
 
+                                                       
+* 应用层协议解析 - SSL/TLS
+--AppLayerParserRegisterProtocolParsers()
+  --RegisterSSLParsers()      注册SSL识别关键字, 解析函数
+                                                       
 
+                                                       
 * 基于规则的安全检测
 配置文件目录: /path/to/suricata/etc/
 规则文件目录: /path/to/suricata/rules/

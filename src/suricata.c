@@ -2534,9 +2534,9 @@ int PostConfLoadedSetup(SCInstance *suri)
     CIDRInit();                     /* 初始化掩码数组，以加速获取对应bit位数的掩码 */
     SCProtoNameInit();              /* 传输层协议映射表，来自/etc/protocols */
 
-    TagInitCtx();                   /* tag/bit等关键字注册到storage模块 */
+    TagInitCtx();                   /* tag等关键字注册到storage模块 */
     PacketAlertTagInit();           /* tag告警, g_tag_signature/g_tag_pa */
-    ThresholdInit();
+    ThresholdInit();                /* threshold关键字 */
     HostBitInitCtx();
     IPPairBitInitCtx();
 

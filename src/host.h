@@ -60,16 +60,16 @@ typedef struct Host_ {
     SCMutex m;
 
     /** host address -- ipv4 or ipv6 */
-    Address a;
+    Address a;           /* 地址 */
 
-    /** use cnt, reference counter */
+    /** use cnt, reference counter *//* 引用计数 */
     SC_ATOMIC_DECLARE(unsigned int, use_cnt);
 
     /** pointers to iprep storage */
     void *iprep;
 
     /** storage api handle */
-    Storage *storage;
+    Storage *storage;    /* */
 
     /** hash pointers, protected by hash row mutex/spin */
     struct Host_ *hnext;
@@ -78,7 +78,7 @@ typedef struct Host_ {
     /** list pointers, protected by host-queue mutex/spin */
     struct Host_ *lnext;
     struct Host_ *lprev;
-} Host;
+} Host;  /* 存储主机打标信息, DETECT_TAG_TYPE_HOST */
 
 typedef struct HostHashRow_ {
     HRLOCK_TYPE lock;

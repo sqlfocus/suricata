@@ -935,8 +935,8 @@ static int StreamTcpPacketStateNone(ThreadVars *tv, Packet *p,
 
         /* reverse packet and flow */
         SCLogDebug("reversing flow and packet");
-        PacketSwap(p);         /* 由于syn+ack触发的建会话，倒换流、报文的信息 */
-        FlowSwap(p->flow);
+        PacketSwap(p);         /* 由于syn+ack触发的建会话和流, 流中记录的五元组和 */
+        FlowSwap(p->flow);     /* 真实情况相反, 因此倒换流、报文的标识信息 */
 
         /* set the state */    /* 更新会话状态，流状态 */
         StreamTcpPacketSetState(p, ssn, TCP_SYN_RECV);
@@ -1426,7 +1426,7 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
     if (StateSynSentValidateTimestamp(ssn, p) == false)
         return -1;
 
-    /* 异常处理：处理RST报文 */
+    /* 异常处理：收到RST报文 */
     if (p->tcph->th_flags & TH_RST) {
         if (!StreamTcpValidateRst(ssn, p))    /* 验证RST报文序号是否合法 */
             return -1;
@@ -1435,22 +1435,22 @@ static int StreamTcpPacketStateSynSent(ThreadVars *tv, Packet *p,
             if (SEQ_EQ(TCP_GET_SEQ(p), ssn->client.isn) &&
                     SEQ_EQ(TCP_GET_WINDOW(p), 0) &&
                     SEQ_EQ(TCP_GET_ACK(p), (ssn->client.isn + 1)))
-            {
+            {         /* rst发往服务器 */
                 SCLogDebug("ssn->server.flags |= STREAMTCP_STREAM_FLAG_RST_RECV");
                 ssn->server.flags |= STREAMTCP_STREAM_FLAG_RST_RECV;
                 StreamTcpCloseSsnWithReset(p, ssn);
             }
-        } else {
+        } else {      /* rst发往客户端 */
             ssn->client.flags |= STREAMTCP_STREAM_FLAG_RST_RECV; /* 设置收到RST标志 */
             SCLogDebug("ssn->client.flags |= STREAMTCP_STREAM_FLAG_RST_RECV");
             StreamTcpCloseSsnWithReset(p, ssn);                  /* 设置关闭状态 */
         }
 
-    /* 异常处理：处理FIN报文 */
+    /* 异常处理：收到FIN报文 */
     } else if (p->tcph->th_flags & TH_FIN) {
         /** \todo */
 
-    /* 正常处理：处理SYN/ACK报文 */
+    /* 正常处理：收到SYN/ACK报文 */
     } else if ((p->tcph->th_flags & (TH_SYN|TH_ACK)) == (TH_SYN|TH_ACK)) {
         if ((ssn->flags & STREAMTCP_FLAG_4WHS) && PKT_IS_TOSERVER(p)) {
             SCLogDebug("ssn %p: SYN/ACK received on 4WHS session", ssn);
@@ -4352,13 +4352,13 @@ static void StreamTcpPacketCheckPostRst(TcpSession *ssn, Packet *p)
     } else {
         ostream = &ssn->client;
     }
-
+    /* 发送了RST后, 仍然在继续发送报文: RST报文是被注入进来的 */
     if (ostream->flags & STREAMTCP_STREAM_FLAG_RST_RECV) {
         SCLogDebug("regular packet %"PRIu64" from same sender as "
                 "the previous RST. Looks like it injected!", p->pcap_cnt);
         ostream->flags &= ~STREAMTCP_STREAM_FLAG_RST_RECV;
-        ssn->flags &= ~STREAMTCP_FLAG_CLOSED_BY_RST;
-        StreamTcpSetEvent(p, STREAM_SUSPECTED_RST_INJECT);
+        ssn->flags &= ~STREAMTCP_FLAG_CLOSED_BY_RST;        /* 消掉关闭标志 */
+        StreamTcpSetEvent(p, STREAM_SUSPECTED_RST_INJECT);  /* 设置"怀疑RST注入"标志 */
         return;
     }
     return;
@@ -4651,7 +4651,7 @@ static int StreamTcpPacketIsBadWindowUpdate(TcpSession *ssn, Packet *p)
 /** \internal
  *  \brief call packet handling function for 'state'
  *  \param state current TCP state
- */
+ *//* tcp状态机处理流程 */
 static inline int StreamTcpStateDispatch(ThreadVars *tv, Packet *p,
         StreamTcpThread *stt, TcpSession *ssn, PacketQueueNoLock *pq,
         const uint8_t state)
@@ -4823,7 +4823,7 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
                 ssn->client.last_ack = TCP_GET_ACK(p);
                 StreamTcpReassembleHandleSegment(tv, stt->ra_ctx, ssn,
                         &ssn->server, p, pq);
-            } else {             /* */
+            } else {             /* 对于注入的流结束报文, 仅关注流重组, 跳过状态机 */
                 ssn->server.last_ack = TCP_GET_ACK(p);
                 StreamTcpReassembleHandleSegment(tv, stt->ra_ctx, ssn,
                         &ssn->client, p, pq);
@@ -4860,7 +4860,7 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
 
     skip:
         StreamTcpPacketCheckPostRst(ssn, p);
-                                 /* 检测RST报文 */
+                                 /* 检测RST注入 */
         if (ssn->state >= TCP_ESTABLISHED) {
             p->flags |= PKT_STREAM_EST;
         }
@@ -4871,7 +4871,7 @@ int StreamTcpPacket (ThreadVars *tv, Packet *p, StreamTcpThread *stt,
      * inject a fake packet into the system, forcing reassembly of the
      * opposing direction.
      * There should be only one, but to be sure we do a while loop. */
-    if (ssn != NULL) {
+    if (ssn != NULL) {              /* CASE: 如果在处理报文过程中, 内部产生了伪报文, 则回传过检测 */
         while (stt->pseudo_queue.len > 0) {
             SCLogDebug("processing pseudo packet / stream end");
             Packet *np = PacketDequeueNoLock(&stt->pseudo_queue);
@@ -4979,7 +4979,7 @@ static inline int StreamTcpValidateChecksum(Packet *p)
 
     if (p->flags & PKT_IGNORE_CHECKSUM)
         return ret;
-
+    /* 计算校验和 */
     if (p->level4_comp_csum == -1) {
         if (PKT_IS_IPV4(p)) {
             p->level4_comp_csum = TCPChecksum(p->ip4h->s_ip_addrs,
@@ -4995,12 +4995,12 @@ static inline int StreamTcpValidateChecksum(Packet *p)
                                                 p->tcph->th_sum);
         }
     }
-
+    /* 校验和失败, 计数 */
     if (p->level4_comp_csum != 0) {
         ret = 0;
-        if (p->livedev) {
+        if (p->livedev) {          /* 在线网卡 */
             (void) SC_ATOMIC_ADD(p->livedev->invalid_checksums, 1);
-        } else if (p->pcap_cnt) {
+        } else if (p->pcap_cnt) {  /* 离线pcap文件 */
             PcapIncreaseInvalidChecksum();
         }
     }
@@ -5176,7 +5176,7 @@ TmEcode StreamTcp (ThreadVars *tv, Packet *p, void *data, PacketQueueNoLock *pq)
     }
 
     /* only TCP packets with a flow from here */
-                               /* 校验和 */
+                               /* 校验和失败, 不重组 */
     if (!(p->flags & PKT_PSEUDO_STREAM_END)) {
         if (stream_config.flags & STREAMTCP_INIT_FLAG_CHECKSUM_VALIDATION) {
             if (StreamTcpValidateChecksum(p) == 0) {

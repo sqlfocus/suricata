@@ -357,18 +357,18 @@ static void FlowPruneFiles(Packet *p)
 
 static inline void FlowWorkerStreamTCPUpdate(ThreadVars *tv, FlowWorkerThreadData *fw,
         Packet *p, void *detect_thread)
-{
+{   /* 流重组, 应用识别, 应用解析 */
     FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_STREAM);
     StreamTcp(tv, p, fw->stream_thread, &fw->pq);
     FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_STREAM);
-
+    /* 应用识别结果有变更, 则输出其历史日志 */
     if (FlowChangeProto(p->flow)) {
         StreamTcpDetectLogFlush(tv, fw->stream_thread, p->flow, p, &fw->pq);
         AppLayerParserStateSetFlag(p->flow->alparser, APP_LAYER_PARSER_EOF_TS);
         AppLayerParserStateSetFlag(p->flow->alparser, APP_LAYER_PARSER_EOF_TC);
     }
 
-    /* Packets here can safely access p->flow as it's locked */
+    /* 流重组过程产生的伪报文(如由于rst而注入的反方向报文), 逐包检测, Packets here can safely access p->flow as it's locked */
     SCLogDebug("packet %"PRIu64": extra packets %u", p->pcap_cnt, fw->pq.len);
     Packet *x;
     while ((x = PacketDequeueNoLock(&fw->pq))) {
@@ -382,7 +382,7 @@ static inline void FlowWorkerStreamTCPUpdate(ThreadVars *tv, FlowWorkerThreadDat
 
         OutputLoggerLog(tv, x, fw->output_thread);
 
-        /* put these packets in the preq queue so that they are
+        /* 插入线程队列, put these packets in the preq queue so that they are
          * by the other thread modules before packet 'p'. */
         PacketEnqueueNoLock(&tv->decode_pq, x);
     }
@@ -518,11 +518,11 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         {
             DisableDetectFlowFileFlags(p->flow);
         }
-
+                                                       /* 流重组(操作报文原始数据) */
         FlowWorkerStreamTCPUpdate(tv, fw, p, detect_thread);
-
+                                          /* CASE: UDP处理 */
     /* handle the app layer part of the UDP packet payload */
-    } else if (p->flow && p->proto == IPPROTO_UDP) {  /* CASE: UDP处理 */
+    } else if (p->flow && p->proto == IPPROTO_UDP) {
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_APPLAYERUDP);
         AppLayerHandleUdp(tv, fw->stream_thread->ra_ctx->app_tctx, p, p->flow);
         FLOWWORKER_PROFILING_END(p, PROFILE_FLOWWORKER_APPLAYERUDP);

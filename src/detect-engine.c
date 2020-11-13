@@ -228,7 +228,7 @@ void DetectAppLayerInspectEngineRegister(const char *name,
 
 /** \brief register inspect engine at start up time
  *
- *  \note errors are fatal */
+ *  \note errors are fatal *//* 注册应用层检测引擎 */
 void DetectAppLayerInspectEngineRegister2(const char *name,
         AppProto alproto, uint32_t dir, int progress,
         InspectEngineFuncPtr2 Callback2,
@@ -873,7 +873,7 @@ void DetectBufferTypeSupportsTransformations(const char *name)
     DetectBufferTypeRegister(name);
     DetectBufferType *exists = DetectBufferTypeLookupByName(name);
     BUG_ON(!exists);
-    exists->supports_transforms = true;  /* 此buffer检测类型支持事务 */
+    exists->supports_transforms = true;  /* 此buffer检测类型支持内容修饰符 */
     SCLogDebug("%p %s -- %d supports transformations", exists, name, exists->id);
 }
 
@@ -1057,7 +1057,7 @@ void InspectionBufferClean(DetectEngineThreadCtx *det_ctx)
     }
     det_ctx->multi_inspect.to_clear_idx = 0;
 }
-
+/* 获取检测buffer */
 InspectionBuffer *InspectionBufferGet(DetectEngineThreadCtx *det_ctx, const int list_id)
 {
     InspectionBuffer *buffer = &det_ctx->inspect.buffers[list_id];
@@ -1193,9 +1193,9 @@ bool DetectBufferTypeValidateTransform(DetectEngineCtx *de_ctx, int sm_list,
         const TransformData *t = &dbt->transforms.transforms[i];
         if (!sigmatch_table[t->transform].TransformValidate)
             continue;
-
+        /* DETECT_TRANSFORM_STRIP_WHITESPACE -> TransformStripWhitespaceValidate() */
         if (sigmatch_table[t->transform].TransformValidate(content, content_len, t->options)) {
-            continue;
+            continue;       /* 检测"content"是否符合转换, 比如带空格的字符串不符合 DETECT_TRANSFORM_STRIP_WHITESPACE 的转换要求 */
         }
 
         if (namestr) {
@@ -1637,7 +1637,7 @@ int DetectEngineInspectGenericList(ThreadVars *tv,
  * \retval 0 no match.
  * \retval 1 match.
  * \retval 2 Sig can't match.
- */
+ *//* 内容检测引擎的通用入口 */
 int DetectEngineInspectBufferGeneric(
         DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx,
         const DetectEngineAppInspectionEngine *engine,
@@ -1646,7 +1646,7 @@ int DetectEngineInspectBufferGeneric(
 {
     const int list_id = engine->sm_list;
     SCLogDebug("running inspect on %d", list_id);
-
+    /* 检测阶段是否已经结束? */
     const bool eof = (AppLayerParserGetStateProgress(f->proto, f->alproto, txv, flags) > engine->progress);
 
     SCLogDebug("list %d mpm? %s transforms %p",
@@ -1657,7 +1657,7 @@ int DetectEngineInspectBufferGeneric(
     if (!engine->mpm) {
         transforms = engine->v2.transforms;
     }
-
+    /* 获取待检测数据 */
     const InspectionBuffer *buffer = engine->v2.GetData(det_ctx, transforms,
             f, flags, txv, list_id);
     if (unlikely(buffer == NULL)) {
@@ -1677,18 +1677,18 @@ int DetectEngineInspectBufferGeneric(
     det_ctx->buffer_offset = 0;
     det_ctx->inspection_recursion_counter = 0;
 
-    /* Inspect all the uricontents fetched on each
+    /* 内容检测, Inspect all the uricontents fetched on each
      * transaction at the app layer */
     int r = DetectEngineContentInspection(de_ctx, det_ctx,
                                           s, engine->smd,
                                           NULL, f,
                                           (uint8_t *)data, data_len, offset, ci_flags,
                                           DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
-    if (r == 1) {
+    if (r == 1) {  /* 匹配 */
         return DETECT_ENGINE_INSPECT_SIG_MATCH;
-    } else {
-        return eof ? DETECT_ENGINE_INSPECT_SIG_CANT_MATCH :
-                     DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
+    } else {       /* 未匹配 */
+        return eof ? DETECT_ENGINE_INSPECT_SIG_CANT_MATCH : /* 匹配完毕, 不继续匹配 */
+                     DETECT_ENGINE_INSPECT_SIG_NO_MATCH;    /* 当前不匹配, 仍需继续匹配 */
     }
 }
 
@@ -3140,7 +3140,7 @@ void *DetectThreadCtxGetKeywordThreadCtx(DetectEngineThreadCtx *det_ctx, int id)
  *
  *  \retval id for retrieval of ctx at runtime
  *  \retval -1 on error
- */
+ *//* 注册关键字到全局引擎列表 */
 int DetectRegisterThreadCtxGlobalFuncs(const char *name,
         void *(*InitFunc)(void *), void *data, void (*FreeFunc)(void *))
 {

@@ -57,7 +57,7 @@ void DetectPriorityRegister (void)
 #endif
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 }
-
+/* 解析规则中优先级字段 */
 static int DetectPrioritySetup (DetectEngineCtx *de_ctx, Signature *s, const char *rawstr)
 {
     char copy_str[128] = "";
@@ -90,9 +90,9 @@ static int DetectPrioritySetup (DetectEngineCtx *de_ctx, Signature *s, const cha
     if (s->init_data->init_flags & SIG_FLAG_INIT_PRIO_EXPLICT) {
         SCLogWarning(SC_ERR_CONFLICTING_RULE_KEYWORDS, "duplicate priority "
                 "keyword. Using highest priority in the rule");
-        s->prio = MIN(s->prio, prio);
+        s->prio = MIN(s->prio, prio);  /* 多个优先级字段, 选用高优先级(数字小) */
     } else {
-        s->prio = prio;
+        s->prio = prio;                /* 赋值 */
         s->init_data->init_flags |= SIG_FLAG_INIT_PRIO_EXPLICT;
     }
     return 0;

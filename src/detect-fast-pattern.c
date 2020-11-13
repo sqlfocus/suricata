@@ -89,7 +89,7 @@ int FastPatternSupportEnabledForSigMatchList(const DetectEngineCtx *de_ctx,
  *
  * \param list_id SM list id.
  * \param priority Priority for this list.
- *//* 某检测规则组，加入 sm_fp_support_smlist_list 快速匹配链表 */
+ *//* 某检测类型, 加入 sm_fp_support_smlist_list 快速匹配链表 */
 void SupportFastPatternForSigMatchList(int list_id, int priority)
 {
     SCFPSupportSMList *ip = NULL;

@@ -104,7 +104,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 
 #define FLOW_WRONG_THREAD               BIT_U32(25)   /* TCP流必须在相同线程 */
 /** Protocol detection told us flow is picked up in wrong direction (midstream) */
-#define FLOW_DIR_REVERSED               BIT_U32(26)
+#define FLOW_DIR_REVERSED               BIT_U32(26)   /* 建流的五元组, 和真实流方向相反 */
 /** Indicate that the flow did trigger an expectation creation */
 #define FLOW_HAS_EXPECTATION            BIT_U32(27)
 

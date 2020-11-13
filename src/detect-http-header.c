@@ -148,7 +148,7 @@ static uint8_t *GetBufferForTX(htp_tx_t *tx, uint64_t tx_id,
 
 /** \internal
  *  \brief custom inspect function to utilize the cached headers
- */
+ *//* 定制化的检测函数, 对于http报文头(包括服务器/客户端) */
 static int DetectEngineInspectBufferHttpHeader(
         DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx,
         const DetectEngineAppInspectionEngine *engine,
@@ -168,7 +168,7 @@ static int DetectEngineInspectBufferHttpHeader(
             transforms = engine->v2.transforms;
         }
 
-        uint32_t rawdata_len = 0;
+        uint32_t rawdata_len = 0;     /* 获取检测数据 */
         uint8_t *rawdata = GetBufferForTX(txv, tx_id, det_ctx,
                 f, flags, &rawdata_len);
         if (rawdata_len == 0) {
@@ -189,22 +189,22 @@ static int DetectEngineInspectBufferHttpHeader(
     det_ctx->inspection_recursion_counter = 0;
 
     /* Inspect all the uricontents fetched on each
-     * transaction at the app layer */
+     * transaction at the app layer *//* 内容检测 */
     int r = DetectEngineContentInspection(de_ctx, det_ctx, s, engine->smd,
             NULL, f, (uint8_t *)data, data_len, offset,
             DETECT_CI_FLAGS_SINGLE, DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE);
     SCLogDebug("r = %d", r);
-    if (r == 1) {
+    if (r == 1) {                     /* 匹配 */
         return DETECT_ENGINE_INSPECT_SIG_MATCH;
     }
 end:
-    if (flags & STREAM_TOSERVER) {
+    if (flags & STREAM_TOSERVER) {    /* 未匹配, 且数据已用完, 后续不再匹配 */
         if (AppLayerParserGetStateProgress(IPPROTO_TCP, ALPROTO_HTTP, txv, flags) > HTP_REQUEST_HEADERS)
             return DETECT_ENGINE_INSPECT_SIG_CANT_MATCH;
     } else {
         if (AppLayerParserGetStateProgress(IPPROTO_TCP, ALPROTO_HTTP, txv, flags) > HTP_RESPONSE_HEADERS)
             return DETECT_ENGINE_INSPECT_SIG_CANT_MATCH;
-    }
+    }                                 /* 未匹配, 后续继续匹配 */
     return DETECT_ENGINE_INSPECT_SIG_NO_MATCH;
 }
 
@@ -296,7 +296,7 @@ static int PrefilterMpmHttpHeaderRequestRegister(DetectEngineCtx *de_ctx,
     pectx->list_id = list_id;
     pectx->mpm_ctx = mpm_ctx;
     pectx->transforms = &mpm_reg->transforms;
-
+    /* 添加到规则集的 SigGroupHead->init->tx_engines */
     int r = PrefilterAppendTxEngine(de_ctx, sgh, PrefilterMpmHttpHeader,
             mpm_reg->app_v2.alproto, HTP_REQUEST_HEADERS,
             pectx, PrefilterMpmHttpHeaderFree, mpm_reg->pname);
@@ -424,21 +424,21 @@ void DetectHttpHeaderRegister(void)
     sigmatch_table[DETECT_HTTP_HEADER].Setup = DetectHttpHeaderSetupSticky;
     sigmatch_table[DETECT_HTTP_HEADER].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_HTTP_HEADER].flags |= SIGMATCH_INFO_STICKY_BUFFER;
-
+    /* 到服务器方向, 注册检测引擎, 注册多模式匹配引擎 */
     DetectAppLayerInspectEngineRegister2("http_header", ALPROTO_HTTP,
             SIG_FLAG_TOSERVER, HTP_REQUEST_HEADERS,
             DetectEngineInspectBufferHttpHeader, NULL);
     DetectAppLayerMpmRegister2("http_header", SIG_FLAG_TOSERVER, 2,
             PrefilterMpmHttpHeaderRequestRegister, NULL, ALPROTO_HTTP,
             0); /* not used, registered twice: HEADERS/TRAILER */
-
+    /* 到客户端方向 */
     DetectAppLayerInspectEngineRegister2("http_header", ALPROTO_HTTP,
             SIG_FLAG_TOCLIENT, HTP_RESPONSE_HEADERS,
             DetectEngineInspectBufferHttpHeader, NULL);
     DetectAppLayerMpmRegister2("http_header", SIG_FLAG_TOCLIENT, 2,
             PrefilterMpmHttpHeaderResponseRegister, NULL, ALPROTO_HTTP,
             0); /* not used, registered twice: HEADERS/TRAILER */
-
+    /* 注册检测类型 */
     DetectBufferTypeSetDescriptionByName("http_header",
             "http headers");
 

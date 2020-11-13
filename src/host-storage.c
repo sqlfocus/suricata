@@ -80,7 +80,7 @@ int HostSetStorageById(Host *h, int id, void *ptr)
  * \param id the id of the storage (return of HostStorageRegister() call)
  *
  */
-
+/* 由索引获取主机相应的存储信息 */
 void *HostGetStorageById(Host *h, int id)
 {
     return StorageGetById((Storage *)((void *)h + sizeof(Host)), STORAGE_HOST, id);

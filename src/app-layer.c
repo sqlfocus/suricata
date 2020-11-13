@@ -426,7 +426,7 @@ static int TCPProtoDetect(ThreadVars *tv,
             if (first_data_dir && !(first_data_dir & ssn->data_first_seen_dir)) {
                 AppLayerDecoderEventsSetEventRaw(&p->app_layer_events,
                         APPLAYER_WRONG_DIRECTION_FIRST_DATA);
-                DisableAppLayer(tv, f, p);
+                DisableAppLayer(tv, f, p);     /* 首次看到数据, 并不是要求的方向, 错误退出/不再检测 */
                 SCReturnInt(-1);
             }
             /* This can happen if the current direction is not the
@@ -437,7 +437,7 @@ static int TCPProtoDetect(ThreadVars *tv,
              * hasn't managed to send data from the other direction
              * to the app layer. */
             if (first_data_dir && !(first_data_dir & flags)) {
-                FlowCleanupAppLayer(f);
+                FlowCleanupAppLayer(f);        /* 本方向不是希望首次看到的方向 */
                 StreamTcpResetStreamFlagAppProtoDetectionCompleted(*stream);
                 FLOW_RESET_PP_DONE(f, flags);
                 FLOW_RESET_PM_DONE(f, flags);
@@ -445,7 +445,7 @@ static int TCPProtoDetect(ThreadVars *tv,
                 SCReturnInt(-1);
             }
         }
-                                          /* */
+                                          /* 设置标识 */
         /* Set a value that is neither STREAM_TOSERVER, nor STREAM_TOCLIENT */
         ssn->data_first_seen_dir = APP_LAYER_DATA_ALREADY_SENT_TO_APP_LAYER;
 
@@ -459,7 +459,7 @@ static int TCPProtoDetect(ThreadVars *tv,
         } else if (r == 0) {              /* 更新消耗数据 */
             StreamTcpUpdateAppLayerProgress(ssn, direction, data_len);
         }
-    } else {
+    } else {/* 本方向协议识别失败 */
         /* if the ssn is midstream, we may end up with a case where the
          * start of an HTTP request is missing. We won't detect HTTP based
          * on the request. However, the reply is fine, so we detect
@@ -476,17 +476,17 @@ static int TCPProtoDetect(ThreadVars *tv,
          */
         if ((ssn->flags & STREAMTCP_FLAG_MIDSTREAM) &&
                 !(ssn->flags & STREAMTCP_FLAG_MIDSTREAM_SYNACK))
-        {
+        {                                   /* CASE1: 中间报文建流, 已经通过规则/端口等识别手段, 但仍然未识别 */
             if (FLOW_IS_PM_DONE(f, STREAM_TOSERVER) && FLOW_IS_PP_DONE(f, STREAM_TOSERVER)) {
                 SCLogDebug("midstream end pd %p", ssn);
                 /* midstream and toserver detection failed: give up */
-                DisableAppLayer(tv, f, p);
+                DisableAppLayer(tv, f, p);  /* 后续不再识别 */
                 SCReturnInt(0);
             }
         }
 
         if (*alproto_otherdir != ALPROTO_UNKNOWN) {
-            uint8_t first_data_dir;
+            uint8_t first_data_dir;         /* CASE2: 另一方向已经识别 */
             first_data_dir = AppLayerParserGetFirstDataDir(f->proto, *alproto_otherdir);
 
             /* this would handle this test case -
@@ -516,12 +516,12 @@ static int TCPProtoDetect(ThreadVars *tv,
              * direction: the opposing stream
              *
              * If PD was not yet complete, we don't do anything.
-             */
+             */                             /* 本方向识别手段已经使用完毕, 承认另一方向 */
             if (FLOW_IS_PM_DONE(f, flags) && FLOW_IS_PP_DONE(f, flags)) {
                 if (data_len > 0)
                     ssn->data_first_seen_dir = APP_LAYER_DATA_ALREADY_SENT_TO_APP_LAYER;
 
-                if (*alproto_otherdir != ALPROTO_FAILED) {
+                if (*alproto_otherdir != ALPROTO_FAILED) {  /* 另一方向已识别, 则依此协议解析 */
                     PACKET_PROFILING_APP_START(app_tctx, f->alproto);
                     int r = AppLayerParserParse(tv, app_tctx->alp_tctx, f,
                             f->alproto, flags,
@@ -542,14 +542,14 @@ static int TCPProtoDetect(ThreadVars *tv,
                     if (r < 0) {
                         SCReturnInt(-1);
                     }
-                }
+                }                                           /* 设置本段识别失败标志 */
                 *alproto = ALPROTO_FAILED;
                 StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);
                 AppLayerIncFlowCounter(tv, f);
                 FlagPacketFlow(p, f, flags);
 
             }
-        } else {
+        } else {                            /* CASE3: 另一方向也未识别, 决定是否放弃 */
             /* both sides unknown, let's see if we need to give up */
             TCPProtoDetectCheckBailConditions(tv, f, ssn, p);
         }
@@ -564,7 +564,7 @@ static int TCPProtoDetect(ThreadVars *tv,
  *
  *  \param stream ptr-to-ptr to stream object. Might change if flow dir is
  *                reversed.
- *//* 应用识别入口: 处理应用协议的tcp数据, 应用识别、应用解析 */
+ *//* 应用识别入口: 处理应用协议的tcp数据, 应用识别、应用解析; 成功返回0, 失败-1 */
 int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                           Packet *p, Flow *f,
                           TcpSession *ssn, TcpStream **stream,
@@ -583,38 +583,38 @@ int AppLayerHandleTCPData(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
     SCLogDebug("data_len %u flags %02X", data_len, flags);
     if (ssn->flags & STREAMTCP_FLAG_APP_LAYER_DISABLED) {
         SCLogDebug("STREAMTCP_FLAG_APP_LAYER_DISABLED is set");
-        goto end;
+        goto end;                         /* 已关闭应用层解析, 直接退出 */
     }
 
     const int direction = (flags & STREAM_TOSERVER) ? 0 : 1;
 
-    if (flags & STREAM_TOSERVER) {        /* 已识别的结果 */
+    if (flags & STREAM_TOSERVER) {        /* 提取已识别的结果 */
         alproto = f->alproto_ts;
     } else {
         alproto = f->alproto_tc;
     }
 
-    /* 处理空洞数据，If a gap notification, relay the notification on to the
+    /* CASE: 处理空洞数据，If a gap notification, relay the notification on to the
      * app-layer if known. */
     if (flags & STREAM_GAP) {        
-        if (alproto == ALPROTO_UNKNOWN) { /* 如果双向均未识别则结束识别 */
+        if (alproto == ALPROTO_UNKNOWN) { /* 结束当前方向识别, 如果双向均未识别则结束识别 */
             StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);
             SCLogDebug("ALPROTO_UNKNOWN flow %p, due to GAP in stream start", f);
             /* if the other side didn't already find the proto, we're done */
             if (f->alproto == ALPROTO_UNKNOWN) {
                 goto failure;
             }
-        }                                 /* 跳过数据空洞的协议解析结果 */
+        }                                 /* 应用解析 */
         PACKET_PROFILING_APP_START(app_tctx, f->alproto);
         r = AppLayerParserParse(tv, app_tctx->alp_tctx, f, f->alproto,
-                flags, data, data_len);
+                flags, data, data_len);   
         PACKET_PROFILING_APP_END(app_tctx, f->alproto);
-        /* ignore parser result for gap */
+        /* ignore parser result for gap *//* 跳过数据空洞的协议解析结果; 仅消耗数据 */
         StreamTcpUpdateAppLayerProgress(ssn, direction, data_len);
         goto end;
     }
 
-    /* 应用识别，if we don't know the proto yet and we have received a stream
+    /* CASE: 处理非空洞数据，if we don't know the proto yet and we have received a stream
      * initializer message, we run proto detection.
      * We receive 2 stream init msgs (one for each direction) but we
      * only run the proto detection once. */
@@ -732,7 +732,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
     AppLayerProfilingReset(tctx);
 
     /* if the protocol is still unknown, run detection */
-    if (f->alproto == ALPROTO_UNKNOWN) {    /* 协议尚未识别，运行协议识别算法 */
+    if (f->alproto == ALPROTO_UNKNOWN) {    /* CASE: 协议尚未识别，运行协议识别算法 */
         SCLogDebug("Detecting AL proto on udp mesg (len %" PRIu32 ")",
                    p->payload_len);
 
@@ -776,7 +776,7 @@ int AppLayerHandleUdp(ThreadVars *tv, AppLayerThreadCtx *tctx, Packet *p, Flow *
         r = AppLayerParserParse(tv, tctx->alp_tctx, f, f->alproto,
                 flags, p->payload, p->payload_len);
         PACKET_PROFILING_APP_END(tctx, f->alproto);
-        PACKET_PROFILING_APP_STORE(tctx, p);/* 协议层解析 */
+        PACKET_PROFILING_APP_STORE(tctx, p);/* CASE: 协议层解析 */
     }
 
     SCReturnInt(r);

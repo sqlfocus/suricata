@@ -502,7 +502,7 @@ typedef struct Packet_
     EthernetHdr *ethh;
 
     /* Checksum for IP packets. */
-    int32_t level3_comp_csum;
+    int32_t level3_comp_csum;   /* 校验和 */
     /* Check sum for TCP, UDP or ICMP packets */
     int32_t level4_comp_csum;
 
@@ -1102,12 +1102,12 @@ void DecodeUnregisterCounters(void);
 #define PKT_NOPACKET_INSPECTION         (1)         /**< Flag to indicate that packet header or contents should not be inspected*/
 #define PKT_NOPAYLOAD_INSPECTION        (1<<2)      /**< Flag to indicate that packet contents should not be inspected*/
 #define PKT_ALLOC                       (1<<3)      /**< Packet was alloc'd this run, needs to be freed */
-#define PKT_HAS_TAG                     (1<<4)      /**< Packet has matched a tag */
+#define PKT_HAS_TAG                     (1<<4)      /* 报文匹配到了某个tag *< Packet has matched a tag */
 #define PKT_STREAM_ADD                  (1<<5)      /**< Packet payload was added to reassembled stream */
 #define PKT_STREAM_EST                  (1<<6)      /**< Packet is part of established stream */
 #define PKT_STREAM_EOF                  (1<<7)      /**< Stream is in eof state */
 #define PKT_HAS_FLOW                    (1<<8)      /* 查找到流后, 或创建pseudo报文, 一般会打上此标识 */
-#define PKT_PSEUDO_STREAM_END           (1<<9)      /**< Pseudo packet to end the stream */
+#define PKT_PSEUDO_STREAM_END           (1<<9)      /* 伪报文, 用于结束流 *< Pseudo packet to end the stream */
 #define PKT_STREAM_MODIFIED             (1<<10)     /**< Packet is modified by the stream engine, we need to recalc the csum and reinject/replace */
 #define PKT_MARK_MODIFIED               (1<<11)     /**< Packet mark is modified */
 #define PKT_STREAM_NOPCAPLOG            (1<<12)     /**< Exclude packet from pcap logging as it's part of a stream that has reassembly depth reached. */

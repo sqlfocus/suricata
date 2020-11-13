@@ -4,9 +4,11 @@
 * 参考
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricata_Rules][官网规则简介]]
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Fast_pattern][fast pattern关键字]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/File-keywords][file keywords]]
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Flowint][flowint关键字]]
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Pcre_(Perl_Compatible_Regular_Expressions)][pcre关键字]]
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricatayaml][suricata.yaml简介]]
+- [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Rule-Thresholding][threshold]]
 
 
 

@@ -76,7 +76,7 @@ int ThresholdHostStorageId(void)
 {
     return host_threshold_id;
 }
-
+/* 关键字“threshold”存储 */
 void ThresholdInit(void)
 {
     host_threshold_id = HostStorageRegister("threshold", sizeof(void *), NULL, ThresholdListFree);

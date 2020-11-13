@@ -85,7 +85,7 @@ static int g_mpm_list_cnt[DETECT_BUFFER_MPM_TYPE_SIZE] = { 0, 0 };
 /** \brief register a MPM engine
  *
  *  \note to be used at start up / registration only. Errors are fatal.
- */
+ *//* 注册多模检测关键字 */
 void DetectAppLayerMpmRegister2(const char *name,
         int direction, int priority,
         int (*PrefilterRegister)(DetectEngineCtx *de_ctx,
@@ -102,8 +102,8 @@ void DetectAppLayerMpmRegister2(const char *name,
         abort();
     }
 
-    DetectBufferTypeSupportsMpm(name);             /* 支持多模引擎, 注册到 g_app_inspect_engines */
-    DetectBufferTypeSupportsTransformations(name); /* 支持事务 */
+    DetectBufferTypeSupportsMpm(name);             /* 支持多模引擎 */
+    DetectBufferTypeSupportsTransformations(name); /* 支持内容修饰符 */
     int sm_list = DetectBufferTypeGetByName(name);
     if (sm_list == -1) {
         FatalError(SC_ERR_INITIALIZATION,
@@ -117,10 +117,10 @@ void DetectAppLayerMpmRegister2(const char *name,
     am->direction = direction;
     am->sm_list = sm_list;
     am->priority = priority;
-    am->type = DETECT_BUFFER_MPM_TYPE_APP;
+    am->type = DETECT_BUFFER_MPM_TYPE_APP;         /* 属于应用检测 */
 
     am->PrefilterRegisterWithListId = PrefilterRegister;
-    am->app_v2.GetData = GetData;
+    am->app_v2.GetData = GetData;                  /* 初始化内容获取回调 */
     am->app_v2.alproto = alproto;
     am->app_v2.tx_min_progress = tx_min_progress;
 

@@ -260,7 +260,7 @@ static inline void TcpStreamFlowSwap(Flow *f)
  */
 void FlowSwap(Flow *f)
 {
-    f->flags |= FLOW_DIR_REVERSED;   /* syn+ack创建的流，设置此标识 */
+    f->flags |= FLOW_DIR_REVERSED;   /* (syn+ack创建的流)设置此标识, 标志着流表五元组和真实方向相反 */
 
     SWAP_VARS(uint32_t, f->probing_parser_toserver_alproto_masks,
                    f->probing_parser_toclient_alproto_masks);
@@ -418,15 +418,15 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p, ThreadVars *tv, DecodeThreadVars
             }
         }
     }
-#endif
-    /* update flags and counters */
+#endif/* <TK!!!>对于新建的流, 当前报文被认为TOSERVER; 后续会根据"syn+ack"或 */
+    /* update flags and counters *//* 协议识别进行调整, 因为可能是中间报文触发的建流, 导致方向错误 */
     if (FlowGetPacketDirection(f, p) == TOSERVER) {
-        f->todstpktcnt++;                     /* 更新收发报文计数 */
+        f->todstpktcnt++;                       /* 更新收发报文计数 */
         f->todstbytecnt += GET_PKT_LEN(p);
         p->flowflags = FLOW_PKT_TOSERVER;
         if (!(f->flags & FLOW_TO_DST_SEEN)) {
             if (FlowUpdateSeenFlag(p)) {
-                f->flags |= FLOW_TO_DST_SEEN;  /* 有报文发往服务器端 */
+                f->flags |= FLOW_TO_DST_SEEN;   /* 有报文发往服务器端 */
                 p->flowflags |= FLOW_PKT_TOSERVER_FIRST;
             }
         }
@@ -441,7 +441,7 @@ void FlowHandlePacketUpdate(Flow *f, Packet *p, ThreadVars *tv, DecodeThreadVars
         f->tosrcbytecnt += GET_PKT_LEN(p);
         p->flowflags = FLOW_PKT_TOCLIENT;
         if (!(f->flags & FLOW_TO_SRC_SEEN)) {
-            if (FlowUpdateSeenFlag(p)) {       /* 有报文发往客户端 */
+            if (FlowUpdateSeenFlag(p)) {        /* 有报文发往客户端 */
                 f->flags |= FLOW_TO_SRC_SEEN;
                 p->flowflags |= FLOW_PKT_TOCLIENT_FIRST;
             }

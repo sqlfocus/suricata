@@ -100,7 +100,7 @@
  *
  *  \retval 0 no match
  *  \retval 1 match
- */
+ *//* 内容检测入口函数 */
 int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx,
                                   const Signature *s, const SigMatchData *smd,
                                   Packet *p, Flow *f,
@@ -124,7 +124,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         SCReturnInt(0);
     }
 
-    /* \todo unify this which is phase 2 of payload inspection unification */
+    /* CASE: 内容匹配, \todo unify this which is phase 2 of payload inspection unification */
     if (smd->type == DETECT_CONTENT) {
 
         DetectContentData *cd = (DetectContentData *)smd->ctx;
@@ -370,27 +370,27 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
             }
 
         } while(1);
-
+    /* CASE: 负载特定位置匹配 */
     } else if (smd->type == DETECT_ISDATAAT) {
         SCLogDebug("inspecting isdataat");
 
         const DetectIsdataatData *id = (DetectIsdataatData *)smd->ctx;
         uint32_t dataat = id->dataat;
-        if (id->flags & ISDATAAT_OFFSET_VAR) {
+        if (id->flags & ISDATAAT_OFFSET_VAR) {/* */
             uint64_t be_value = det_ctx->byte_values[dataat];
             if (be_value >= 100000000) {
                 if ((id->flags & ISDATAAT_NEGATED) == 0) {
                     SCLogDebug("extracted value %"PRIu64" very big: no match", be_value);
-                    goto no_match;
+                    goto no_match;                         /* 无取反操作, 则无有效数据, 不匹配 */
                 }
                 SCLogDebug("extracted value way %"PRIu64" very big: match", be_value);
-                goto match;
+                goto match;                                /* 有取反操作, 直接匹配 */
             }
             dataat = (uint32_t)be_value;
             SCLogDebug("isdataat: using value %u from byte_extract local_id %u", dataat, id->dataat);
         }
 
-        if (id->flags & ISDATAAT_RELATIVE) {
+        if (id->flags & ISDATAAT_RELATIVE) {  /* 设定了relative关键字, 相对于上次匹配 */
             if (det_ctx->buffer_offset + dataat > buffer_len) {
                 SCLogDebug("det_ctx->buffer_offset + dataat %"PRIu32" > %"PRIu32, det_ctx->buffer_offset + dataat, buffer_len);
                 if (id->flags & ISDATAAT_NEGATED)
@@ -402,7 +402,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     goto no_match;
                 goto match;
             }
-        } else {
+        } else {                              /* 未设定relative关键字 */
             if (dataat < buffer_len) {
                 SCLogDebug("absolute isdataat match");
                 if (id->flags & ISDATAAT_NEGATED)
@@ -415,7 +415,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                 goto no_match;
             }
         }
-
+    /* CASE: 负载PCRE匹配 */
     } else if (smd->type == DETECT_PCRE) {
         SCLogDebug("inspecting pcre");
         DetectPcreData *pe = (DetectPcreData *)smd->ctx;
@@ -456,7 +456,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
             det_ctx->buffer_offset = prev_buffer_offset;
             det_ctx->pcre_match_start_offset = prev_offset;
         } while (1);
-
+    /* CASE: 负载字节匹配 */
     } else if (smd->type == DETECT_BYTETEST) {
         DetectBytetestData *btd = (DetectBytetestData *)smd->ctx;
         uint8_t btflags = btd->flags;
@@ -484,7 +484,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         }
 
         goto match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_BYTEJUMP) {
         DetectBytejumpData *bjd = (DetectBytejumpData *)smd->ctx;
         uint16_t bjflags = bjd->flags;
@@ -509,7 +509,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         }
 
         goto match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_BYTE_EXTRACT) {
 
         DetectByteExtractData *bed = (DetectByteExtractData *)smd->ctx;
@@ -537,7 +537,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         SCLogDebug("[BE] Fetched value for index %d: %"PRIu64,
                    bed->local_id, det_ctx->byte_values[bed->local_id]);
         goto match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_BYTEMATH) {
 
         DetectByteMathData *bmd = (DetectByteMathData *)smd->ctx;
@@ -573,7 +573,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         SCLogDebug("[BM] Fetched value for index %d: %"PRIu64,
                    bmd->local_id, det_ctx->byte_values[bmd->local_id]);
         goto match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_BSIZE) {
 
         bool eof = (flags & DETECT_CI_FLAGS_END);
@@ -587,7 +587,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
             goto no_match;
         }
         goto match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_DATASET) {
 
         //PrintRawDataFp(stdout, buffer, buffer_len);
@@ -598,7 +598,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         }
         det_ctx->discontinue_matching = 1;
         goto no_match;
-
+    /* CASE:  */
     } else if (smd->type == DETECT_DATAREP) {
 
         //PrintRawDataFp(stdout, buffer, buffer_len);
@@ -609,7 +609,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         }
         det_ctx->discontinue_matching = 1;
         goto no_match;
-
+    /* CASE:  URI长度匹配 */
     } else if (smd->type == DETECT_AL_URILEN) {
         SCLogDebug("inspecting uri len");
 
@@ -645,7 +645,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
 
         goto no_match;
 #ifdef HAVE_LUA
-    }
+    }/* CASE: LUA脚本匹配 */
     else if (smd->type == DETECT_LUA) {
         SCLogDebug("lua starting");
 
@@ -657,7 +657,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         }
         SCLogDebug("lua match");
         goto match;
-#endif /* HAVE_LUA */
+#endif /* CASE: base64编码匹配 */
     } else if (smd->type == DETECT_BASE64_DECODE) {
         if (DetectBase64DecodeDoMatch(det_ctx, s, smd, buffer, buffer_len)) {
             if (s->sm_arrays[DETECT_SM_LIST_BASE64_DATA] != NULL) {
@@ -680,7 +680,7 @@ no_match:
     SCReturnInt(0);
 
 match:
-    /* this sigmatch matched, inspect the next one. If it was the last,
+    /* 如果不是最后一个匹配, 则继续匹配 this sigmatch matched, inspect the next one. If it was the last,
      * the buffer portion of the signature matched. */
     if (!smd->is_last) {
         KEYWORD_PROFILING_END(det_ctx, smd->type, 1);

@@ -433,48 +433,48 @@ void SigTableSetup(void)
     DetectRevRegister();         /* 关键字rev, signature版本号 */
     DetectClasstypeRegister();   /* 关键字classtype */
     DetectReferenceRegister();   /* 关键字reference */
-    DetectTagRegister();
+    DetectTagRegister();         /* 关键字tag */
     DetectThresholdRegister();   /* 关键字threshold */
     DetectMetadataRegister();
     DetectMsgRegister();         /* 关键字msg */
-    DetectAckRegister();
+    DetectAckRegister();         /* 关键字ack */
     DetectSeqRegister();
     DetectContentRegister();     /* 关键字content */
-    DetectUricontentRegister();
+    DetectUricontentRegister();  /* 关键字uricontent; 已废弃, 使用"content:%s; http_uri;"替代 */
 
     /* NOTE: the order of these currently affects inspect 此区间的代码顺序顺序将影响监测引擎的注册顺序
      * engine registration order and ultimately the order 并最终影响监测引擎规则的配置顺序;
      * of inspect engines in the rule. Which in turn affects 此区间注册的关键字, 还会单独保存为独立的检测类型
      * state keeping *//* 存储在 g_buffer_type_hash, 其ID排在 DETECT_SM_LIST_DYNAMIC_START 之后, 为动态注册类型 */
-    DetectHttpUriRegister();     /* 关键字http_uri */
-    DetectHttpRequestLineRegister();
-    DetectHttpClientBodyRegister();
+    DetectHttpUriRegister();     /* 关键字http_uri/http_raw_uri/http.uri/http.uri.raw */
+    DetectHttpRequestLineRegister();   /* 关键字 http_request_line/http.request_line */
+    DetectHttpClientBodyRegister();    /* http_client_body/http.request_body */
     DetectHttpResponseLineRegister();
-    DetectHttpServerBodyRegister();
+    DetectHttpServerBodyRegister();    /**/
     DetectHttpHeaderRegister();
     DetectHttpHeaderNamesRegister();
-    DetectHttpHeadersRegister();
-    DetectHttpProtocolRegister();
+    DetectHttpHeadersRegister();       /* http.accept/http.referer/http.server/... */
+    DetectHttpProtocolRegister();      /* http.protocol */
     DetectHttpStartRegister();
     DetectHttpRawHeaderRegister();
     DetectHttpMethodRegister();
     DetectHttpCookieRegister();
 
-    DetectFilenameRegister();
+    DetectFilenameRegister();          /* filename/file.name(files) */
     DetectFileextRegister();
-    DetectFilestoreRegister();
+    DetectFilestoreRegister();         /* "filestore" 匹配后支持文件存储 */
     DetectFilemagicRegister();
     DetectFileMd5Register();
     DetectFileSha1Register();
     DetectFileSha256Register();
     DetectFilesizeRegister();
 
-    DetectHttpUARegister();
-    DetectHttpHHRegister();
+    DetectHttpUARegister();            /* http_user_agent/http.user_agent */
+    DetectHttpHHRegister();            /* http_host/http.host */
 
     DetectHttpStatMsgRegister();
     DetectHttpStatCodeRegister();
-    DetectHttp2Register();
+    DetectHttp2Register();             /* http2 */
 
     DetectDnsQueryRegister();
     DetectDnsOpcodeRegister();
@@ -498,8 +498,8 @@ void SigTableSetup(void)
     DetectAppLayerEventRegister();    /* 注册应用协议检测事件处理句柄 */
     /* 以上区域的代码需保持排序状态, end of order dependent regs */
 
-    DetectPcreRegister();
-    DetectDepthRegister();
+    DetectPcreRegister();             /* pcre */
+    DetectDepthRegister();            /* depth/startswith */
     DetectNocaseRegister();
     DetectRawbytesRegister();
     DetectBytetestRegister();
@@ -535,7 +535,7 @@ void SigTableSetup(void)
     DetectFlagsRegister();
     DetectFragBitsRegister();
     DetectFragOffsetRegister();
-    DetectGidRegister();
+    DetectGidRegister();              /* gid */
     DetectMarkRegister();
     DetectCsumRegister();
     DetectStreamSizeRegister();

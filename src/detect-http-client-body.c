@@ -97,16 +97,16 @@ void DetectHttpClientBodyRegister(void)
     sigmatch_table[DETECT_HTTP_REQUEST_BODY].Setup = DetectHttpClientBodySetupSticky;
     sigmatch_table[DETECT_HTTP_REQUEST_BODY].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_HTTP_REQUEST_BODY].flags |= SIGMATCH_INFO_STICKY_BUFFER;
-
+    /* 注册应用检测引擎 */
     DetectAppLayerInspectEngineRegister2("http_client_body", ALPROTO_HTTP,
             SIG_FLAG_TOSERVER, HTP_REQUEST_BODY,
             DetectEngineInspectBufferGeneric,
             HttpClientBodyGetDataCallback);
-
+    /* 注册多模式匹配引擎 */
     DetectAppLayerMpmRegister2("http_client_body", SIG_FLAG_TOSERVER, 2,
             PrefilterGenericMpmRegister, HttpClientBodyGetDataCallback,
             ALPROTO_HTTP, HTP_REQUEST_BODY);
-
+    /* 注册检测类型 */
     DetectBufferTypeSetDescriptionByName("http_client_body",
             "http request body");
 
@@ -138,7 +138,7 @@ static void DetectHttpClientBodySetupCallback(const DetectEngineCtx *de_ctx,
  *
  * \retval  0 On success
  * \retval -1 On failure
- */
+ *//* 构建 http_client_body 修饰符关键字 */
 int DetectHttpClientBodySetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 {
     return DetectEngineContentModifierBufferSetup(de_ctx, s, arg,
@@ -175,7 +175,7 @@ static inline HtpBody *GetRequestBody(htp_tx_t *tx)
 
     return &htud->request_body;
 }
-
+/* 获取“http_client_body” */
 static InspectionBuffer *HttpClientBodyGetDataCallback(DetectEngineThreadCtx *det_ctx,
         const DetectEngineTransforms *transforms,
         Flow *f, const uint8_t flow_flags,
@@ -190,13 +190,13 @@ static InspectionBuffer *HttpClientBodyGetDataCallback(DetectEngineThreadCtx *de
     htp_tx_t *tx = txv;
     HtpState *htp_state = f->alstate;
     const uint8_t flags = flow_flags;
-
+    /* 从http事务提取请求body */
     HtpBody *body = GetRequestBody(tx);
     if (body == NULL) {
         return NULL;
     }
 
-    /* no new data */
+    /* 所有数据都已经检测, 无新数据; no new data */
     if (body->body_inspected == body->content_len_so_far) {
         SCLogDebug("no new data");
         return NULL;
@@ -214,7 +214,7 @@ static InspectionBuffer *HttpClientBodyGetDataCallback(DetectEngineThreadCtx *de
               htp_state->cfg->request.inspect_min_size,
               flags & STREAM_EOF ? "true" : "false",
                (AppLayerParserGetStateProgress(IPPROTO_TCP, ALPROTO_HTTP, tx, flags) > HTP_REQUEST_BODY) ? "true" : "false");
-
+    /* 仍然没有拿到所有待检测数据, 继续等待新数据 */
     if (!htp_state->cfg->http_body_inline) {
         /* inspect the body if the transfer is complete or we have hit
         * our body size limit */
@@ -235,7 +235,7 @@ static InspectionBuffer *HttpClientBodyGetDataCallback(DetectEngineThreadCtx *de
      * make sure that we have at least the configured inspect_win size.
      * If we have more, take at least 1/4 of the inspect win size before
      * the new data.
-     */
+     *//* 得到待拷贝内存偏移, 需携带部分已检测数据 */
     uint64_t offset = 0;
     if (body->body_inspected > htp_state->cfg->request.inspect_min_size) {
         BUG_ON(body->content_len_so_far < body->body_inspected);
@@ -244,17 +244,17 @@ static InspectionBuffer *HttpClientBodyGetDataCallback(DetectEngineThreadCtx *de
         if (inspect_win < htp_state->cfg->request.inspect_window) {
             uint64_t inspect_short = htp_state->cfg->request.inspect_window - inspect_win;
             if (body->body_inspected < inspect_short)
-                offset = 0;
+                offset = 0;   /* 新数据量不足, 携带更多老数据 */
             else
                 offset = body->body_inspected - inspect_short;
-        } else {
+        } else {              /* 新数据量充足, 仅携带部分老数据(已检测)/最小检测长度的1/4 */
             offset = body->body_inspected - (htp_state->cfg->request.inspect_window / 4);
         }
     }
 
     const uint8_t *data;
     uint32_t data_len;
-
+    /* 获取数据 */
     StreamingBufferGetDataAtOffset(body->sb,
             &data, &data_len, offset);
     InspectionBufferSetup(buffer, data, data_len);

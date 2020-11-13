@@ -64,7 +64,7 @@
  *  \retval 1 match
  *  \retval 2 can't match
  *  \retval 3 can't match filestore signature
- */
+ *//* 检测文件 */
 static int DetectFileInspect(ThreadVars *tv, DetectEngineThreadCtx *det_ctx,
         Flow *f, const Signature *s, const SigMatchData *smd,
         uint8_t flags, FileContainer *ffc)

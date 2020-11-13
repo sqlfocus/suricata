@@ -43,8 +43,8 @@
 
 /* Type of tag: session or host */
 enum {
-    DETECT_TAG_TYPE_SESSION,
-    DETECT_TAG_TYPE_HOST,
+    DETECT_TAG_TYPE_SESSION,  /* 标记流 */
+    DETECT_TAG_TYPE_HOST,     /* 标记主机 */
     DETECT_TAG_TYPE_MAX
 };
 
@@ -60,31 +60,31 @@ enum {
     DETECT_TAG_METRIC_BYTES,
     DETECT_TAG_METRIC_MAX
 };
-
-/** This will be the rule options/parameters */
+/* 匹配规则后, 会存储此标签; 后续匹配规则的报文, 则打上相应的标签, 以便执行动作 */
+/** This will be the rule options/parameters */ /* 标签根据->count/metric决定何时失效 */
 typedef struct DetectTagData_ {
-    uint8_t type;          /**< tag type */
-    uint8_t direction;     /**< host direction */
-    uint32_t count;        /**< count */
-    uint32_t metric;       /**< metric */
+    uint8_t type;          /* 类型*< tag type */
+    uint8_t direction;     /* 方向*< host direction */
+    uint32_t count;        /* 指标计数, *< count */
+    uint32_t metric;       /* 指标单位, packets/seconds/bytes, *< metric */
 } DetectTagData;
 
 /** This is the installed data at the session/global or host table */
 typedef struct DetectTagDataEntry_ {
-    uint8_t flags:3;
-    uint8_t metric:5;
+    uint8_t flags:3;       /* TAG_ENTRY_FLAG_DIR_DST */
+    uint8_t metric:5;      /* DetectTagData->metric */
     uint8_t pad0;
     uint16_t cnt_match;                 /**< number of times this tag was reset/updated */
 
-    uint32_t count;                     /**< count setting from rule */
-    uint32_t sid;                       /**< sid originating the tag */
+    uint32_t count;        /* DetectTagData->count */
+    uint32_t sid;                       /* 对应规则信息 *< sid originating the tag */
     uint32_t gid;                       /**< gid originating the tag */
     union {
         uint32_t packets;               /**< number of packets (metric packets) */
         uint32_t bytes;                 /**< number of bytes (metric bytes) */
     };
     uint32_t first_ts;                  /**< First time seen (for metric = seconds) */
-    uint32_t last_ts;                   /**< Last time seen (to prune old sessions) */
+    uint32_t last_ts;                   /* 上次匹配打标时间 *< Last time seen (to prune old sessions) */
 #if __WORDSIZE == 64
     uint32_t pad1;
 #endif

@@ -91,7 +91,7 @@ void DetectTagRegister(void)
  *
  * \retval 0 no match
  * \retval 1 match
- */
+ *//* 给具体的主机或流, 打标 */
 static int DetectTagMatch(DetectEngineThreadCtx *det_ctx, Packet *p,
         const Signature *s, const SigMatchCtx *ctx)
 {
@@ -101,13 +101,13 @@ static int DetectTagMatch(DetectEngineThreadCtx *det_ctx, Packet *p,
 
     switch (td->type) {
         case DETECT_TAG_TYPE_HOST:
-#ifdef DEBUG
+#ifdef DEBUG                        /* 主机打标 */
             BUG_ON(!(td->direction == DETECT_TAG_DIR_SRC || td->direction == DETECT_TAG_DIR_DST));
 #endif
 
             tde.sid = s->id;
             tde.gid = s->gid;
-            tde.last_ts = tde.first_ts = p->ts.tv_sec;
+            tde.last_ts = tde.first_ts = p->ts.tv_sec; /* 打标时间 */
             tde.metric = td->metric;
             tde.count = td->count;
             if (td->direction == DETECT_TAG_DIR_SRC)
@@ -116,10 +116,10 @@ static int DetectTagMatch(DetectEngineThreadCtx *det_ctx, Packet *p,
                 tde.flags |= TAG_ENTRY_FLAG_DIR_DST;
 
             SCLogDebug("Tagging Host with sid %"PRIu32":%"PRIu32"", s->id, s->gid);
-            TagHashAddTag(&tde, p);
+            TagHashAddTag(&tde, p);                    /* 存储到主机打标信息 */
             break;
         case DETECT_TAG_TYPE_SESSION:
-            if (p->flow != NULL) {
+            if (p->flow != NULL) {  /* 流打标 */
                 SCLogDebug("Setting up tag for flow");
                 /* If it already exists it will be updated */
                 tde.sid = s->id;
@@ -130,7 +130,7 @@ static int DetectTagMatch(DetectEngineThreadCtx *det_ctx, Packet *p,
 
                 SCLogDebug("Adding to or updating flow; first_ts %u count %u",
                     tde.first_ts, tde.count);
-                TagFlowAdd(p, &tde);
+                TagFlowAdd(p, &tde);                   /* 存储到流打标信息 */
             } else {
                 SCLogDebug("No flow to append the session tag");
             }
@@ -173,7 +173,7 @@ static DetectTagData *DetectTagParse(const char *tagstr)
         goto error;
     }
 
-    /* Type */
+    /* 解析类型, Type */
     if (strcasecmp("session", str_ptr) == 0) {
         td.type = DETECT_TAG_TYPE_SESSION;
     } else if (strcasecmp("host", str_ptr) == 0) {
@@ -185,7 +185,7 @@ static DetectTagData *DetectTagParse(const char *tagstr)
     pcre_free_substring(str_ptr);
     str_ptr = NULL;
 
-    /* default tag is 256 packets from session or dst host */
+    /* 赋默认值, default tag is 256 packets from session or dst host */
     td.count = DETECT_TAG_MAX_PKTS;
     td.metric = DETECT_TAG_METRIC_PACKET;
     td.direction = DETECT_TAG_DIR_DST;
@@ -282,7 +282,7 @@ error:
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 解析"tag:session,10,seconds;" */
 int DetectTagSetup(DetectEngineCtx *de_ctx, Signature *s, const char *tagstr)
 {
     DetectTagData *td = DetectTagParse(tagstr);
@@ -298,7 +298,7 @@ int DetectTagSetup(DetectEngineCtx *de_ctx, Signature *s, const char *tagstr)
     sm->type = DETECT_TAG;
     sm->ctx = (SigMatchCtx *)td;
 
-    /* Append it to the list of tags */
+    /* 添加到TMATCH链表, Append it to the list of tags */
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_TMATCH);
     return 0;
 }

@@ -146,9 +146,9 @@ typedef enum HtpSwfCompressType_ {
 } HtpSwfCompressType;
 
 typedef struct HTPCfgDir_ {
-    uint32_t body_limit;
-    uint32_t inspect_min_size;
-    uint32_t inspect_window;
+    uint32_t body_limit;            /* 报文体检测长度上限: 0无限制 */
+    uint32_t inspect_min_size;      /* 启动报文体检测的门限值: 大于此值启动检测 */
+    uint32_t inspect_window;        /* 报文检测宽度最小值??? */
     StreamingBufferConfig sbcfg;    /* 缓存配置 */
 } HTPCfgDir;         /* libhtp库方向性配置 */
 
@@ -169,7 +169,7 @@ typedef struct HTPCfgRec_ {
     uint32_t            swf_decompress_depth;
     uint32_t            swf_compress_depth;
 
-    HTPCfgDir request;
+    HTPCfgDir request;              /* 检测配置 */
     HTPCfgDir response;
 } HTPCfgRec;         /* libhtp库配置信息 */
 
@@ -189,11 +189,11 @@ typedef struct HtpBody_ {
     StreamingBuffer *sb;          /* 缓存的原始数据; 类似于流重组的操作 */
 
     /* Holds the length of the htp request body seen so far */
-    uint64_t content_len_so_far;  /* 截止当前时刻, 看到的数据量长度 */
+    uint64_t content_len_so_far;  /* 数据量长度 */
     /* parser tracker */
     uint64_t body_parsed;
     /* inspection tracker */
-    uint64_t body_inspected;
+    uint64_t body_inspected;      /* 已检测等数据量长度 */
 } HtpBody;
 
 #define HTP_CONTENTTYPE_SET     BIT_U8(0)    /**< We have the content type */

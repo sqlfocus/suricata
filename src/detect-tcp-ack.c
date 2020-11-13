@@ -62,9 +62,9 @@ void DetectAckRegister(void)
     sigmatch_table[DETECT_ACK].Match = DetectAckMatch;
     sigmatch_table[DETECT_ACK].Setup = DetectAckSetup;
     sigmatch_table[DETECT_ACK].Free = DetectAckFree;
-
+                                                                       /* 此关键字支持prefilter */
     sigmatch_table[DETECT_ACK].SupportsPrefilter = PrefilterTcpAckIsPrefilterable;
-    sigmatch_table[DETECT_ACK].SetupPrefilter = PrefilterSetupTcpAck;
+    sigmatch_table[DETECT_ACK].SetupPrefilter = PrefilterSetupTcpAck;  /* 构建规则组的prefilter的函数, called by PrefilterSetupRuleGroup()  */
 #ifdef UNITTESTS
     sigmatch_table[DETECT_ACK].RegisterTests = DetectAckRegisterTests;
 #endif
@@ -87,7 +87,7 @@ static int DetectAckMatch(DetectEngineThreadCtx *det_ctx,
 {
     const DetectAckData *data = (const DetectAckData *)ctx;
 
-    /* This is only needed on TCP packets */
+    /* 需要为TCP报文, 且非伪报文; This is only needed on TCP packets */
     if (!(PKT_IS_TCP(p)) || PKT_IS_PSEUDOPKT(p)) {
         return 0;
     }
@@ -106,7 +106,7 @@ static int DetectAckMatch(DetectEngineThreadCtx *det_ctx,
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 解析 "ack: 123;" */
 static int DetectAckSetup(DetectEngineCtx *de_ctx, Signature *s, const char *optstr)
 {
     DetectAckData *data = NULL;
@@ -159,15 +159,15 @@ static void
 PrefilterPacketAckMatch(DetectEngineThreadCtx *det_ctx, Packet *p, const void *pectx)
 {
     const PrefilterPacketHeaderCtx *ctx = pectx;
-
+    /* 额外匹配 */
     if (PrefilterPacketHeaderExtraMatch(ctx, p) == FALSE)
         return;
-
+    /* 匹配ack序号 */
     if ((p->proto) == IPPROTO_TCP && !(PKT_IS_PSEUDOPKT(p)) &&
         (p->tcph != NULL) && (TCP_GET_ACK(p) == ctx->v1.u32[0]))
     {
         SCLogDebug("packet matches TCP ack %u", ctx->v1.u32[0]);
-        PrefilterAddSids(&det_ctx->pmq, ctx->sigs_array, ctx->sigs_cnt);
+        PrefilterAddSids(&det_ctx->pmq, ctx->sigs_array, ctx->sigs_cnt);  /* 拷贝匹配的规则集 */
     }
 }
 
@@ -175,7 +175,7 @@ static void
 PrefilterPacketAckSet(PrefilterPacketHeaderValue *v, void *smctx)
 {
     const DetectAckData *a = smctx;
-    v->u32[0] = a->ack;
+    v->u32[0] = a->ack;             /* 将ack序号拷贝到匹配结构 */
 }
 
 static bool
@@ -186,7 +186,7 @@ PrefilterPacketAckCompare(PrefilterPacketHeaderValue v, void *smctx)
         return TRUE;
     return FALSE;
 }
-
+/* 构建 DETECT_ACK 的prefilter匹配 */
 static int PrefilterSetupTcpAck(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
 {
     return PrefilterSetupPacketHeader(de_ctx, sgh, DETECT_ACK,

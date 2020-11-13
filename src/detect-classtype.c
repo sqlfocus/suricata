@@ -125,7 +125,7 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
     if (DetectClasstypeParseRawString(rawstr, parsed_ct_name, sizeof(parsed_ct_name)) < 0) {
         SCLogError(SC_ERR_PCRE_PARSE, "invalid value for classtype keyword: "
                 "\"%s\"", rawstr);
-        return -1;                 /* 获得classtype关键字对应的值 */
+        return -1;                 /* 获得classtype关键字对应的值(类名字符串) */
     }
 
     bool real_ct = true;
@@ -187,8 +187,8 @@ static int DetectClasstypeSetup(DetectEngineCtx *de_ctx, Signature *s, const cha
         }
     }
 
-    if (real_ct && update_ct) {    /* 更新 Signature->class_id/class_msg */
-        s->class_id = ct->classtype_id;
+    if (real_ct && update_ct) {    /* 知名注册类, 才更新 Signature->class_id/class_msg */
+        s->class_id = ct->classtype_id;     /* 未知新类, real_ct=false */
         s->class_msg = ct->classtype_desc;
     }
     return 0;

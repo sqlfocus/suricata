@@ -1219,7 +1219,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     if (p->StateAlloc == NULL)      /* CASE: 未注册应用解析 */
         goto end;
 
-    if (flags & STREAM_GAP) {       /* CASE: 不接受数据存在间隙 */
+    if (flags & STREAM_GAP) {       /* CASE: 不接受数据存在间隙, 截断处理(如http截断文件) */
         if (!(p->option_flags & APP_LAYER_PARSER_OPT_ACCEPT_GAPS)) {
             SCLogDebug("app-layer parser does not accept gaps");
             if (f->alstate != NULL && !FlowChangeProto(f)) {

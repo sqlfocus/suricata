@@ -52,8 +52,8 @@ enum
 };
 
 enum StreamUpdateDir {
-    UPDATE_DIR_PACKET,
-    UPDATE_DIR_OPPOSING,
+    UPDATE_DIR_PACKET,    /* 当前方向的流重组 */
+    UPDATE_DIR_OPPOSING,  /* 反方向的流重组 */
     UPDATE_DIR_BOTH,
 };
 

@@ -26,9 +26,9 @@
 
 /**
  * \brief ack data
- */
+ *//* 支持prefilter */
 typedef struct DetectAckData_ {
-    uint32_t ack;                    /**< ack to match */
+    uint32_t ack;     /* tcp序号 *< ack to match */
 } DetectAckData;
 
 /**

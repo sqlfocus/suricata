@@ -318,7 +318,7 @@ void DetectContentPrint(DetectContentData *cd)
  * \param contentstr pointer to the current keyword content string
  * \retval -1 if error
  * \retval 0 if all was ok
- */
+ *//* 构建内容检测模式 */
 int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *contentstr)
 {
     DetectContentData *cd = NULL;
@@ -334,15 +334,15 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
     DetectContentPrint(cd);
 
     if (DetectBufferGetActiveList(de_ctx, s) == -1)
-        goto error;
+        goto error;        /* 存储前置另外的content(如果已经有) */
 
     int sm_list = s->init_data->list;
-    if (sm_list == DETECT_SM_LIST_NOTSET) {
+    if (sm_list == DETECT_SM_LIST_NOTSET) {        /* 初始值, 未初始化, 此content存储在 DETECT_SM_LIST_PMATCH 链 */
         sm_list = DETECT_SM_LIST_PMATCH;
-    } else if (sm_list > DETECT_SM_LIST_MAX &&
+    } else if (sm_list > DETECT_SM_LIST_MAX &&     /* */
             0 == (cd->flags & DETECT_CONTENT_NEGATED)) {
         /* Check transform compatibility */
-        const char *tstr;
+        const char *tstr;  /* 检测transform兼容性: 例如, 带有去除空格转换, 则不允许检测内容带有空格 */
         if (!DetectBufferTypeValidateTransform(de_ctx, sm_list, cd->content,
                     cd->content_len, &tstr)) {
             SCLogError(SC_ERR_INVALID_SIGNATURE,
@@ -352,7 +352,7 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
         }
     }
 
-    sm = SigMatchAlloc();
+    sm = SigMatchAlloc();  /* 存储匹配, 类型 DETECT_CONTENT */
     if (sm == NULL)
         goto error;
     sm->ctx = (void *)cd;
@@ -436,7 +436,7 @@ bool DetectContentPMATCHValidateCallback(const Signature *s)
  *  Another example: 'content:"1"; depth:1; content:"2"; distance:0;'. Here we
  *  cannot set a depth, but we can set an offset of 'offset:1;'. This will
  *  make the mpm a bit more precise.
- *//* 尽量更具配置规则，精确MPM匹配内容区间，以减少匹配消耗 */
+ *//* 尽量根据配置规则，精确MPM匹配内容区间，以减少匹配消耗 */
 void DetectContentPropagateLimits(Signature *s)
 {
     BUG_ON(s == NULL || s->init_data == NULL);

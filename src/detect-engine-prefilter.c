@@ -199,13 +199,13 @@ int PrefilterAppendEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         return -1;
     memset(e, 0x00, sizeof(*e));
 
-    e->Prefilter = PrefilterFunc;
-    e->pectx = pectx;
+    e->Prefilter = PrefilterFunc;  /* DETECT_ACK -> PrefilterPacketAckMatch() */
+    e->pectx = pectx;              /* DETECT_ACK -> PrefilterPacketHeaderCtx */
     e->Free = FreeFunc;
 
     if (sgh->init->pkt_engines == NULL) {
         sgh->init->pkt_engines = e;
-    } else {
+    } else {                       /* 加入报文检测引擎 */
         PrefilterEngineList *t = sgh->init->pkt_engines;
         while (t->next != NULL) {
             t = t->next;
@@ -607,7 +607,7 @@ static void PrefilterGenericMpmFree(void *ptr)
 {
     SCFree(ptr);
 }
-
+/* 关键字多模式预处理, 如"http_uri" */
 int PrefilterGenericMpmRegister(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, MpmCtx *mpm_ctx,
         const DetectBufferMpmRegistery *mpm_reg, int list_id)
@@ -620,7 +620,7 @@ int PrefilterGenericMpmRegister(DetectEngineCtx *de_ctx,
     pectx->GetData = mpm_reg->app_v2.GetData;
     pectx->mpm_ctx = mpm_ctx;
     pectx->transforms = &mpm_reg->transforms;
-    /* 添加 SigGroupHead->init->tx_engines */
+    /* 添加到 SigGroupHead->init->tx_engines */
     int r = PrefilterAppendTxEngine(de_ctx, sgh, PrefilterMpm,
         mpm_reg->app_v2.alproto, mpm_reg->app_v2.tx_min_progress,
         pectx, PrefilterGenericMpmFree, mpm_reg->pname);

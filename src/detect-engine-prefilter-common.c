@@ -20,12 +20,12 @@
 #include "detect-engine-prefilter-common.h"
 
 typedef struct PrefilterPacketHeaderHashCtx_ {
-    PrefilterPacketHeaderValue v1;
+    PrefilterPacketHeaderValue v1; /* 真实待比较的信息 */
 
-    uint16_t type;  /**< PREFILTER_EXTRA_MATCH_* */
+    uint16_t type;                 /* 额外匹配信息, 加速 *< PREFILTER_EXTRA_MATCH_* */
     uint16_t value;
 
-    uint32_t cnt;
+    uint32_t cnt;                  /* 引用计数 */
 } PrefilterPacketHeaderHashCtx;
 
 static uint32_t PrefilterPacketHeaderHashFunc(HashListTable *ht, void *data, uint16_t datalen)
@@ -72,21 +72,21 @@ static void PrefilterPacketU8HashCtxFree(void *vctx)
     }
     SCFree(ctx);
 }
-
+/* 提取额外匹配信息 */
 static void GetExtraMatch(const Signature *s, uint16_t *type, uint16_t *value)
 {
     if (s->sp != NULL && s->sp->next == NULL && s->sp->port == s->sp->port2 &&
         !(s->sp->flags & PORT_FLAG_NOT))
-    {
+    {                                             /* 如果源端口唯一 */
         *type = PREFILTER_EXTRA_MATCH_SRCPORT;
         *value = s->sp->port;
     } else if (s->alproto != ALPROTO_UNKNOWN) {
-        *type = PREFILTER_EXTRA_MATCH_ALPROTO;
+        *type = PREFILTER_EXTRA_MATCH_ALPROTO;    /* 如果指定了应用协议 */
         *value = s->alproto;
     } else if (s->dp != NULL && s->dp->next == NULL && s->dp->port == s->dp->port2 &&
         !(s->dp->flags & PORT_FLAG_NOT))
     {
-        *type = PREFILTER_EXTRA_MATCH_DSTPORT;
+        *type = PREFILTER_EXTRA_MATCH_DSTPORT;    /* 如果目的端口唯一 */
         *value = s->dp->port;
     }
 }
@@ -108,16 +108,16 @@ SetupEngineForPacketHeader(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         return -1;
 
     ctx->v1 = hctx->v1;
-    ctx->type = hctx->type;
+    ctx->type = hctx->type;     /* 匹配信息, 额外匹配信息 */
     ctx->value = hctx->value;
 
-    ctx->sigs_cnt = hctx->cnt;
+    ctx->sigs_cnt = hctx->cnt;  /* 复用的信号数 */
     ctx->sigs_array = SCCalloc(ctx->sigs_cnt, sizeof(SigIntId));
     if (ctx->sigs_array == NULL) {
         SCFree(ctx);
         return -1;
     }
-
+                                /* 得到复用此信息结构的信号 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)
@@ -142,7 +142,7 @@ SetupEngineForPacketHeader(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
 
     SCLogDebug("%s: ctx %p extra type %u extra value %u, sig cnt %u",
             sigmatch_table[sm_type].name, ctx, ctx->type, ctx->value,
-            ctx->sigs_cnt);
+               ctx->sigs_cnt);  /* 挂接到 SigGroupHead->init->pkt_engines */
     PrefilterAppendEngine(de_ctx, sgh, Match, ctx,
             PrefilterPacketHeaderFree, sigmatch_table[sm_type].name);
     return 0;
@@ -322,7 +322,7 @@ static void SetupU8Hash(DetectEngineCtx *de_ctx, HashListTable *hash_table,
     SetupEngineForPacketHeaderPrefilterPacketU8HashCtx(de_ctx, sgh, sm_type,
             counts, Set, Compare, Match);
 }
-
+/* 构建某检测类型/sm_type的prefilter的通用入口函数 */
 static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, int sm_type,
         void (*Set)(PrefilterPacketHeaderValue *v, void *),
@@ -345,22 +345,22 @@ static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
             PrefilterPacketHeaderFreeFunc);
     if (hash_table == NULL)
         return -1;
-
+    /* 遍历规则组内的规则 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)
             continue;
         if (s->init_data->prefilter_sm == NULL || s->init_data->prefilter_sm->type != sm_type)
-            continue;
+            continue;                            /* 待构建的类型需要与规则选中的prefilter类型一致 */
 
         PrefilterPacketHeaderHashCtx ctx;
-        memset(&ctx, 0, sizeof(ctx));
+        memset(&ctx, 0, sizeof(ctx));            /* DETECT_ACK -> PrefilterPacketAckSet() */
         Set(&ctx.v1, s->init_data->prefilter_sm->ctx);
 
-        GetExtraMatch(s, &ctx.type, &ctx.value);
+        GetExtraMatch(s, &ctx.type, &ctx.value); /* 试图获取额外匹配信息, 以最终匹配时加速 */
 
         PrefilterPacketHeaderHashCtx *rctx = HashListTableLookup(hash_table, (void *)&ctx, 0);
-        if (rctx != 0) {
+        if (rctx != 0) {                         /* 加入临时hash数组 */
             rctx->cnt++;
         } else {
             PrefilterPacketHeaderHashCtx *actx = SCCalloc(1, sizeof(*actx));
@@ -380,7 +380,7 @@ static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
         }
     }
 
-    if (u8hash == FALSE) {
+    if (u8hash == FALSE) {                       /* 整合到检测环境, SigGroupHead->init->pkt_engines */
         SetupSingle(de_ctx, hash_table, sgh, sm_type, Compare, Match);
     } else {
         SetupU8Hash(de_ctx, hash_table, sgh, sm_type, Set, Compare, Match);

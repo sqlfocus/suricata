@@ -87,7 +87,7 @@ static int g_http_uri_buffer_id = 0;     /* "http_uri"对应的检测类型ID/De
  */
 void DetectHttpUriRegister (void)
 {
-    /* http_uri content modifier */
+    /* HTTP URI的规范化后的缓存, http_uri content modifier */
     sigmatch_table[DETECT_AL_HTTP_URI].name = "http_uri";
     sigmatch_table[DETECT_AL_HTTP_URI].desc = "content modifier to match specifically and only on the HTTP uri-buffer";
     sigmatch_table[DETECT_AL_HTTP_URI].url = "/rules/http-keywords.html#http-uri-and-http-raw-uri";
@@ -106,11 +106,11 @@ void DetectHttpUriRegister (void)
     sigmatch_table[DETECT_HTTP_URI].Setup = DetectHttpUriSetupSticky;
     sigmatch_table[DETECT_HTTP_URI].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("http_uri", ALPROTO_HTTP,  /* 注册应用检测引擎 */
+    DetectAppLayerInspectEngineRegister2("http_uri", ALPROTO_HTTP,  /* 注册到应用检测引擎 */
             SIG_FLAG_TOSERVER, HTP_REQUEST_LINE,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("http_uri", SIG_FLAG_TOSERVER, 2,    /* 注册多模引擎列表, g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
+    DetectAppLayerMpmRegister2("http_uri", SIG_FLAG_TOSERVER, 2,    /* 注册到多模引擎列表, g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
             PrefilterGenericMpmRegister, GetData, ALPROTO_HTTP,
             HTP_REQUEST_LINE);
 
@@ -125,7 +125,7 @@ void DetectHttpUriRegister (void)
                                                           /* 存储检测类型 */
     g_http_uri_buffer_id = DetectBufferTypeGetByName("http_uri");
 
-    /* http_raw_uri content modifier */
+    /* HTTP URI的原始缓存; http_raw_uri content modifier */
     sigmatch_table[DETECT_AL_HTTP_RAW_URI].name = "http_raw_uri";
     sigmatch_table[DETECT_AL_HTTP_RAW_URI].desc = "content modifier to match on the raw HTTP uri";
     sigmatch_table[DETECT_AL_HTTP_RAW_URI].url = "/rules/http-keywords.html#http_uri-and-http_raw-uri";
@@ -170,7 +170,7 @@ void DetectHttpUriRegister (void)
  * \retval  0 On success
  * \retval -1 On failure
  */
-
+/* 构建"http_uri"关键字 */
 int DetectHttpUriSetup(DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     return DetectEngineContentModifierBufferSetup(de_ctx, s, str,
@@ -199,7 +199,7 @@ static void DetectHttpUriSetupCallback(const DetectEngineCtx *de_ctx,
  * \param str      Should hold an empty string always
  *
  * \retval 0       On success
- */
+ *//* 设定sticky buffer, 指向g_http_uri_buffer_id, 被此关键字修饰 */
 static int DetectHttpUriSetupSticky(DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     if (DetectBufferSetActiveList(s, g_http_uri_buffer_id) < 0)
@@ -208,7 +208,7 @@ static int DetectHttpUriSetupSticky(DetectEngineCtx *de_ctx, Signature *s, const
         return -1;
     return 0;
 }
-
+/* "http_uri"关键字对应的应用检测引擎, 获取检测buffer的回调函数: DetectEngineAppInspectionEngine->v2.GetData() */
 static InspectionBuffer *GetData(DetectEngineThreadCtx *det_ctx,
         const DetectEngineTransforms *transforms, Flow *_f,
         const uint8_t _flow_flags, void *txv, const int list_id)
@@ -216,20 +216,20 @@ static InspectionBuffer *GetData(DetectEngineThreadCtx *det_ctx,
     SCEnter();
 
     InspectionBuffer *buffer = InspectionBufferGet(det_ctx, list_id);
-    if (buffer->inspect == NULL) {
+    if (buffer->inspect == NULL) { /* 如果尚无检测buffer, 则构建 */
         htp_tx_t *tx = (htp_tx_t *)txv;
         HtpTxUserData *tx_ud = htp_tx_get_user_data(tx);
 
         if (tx_ud == NULL || tx_ud->request_uri_normalized == NULL) {
             SCLogDebug("no tx_id or uri");
-            return NULL;
+            return NULL;           /* 获取libhtp规范化的uri内存 */
         }
 
         const uint32_t data_len = bstr_len(tx_ud->request_uri_normalized);
         const uint8_t *data = bstr_ptr(tx_ud->request_uri_normalized);
 
-        InspectionBufferSetup(buffer, data, data_len);
-        InspectionBufferApplyTransforms(buffer, transforms);
+        InspectionBufferSetup(buffer, data, data_len);        /* 构建原始内存 */
+        InspectionBufferApplyTransforms(buffer, transforms);  /* 转变处理, 如去除空格等 */
     }
 
     return buffer;

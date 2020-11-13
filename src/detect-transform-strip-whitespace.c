@@ -97,10 +97,10 @@ static bool TransformStripWhitespaceValidate(const uint8_t *content,
     }
     return true;
 }
-
+/* 检测内存, 去掉空格 */
 static void TransformStripWhitespace(InspectionBuffer *buffer, void *options)
 {
-    const uint8_t *input = buffer->inspect;
+    const uint8_t *input = buffer->inspect; /* 待操控内存 */
     const uint32_t input_len = buffer->inspect_len;
     uint8_t output[input_len]; // we can only shrink
     uint8_t *oi = output, *os = output;
@@ -114,7 +114,7 @@ static void TransformStripWhitespace(InspectionBuffer *buffer, void *options)
     }
     uint32_t output_size = oi - os;
     //PrintRawDataFp(stdout, output, output_size);
-
+                                            /* 存储变更后数据 */
     InspectionBufferCopy(buffer, os, output_size);
 }
 

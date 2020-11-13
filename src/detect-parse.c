@@ -142,20 +142,20 @@ const char *DetectListToString(int list)
     return "unknown";
 }
 
-/** \param arg NULL or empty string */
+/* 为内容检测构建修饰符关键字, 如http_uri/http_client_body等 * \param arg NULL or empty string */
 int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
         Signature *s, const char *arg, int sm_type, int sm_list,
         AppProto alproto)
 {
     SigMatch *sm = NULL;
     int ret = -1;
-
+    /* "http_uri"不能跟参数 */
     if (arg != NULL && strcmp(arg, "") != 0) {
         SCLogError(SC_ERR_INVALID_ARGUMENT, "%s shouldn't be supplied "
                    "with an argument", sigmatch_table[sm_type].name);
         goto end;
     }
-
+    /* 不允许设置sticky buffer */
     if (s->init_data->list != DETECT_SM_LIST_NOTSET) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "\"%s\" keyword seen "
                    "with a sticky buffer still set.  Reset sticky buffer "
@@ -168,8 +168,8 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
                    "alprotos set");
         goto end;
     }
-
-    sm = DetectGetLastSMByListId(s,   /* 查找对应类型的 SigMatch */
+    /* 查找最后一个content关键字的注册匹配, 用于修饰此匹配 */
+    sm = DetectGetLastSMByListId(s,
             DETECT_SM_LIST_PMATCH, DETECT_CONTENT, -1);
     if (sm == NULL) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "\"%s\" keyword "
@@ -180,13 +180,13 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
         goto end;
     }
     DetectContentData *cd = (DetectContentData *)sm->ctx;
-    if (cd->flags & DETECT_CONTENT_RAWBYTES) {
+    if (cd->flags & DETECT_CONTENT_RAWBYTES) {   /* 不能做用于rawbyte内容关键字 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "%s rule can not "
                    "be used with the rawbytes rule keyword",
                    sigmatch_table[sm_type].name);
         goto end;
     }
-    if (cd->flags & DETECT_CONTENT_REPLACE) {
+    if (cd->flags & DETECT_CONTENT_REPLACE) {    /* 不能做用于可替换内容关键字 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "%s rule can not "
                    "be used with the replace rule keyword",
                    sigmatch_table[sm_type].name);
@@ -218,8 +218,8 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
         }
     }
     s->alproto = alproto;
-    s->flags |= SIG_FLAG_APPLAYER;
-
+    s->flags |= SIG_FLAG_APPLAYER;   /* 此规则也用于应用层检测 */
+    /* 将此匹配从 DETECT_SM_LIST_PMATCH 移动到 g_http_uri_buffer_id 列表 */
     /* transfer the sm from the pmatch list to sm_list */
     SigMatchTransferSigMatchAcrossLists(sm,
                                         &s->init_data->smlists[DETECT_SM_LIST_PMATCH],
@@ -504,7 +504,7 @@ SigMatch *DetectGetLastSMFromLists(const Signature *s, ...)
  * \param va_args list of keyword types terminated by -1
  *
  * \retval sm_last to last sm.
- */
+ *//* 从此匹配沿着它所在的链表, 反向搜索, 找到对应类型的匹配(几个类型中索引最大的) */
 SigMatch *DetectGetLastSMByListPtr(const Signature *s, SigMatch *sm_list, ...)
 {
     SigMatch *sm_last = NULL;
@@ -516,10 +516,10 @@ SigMatch *DetectGetLastSMByListPtr(const Signature *s, SigMatch *sm_list, ...)
 
     for (sm_type = va_arg(ap, int); sm_type != -1; sm_type = va_arg(ap, int))
     {
-        sm_new = SigMatchGetLastSMByType(sm_list, sm_type);
+        sm_new = SigMatchGetLastSMByType(sm_list, sm_type); /* 反向搜索, 查找某类型 */
         if (sm_new == NULL)
             continue;
-        if (sm_last == NULL || sm_new->idx > sm_last->idx)
+        if (sm_last == NULL || sm_new->idx > sm_last->idx)  /* 在多个类型中, 选择索引最大的 */
             sm_last = sm_new;
     }
 
@@ -555,10 +555,10 @@ SigMatch *DetectGetLastSMByListId(const Signature *s, int list_id, ...)
 
     for (sm_type = va_arg(ap, int); sm_type != -1; sm_type = va_arg(ap, int))
     {
-        sm_new = SigMatchGetLastSMByType(sm_list, sm_type);
+        sm_new = SigMatchGetLastSMByType(sm_list, sm_type); /* 反向搜索 */
         if (sm_new == NULL)
             continue;
-        if (sm_last == NULL || sm_new->idx > sm_last->idx)
+        if (sm_last == NULL || sm_new->idx > sm_last->idx)  /* 选取各类型中, 索引最大的 */
             sm_last = sm_new;
     }
 

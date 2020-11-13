@@ -31,7 +31,7 @@
 #define DETECT_CONTENT_WITHIN            BIT_U32(2)
 #define DETECT_CONTENT_OFFSET            BIT_U32(3)
 #define DETECT_CONTENT_DEPTH             BIT_U32(4)
-#define DETECT_CONTENT_FAST_PATTERN      BIT_U32(5)
+#define DETECT_CONTENT_FAST_PATTERN      BIT_U32(5)   /* 支持多模式匹配 */
 #define DETECT_CONTENT_FAST_PATTERN_ONLY BIT_U32(6)
 #define DETECT_CONTENT_FAST_PATTERN_CHOP BIT_U32(7)
 /** content applies to a "raw"/undecoded field if applicable */
@@ -98,8 +98,8 @@ typedef struct DetectContentData_ {
     PatIntId id;           /* 协议识别：pattern id, 在 AppLayerProtoDetectPMCtx->map[] 中的编号 */
     uint16_t depth;        /* 内容检测：支持fast pattern的不重复的序号  */
     uint16_t offset;
-    int32_t distance;
-    int32_t within;
+    int32_t distance;      /* 匹配长度上限: depth/相对于0处; within/相对于上次匹配处 */
+    int32_t within;        /* 匹配起始位置: offset/相对于0处; distance/相对于上次匹配 */
     /* SPM search context. */
     SpmCtx *spm_ctx;       /* 单模匹配引擎上下文 */
     /* pointer to replacement data */

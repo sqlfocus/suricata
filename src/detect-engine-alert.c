@@ -89,7 +89,7 @@ static int PacketAlertHandle(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det
 
                 /* PacketAlertThreshold returns 2 if the alert is suppressed but
                  * we do need to apply rule actions to the packet. */
-                KEYWORD_PROFILING_START;
+                KEYWORD_PROFILING_START;    /* 告警限速 */
                 ret = PacketAlertThreshold(de_ctx, det_ctx, td, p, s, pa);
                 if (ret == 0 || ret == 2) {
                     KEYWORD_PROFILING_END(det_ctx, DETECT_THRESHOLD, 0);
@@ -112,7 +112,7 @@ static int PacketAlertHandle(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det
 
                 /* PacketAlertThreshold returns 2 if the alert is suppressed but
                  * we do need to apply rule actions to the packet. */
-                KEYWORD_PROFILING_START;
+                KEYWORD_PROFILING_START;    /* 告警限速 */
                 ret = PacketAlertThreshold(de_ctx, det_ctx, td, p, s, pa);
                 if (ret == 0 || ret == 2) {
                     KEYWORD_PROFILING_END(det_ctx, DETECT_THRESHOLD ,0);
@@ -317,7 +317,7 @@ void PacketAlertFinalize(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx
             i++;
         }
     }
-
+    /* 试图给报文打标: 主机/流tag */
     /* At this point, we should have all the new alerts. Now check the tag
      * keyword context for sessions and hosts */
     if (!(p->flags & PKT_PSEUDO_STREAM_END))

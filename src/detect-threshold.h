@@ -28,9 +28,9 @@
 #include "decode-ipv4.h"
 #include "decode-tcp.h"
 
-#define TYPE_LIMIT     1
-#define TYPE_BOTH      2
-#define TYPE_THRESHOLD 3
+#define TYPE_LIMIT     1    /* 限速: 指定时间内的告警数上限 */
+#define TYPE_BOTH      2    /* TYPE_LIMIT 和 TYPE_THRESHOLD 同时作用 */
+#define TYPE_THRESHOLD 3    /* 设门槛: 未达到指定值, 不告警 */
 #define TYPE_DETECTION 4
 #define TYPE_RATE      5
 #define TYPE_SUPPRESS  6
@@ -55,13 +55,13 @@
  */
 
 typedef struct DetectThresholdData_ {
-    uint32_t count;     /**< Event count */
-    uint32_t seconds;   /**< Event seconds */
-    uint8_t type;       /**< Threshold type : limit , threshold, both, detection_filter */
-    uint8_t track;      /**< Track type: by_src, by_dst */
-    uint8_t new_action; /**< new_action alert|drop|pass|log|sdrop|reject */
-    uint32_t timeout;   /**< timeout */
-    uint32_t flags;     /**< flags used to set option */
+    uint32_t count;     /* 限定->seconds内的计数, *< Event count */
+    uint32_t seconds;   /* *< Event seconds */
+    uint8_t type;       /* 类型, *< Threshold type : limit , threshold, both, detection_filter */
+    uint8_t track;      /* 计数metric, TRACK_RULE/TRACK_SRC *< Track type: by_src, by_dst */
+    uint8_t new_action; /* *< new_action alert|drop|pass|log|sdrop|reject */
+    uint32_t timeout;   /* *< timeout */
+    uint32_t flags;     /* *< flags used to set option */
     DetectAddressHead addrs;
 } DetectThresholdData;
 

@@ -61,7 +61,7 @@ void DetectSeqRegister(void)
     sigmatch_table[DETECT_SEQ].Free = DetectSeqFree;
 #ifdef UNITTESTS
     sigmatch_table[DETECT_SEQ].RegisterTests = DetectSeqRegisterTests;
-#endif
+#endif                                                    /* 此关键字也支持prefilter */
     sigmatch_table[DETECT_SEQ].SupportsPrefilter = PrefilterTcpSeqIsPrefilterable;
     sigmatch_table[DETECT_SEQ].SetupPrefilter = PrefilterSetupTcpSeq;
 }

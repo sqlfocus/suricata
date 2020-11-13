@@ -48,7 +48,7 @@ void DetectSidRegister (void)
     sigmatch_table[DETECT_SID].RegisterTests = DetectSidRegisterTests;
 #endif
 }
-/* 解析规则中的sid字段 */
+/* 解析规则中的sid字段, 并赋值到Signature->id */
 static int DetectSidSetup (DetectEngineCtx *de_ctx, Signature *s, const char *sidstr)
 {
     unsigned long id = 0;

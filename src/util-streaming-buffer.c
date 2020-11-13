@@ -862,7 +862,7 @@ int StreamingBufferGetData(const StreamingBuffer *sb,
         return 0;
     }
 }
-
+/* 从缓存直接获取数据 */
 int StreamingBufferGetDataAtOffset (const StreamingBuffer *sb,
         const uint8_t **data, uint32_t *data_len,
         uint64_t offset)
