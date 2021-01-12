@@ -170,7 +170,7 @@ static void SBBPrintList(StreamingBuffer *sb)
 /* setup with gap between 2 blocks
  *
  * [block][gap][block]
- **/
+ **//* 在两个数据块中间形成空洞: 插入实际已存在数据块 */
 static void SBBInit(StreamingBuffer *sb,
                     uint32_t rel_offset, uint32_t data_len)
 {
@@ -194,8 +194,8 @@ static void SBBInit(StreamingBuffer *sb,
     sbb2->len = data_len;
 
     sb->head = sbb;
-    SBB_RB_INSERT(&sb->sbb_tree, sbb);
-    SBB_RB_INSERT(&sb->sbb_tree, sbb2);
+    SBB_RB_INSERT(&sb->sbb_tree, sbb);    /* 插入第一个块, 已缓存的数据 */
+    SBB_RB_INSERT(&sb->sbb_tree, sbb2);   /* 插入第二个块, 新来的数据 */
 
     SCLogDebug("sbb1 %"PRIu64", len %u, sbb2 %"PRIu64", len %u",
             sbb->offset, sbb->len, sbb2->offset, sbb2->len);
@@ -208,7 +208,7 @@ static void SBBInit(StreamingBuffer *sb,
 /* setup with leading gap
  *
  * [gap][block]
- **/
+ **//* 未缓存数据, 第一个新来的数据不是起始数据, 产生头部空洞 */
 static void SBBInitLeadingGap(StreamingBuffer *sb,
                               uint64_t offset, uint32_t data_len)
 {
@@ -221,7 +221,7 @@ static void SBBInitLeadingGap(StreamingBuffer *sb,
     sbb->len = data_len;
 
     sb->head = sbb;
-    SBB_RB_INSERT(&sb->sbb_tree, sbb);
+    SBB_RB_INSERT(&sb->sbb_tree, sbb);  /* 插入新来数据 */
 
     SCLogDebug("sbb %"PRIu64", len %u",
             sbb->offset, sbb->len);
@@ -235,7 +235,7 @@ static inline void ConsolidateFwd(StreamingBuffer *sb,
 {
     uint64_t sa_re = sa->offset + sa->len;
     StreamingBufferBlock *tr, *s = sa;
-    RB_FOREACH_FROM(tr, SBB, s) {
+    RB_FOREACH_FROM(tr, SBB, s) { /* 正向遍历, tr为sa的下一个数据段 */
         if (sa == tr)
             continue;
 
@@ -243,7 +243,7 @@ static inline void ConsolidateFwd(StreamingBuffer *sb,
         SCLogDebug("-> (fwd) tr %p %"PRIu64"/%u re %"PRIu64,
                 tr, tr->offset, tr->len, tr_re);
 
-        if (sa_re < tr->offset)
+        if (sa_re < tr->offset)        /* CASE: 无重叠, 完成 */
             break; // entirely before
 
         /*
@@ -255,7 +255,7 @@ static inline void ConsolidateFwd(StreamingBuffer *sb,
             tr: [       ]
         */
         if (sa->offset >= tr->offset && sa_re <= tr_re) {
-            sa->len = tr->len;
+            sa->len = tr->len;         /* CASE: 被包含, 删除 */
             sa->offset = tr->offset;
             sa_re = sa->offset + sa->len;
             SCLogDebug("-> (fwd) tr %p %"PRIu64"/%u REMOVED ECLIPSED2", tr, tr->offset, tr->len);
@@ -271,7 +271,7 @@ static inline void ConsolidateFwd(StreamingBuffer *sb,
         */
         } else if (sa->offset <= tr->offset && sa_re >= tr_re) {
             SCLogDebug("-> (fwd) tr %p %"PRIu64"/%u REMOVED ECLIPSED", tr, tr->offset, tr->len);
-            SBB_RB_REMOVE(tree, tr);
+            SBB_RB_REMOVE(tree, tr);   /* CASE: 包含下一个段, 删除下一个段 */
             FREE(sb->cfg, tr, sizeof(StreamingBufferBlock));
         /*
             sa: [         ]
@@ -281,7 +281,7 @@ static inline void ConsolidateFwd(StreamingBuffer *sb,
         */
         } else if (sa->offset < tr->offset && // starts before
                    sa_re >= tr->offset && sa_re < tr_re) // ends inside
-        {
+        {                              /* CASE: 有交集, 合并 */
             // merge
             sa->len = tr_re - sa->offset;
             sa_re = sa->offset + sa->len;
@@ -297,17 +297,17 @@ static inline void ConsolidateBackward(StreamingBuffer *sb,
 {
     uint64_t sa_re = sa->offset + sa->len;
     StreamingBufferBlock *tr, *s = sa;
-    RB_FOREACH_REVERSE_FROM(tr, SBB, s) {
+    RB_FOREACH_REVERSE_FROM(tr, SBB, s) {  /* 从sa反向向树首部遍历 */
         if (sa == tr)
             continue;
         const uint64_t tr_re = tr->offset + tr->len;
         SCLogDebug("-> (bwd) tr %p %"PRIu64"/%u", tr, tr->offset, tr->len);
 
-        if (sa->offset > tr_re)
+        if (sa->offset > tr_re)      /* CASE: 和前一个数据段无重叠, 完成 */
             break; // entirely after
 
         if (sa->offset >= tr->offset && sa_re <= tr_re) {
-            sa->len = tr->len;
+            sa->len = tr->len;       /* CASE: 被前一个数据段包含, 删除当前数据段 */
             sa->offset = tr->offset;
             sa_re = sa->offset + sa->len;
             SCLogDebug("-> (bwd) tr %p %"PRIu64"/%u REMOVED ECLIPSED2", tr, tr->offset, tr->len);
@@ -322,7 +322,7 @@ static inline void ConsolidateBackward(StreamingBuffer *sb,
             tr: [         ]
             sa:    [   ]
             tr: [         ]
-        */
+        */                           /* CASE: 包含前一个数据段, 删除前一个数据段 */
         } else if (sa->offset <= tr->offset && sa_re >= tr_re) {
             SCLogDebug("-> (bwd) tr %p %"PRIu64"/%u REMOVED ECLIPSED", tr, tr->offset, tr->len);
             if (sb->head == tr)
@@ -336,7 +336,7 @@ static inline void ConsolidateBackward(StreamingBuffer *sb,
             tr: [   ]
         */
         } else if (sa->offset > tr->offset && sa_re > tr_re && sa->offset <= tr_re) {
-            // merge
+            // merge                 /* CASE: 和前一个数据段有交集, 合并 */
             sa->len = sa_re - tr->offset;
             sa->offset = tr->offset;
             sa_re = sa->offset + sa->len;
@@ -348,7 +348,7 @@ static inline void ConsolidateBackward(StreamingBuffer *sb,
         }
     }
 }
-
+/* 空洞描述树非空, 利用新来的数据调整 */
 static int Insert(StreamingBuffer *sb, struct SBB *tree,
         uint32_t rel_offset, uint32_t len)
 {
@@ -360,18 +360,18 @@ static int Insert(StreamingBuffer *sb, struct SBB *tree,
     sbb->offset = sb->stream_offset + rel_offset;
     sbb->len = len;
     StreamingBufferBlock *res = SBB_RB_INSERT(tree, sbb);
-    if (res) {
+    if (res) {            /* 数据段完全重叠, 直接返回 */
         // exact overlap
         SCLogDebug("* insert failed: exact match in tree with %p %"PRIu64"/%u", res, res->offset, res->len);
         FREE(sb->cfg, sbb, sizeof(StreamingBufferBlock));
         return 0;
     }
     if (SBB_RB_PREV(sbb) == NULL) {
-        sb->head = sbb;
+        sb->head = sbb;   /* 无前置数据段, 更新首数据段指针 */
     } else {
-        ConsolidateBackward(sb, tree, sbb);
-    }
-    ConsolidateFwd(sb, tree, sbb);
+        ConsolidateBackward(sb, tree, sbb);  /* 反向（从首端到sbb）调整数据段 */
+    }           
+    ConsolidateFwd(sb, tree, sbb);           /* 正向（从sbb到尾端）调整数据段 */
 #ifdef DEBUG
     SBBPrintList(sb);
 #endif
@@ -393,33 +393,33 @@ static void SBBFree(StreamingBuffer *sb)
     }
     sb->head = NULL;
 }
-
+/* 每次发生slide后, 维护 StreamingBuffer->sbb_tree */
 static void SBBPrune(StreamingBuffer *sb)
 {
     SCLogDebug("pruning %p to %"PRIu64, sb, sb->stream_offset);
     StreamingBufferBlock *sbb = NULL, *safe = NULL;
     RB_FOREACH_SAFE(sbb, SBB, &sb->sbb_tree, safe) {
-        /* completely beyond window, we're done */
+        /* 与数据块无交集, 完毕, 跳出 completely beyond window, we're done */
         if (sbb->offset > sb->stream_offset) {
-            sb->head = sbb;
+            sb->head = sbb;                  /* 数据描述块不变 */
             break;
         }
 
-        /* partly before, partly beyond. Adjust */
+        /* 与数据块部分交集, 更新, partly before, partly beyond. Adjust */
         if (sbb->offset < sb->stream_offset &&
             sbb->offset + sbb->len > sb->stream_offset) {
             uint32_t shrink_by = sb->stream_offset - sbb->offset;
             DEBUG_VALIDATE_BUG_ON(shrink_by > sbb->len);
             if (sbb->len >= shrink_by) {
-                sbb->len -=  shrink_by;
+                sbb->len -=  shrink_by;      /* 缩小描述块 */
                 sbb->offset += shrink_by;
                 DEBUG_VALIDATE_BUG_ON(sbb->offset != sb->stream_offset);
             }
             sb->head = sbb;
             break;
         }
-
-        SBB_RB_REMOVE(&sb->sbb_tree, sbb);
+        /* 覆盖数据块, 移除 */
+        SBB_RB_REMOVE(&sb->sbb_tree, sbb);   /* 移除数据块 */
         /* either we set it again for the next sbb, or there isn't any */
         sb->head = NULL;
         SCLogDebug("sb %p removed %p %"PRIu64", %u", sb, sbb, sbb->offset, sbb->len);
@@ -663,7 +663,7 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
                             uint64_t offset)
 {
     BUG_ON(seg == NULL);
-
+    /* 待写入偏移, 比实际起始偏移小; 不应该发生, 退出 */
     if (offset < sb->stream_offset)
         return -1;
     /* 首次初始化缓存, calloc() */
@@ -672,14 +672,14 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
             return -1;
     }
     /* 内存不够，slide, 仍不够则新分配内存 */
-    uint32_t rel_offset = offset - sb->stream_offset;
-    if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) {
+    uint32_t rel_offset = offset - sb->stream_offset;     /* 待写入偏移序号, 相对于实际偏移序号的（偏移）量 */
+    if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) { /* 此值为相对于sb->buf的偏移 */
         if (sb->cfg->flags & STREAMING_BUFFER_AUTOSLIDE) {
-            AutoSlide(sb);
-            rel_offset = offset - sb->stream_offset;
+            AutoSlide(sb);                                      /* 滑动数据 */
+            rel_offset = offset - sb->stream_offset;            /* 重新计算写入偏移 */
         }
         if (!DATA_FITS_AT_OFFSET(sb, data_len, rel_offset)) {
-            if (GrowToSize(sb, (rel_offset + data_len)) != 0)
+            if (GrowToSize(sb, (rel_offset + data_len)) != 0)   /* realloc()内存 */
                 return -1;
         }
     }
@@ -688,42 +688,42 @@ int StreamingBufferInsertAt(StreamingBuffer *sb, StreamingBufferSegment *seg,
     }
     /* 拷贝内存 */
     memcpy(sb->buf + rel_offset, data, data_len);
-    seg->stream_offset = offset;   /* 更新段信息的字段 */
+    seg->stream_offset = offset;   /* 更新记录段信息的字段, TcpStream->seg_tree->sbseg */
     seg->segment_len = data_len;
 
     SCLogDebug("rel_offset %u sb->stream_offset %"PRIu64", buf_offset %u",
             rel_offset, sb->stream_offset, sb->buf_offset);
     /* 更新 TcpStream->sb->sbb_tree 红黑树，以判断是否有空洞 */
-    if (RB_EMPTY(&sb->sbb_tree)) {
+    if (RB_EMPTY(&sb->sbb_tree)) {     /* CASE: 无空洞 */
         SCLogDebug("empty sbb list");
 
-        if (sb->stream_offset == offset) {
+        if (sb->stream_offset == offset) {                         /* 起始数据报文 */
             SCLogDebug("empty sbb list: block exactly what was expected, fall through");
             /* empty list, data is exactly what is expected (append),
              * so do nothing */
-        } else if ((rel_offset + data_len) <= sb->buf_offset) {
+        } else if ((rel_offset + data_len) <= sb->buf_offset) {    /* 重复数据, 落在已收到缓存内 */
             SCLogDebug("empty sbb list: block is within existing region");
         } else {
-            if (sb->buf_offset && rel_offset == sb->buf_offset) {
+            if (sb->buf_offset && rel_offset == sb->buf_offset) {  /* 正好流上下一个报文 */
                 // nothing to do
-            } else if (rel_offset < sb->buf_offset) {
+            } else if (rel_offset < sb->buf_offset) {              /* 覆盖部分已缓存数据 */
                 // nothing to do
-            } else if (sb->buf_offset) {
+            } else if (sb->buf_offset) {                           /* 已缓存了部分数据, 空洞: 插入两个数据块（已缓存+新来的） */
                 /* existing data, but there is a gap between us */
                 SBBInit(sb, rel_offset, data_len);
-            } else {
+            } else {                                               /* 未缓存数据, 空洞: 插入新来的数据块 */
                 /* gap before data in empty list */
                 SCLogDebug("empty sbb list: invoking SBBInitLeadingGap");
                 SBBInitLeadingGap(sb, offset, data_len);
             }
         }
-    } else {
+    } else {                           /* CASE: 已有空洞, 更新描述树 */
         /* already have blocks, so append new block based on new data */
         SBBUpdate(sb, rel_offset, data_len);
     }
     /* 记录已缓存数据的右边界 */
     if (rel_offset + data_len > sb->buf_offset)
-        sb->buf_offset = rel_offset + data_len;
+        sb->buf_offset = rel_offset + data_len;     /* 仅代表最右端, 其左端可能包含了空洞 */
 
     return 0;
 }

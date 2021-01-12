@@ -43,7 +43,7 @@ typedef struct FlowBucket_ {
     Flow *head;      /* 属于此hash桶的, 链表组织的流 */
     /** head of the list of evicted flows for this row. Waiting to be
      *  collected by the Flow Manager. */
-    Flow *evicted;   /* 将要释放的流列表 */
+    Flow *evicted;   /* 将要释放的流列表(非当前处理线程), 由管理线程处理 FlowTimeoutHash() */
 #ifdef FBLOCK_MUTEX
     SCMutex m;       /* 操作桶时的锁 */
 #elif defined FBLOCK_SPIN

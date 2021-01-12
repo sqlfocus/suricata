@@ -46,14 +46,14 @@ static int DetectAppLayerProtocolPacketMatch(
     int r = 0;
     const DetectAppLayerProtocolData *data = (const DetectAppLayerProtocolData *)ctx;
 
-    /* if the sig is PD-only we only match when PD packet flags are set */
+    /* 仅当协议识别结束后才开始匹配, if the sig is PD-only we only match when PD packet flags are set */
     if ((s->flags & SIG_FLAG_PDONLY) &&
         (p->flags & (PKT_PROTO_DETECT_TS_DONE|PKT_PROTO_DETECT_TC_DONE)) == 0)
     {
         SCLogDebug("packet %"PRIu64": flags not set", p->pcap_cnt);
         SCReturnInt(0);
     }
-
+    /* 无流, 不匹配 */
     const Flow *f = p->flow;
     if (f == NULL) {
         SCLogDebug("packet %"PRIu64": no flow", p->pcap_cnt);
@@ -61,7 +61,7 @@ static int DetectAppLayerProtocolPacketMatch(
     }
 
     /* unknown means protocol detection isn't ready yet */
-
+    /* 匹配应用层协议 */
     if ((f->alproto_ts != ALPROTO_UNKNOWN) && (p->flowflags & FLOW_PKT_TOSERVER))
     {
         SCLogDebug("toserver packet %"PRIu64": looking for %u/neg %u, got %u",
@@ -135,7 +135,7 @@ static int DetectAppLayerProtocolSetup(DetectEngineCtx *de_ctx,
 {
     DetectAppLayerProtocolData *data = NULL;
     SigMatch *sm = NULL;
-
+    /* 已经设定了应用协议, 通过其他关键字 */
     if (s->alproto != ALPROTO_UNKNOWN) {
         SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "Either we already "
                    "have the rule match on an app layer protocol set through "
@@ -143,11 +143,11 @@ static int DetectAppLayerProtocolSetup(DetectEngineCtx *de_ctx,
                    "already seen a non-negated app-layer-protocol.");
         goto error;
     }
-
+    /* 解析 */
     data = DetectAppLayerProtocolParse(arg, s->init_data->negated);
     if (data == NULL)
         goto error;
-
+    /* 检查, 和现有配置是否冲突 */
     SigMatch *tsm = s->init_data->smlists[DETECT_SM_LIST_MATCH];
     for ( ; tsm != NULL; tsm = tsm->next) {
         if (tsm->type == DETECT_AL_APP_LAYER_PROTOCOL) {
@@ -161,7 +161,7 @@ static int DetectAppLayerProtocolSetup(DetectEngineCtx *de_ctx,
             }
         }
     }
-
+    /* 挂接到 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
     sm = SigMatchAlloc();
     if (sm == NULL)
         goto error;
@@ -256,7 +256,7 @@ static bool PrefilterAppProtoIsPrefilterable(const Signature *s)
     }
     return FALSE;
 }
-
+/* 匹配应用层协议 */
 void DetectAppLayerProtocolRegister(void)
 {
     sigmatch_table[DETECT_AL_APP_LAYER_PROTOCOL].name = "app-layer-protocol";

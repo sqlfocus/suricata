@@ -1249,9 +1249,9 @@ static int SigParse(DetectEngineCtx *de_ctx, Signature *s,
         } while (ret == 1);
     }
                                       /* 去除 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
-    DetectIPProtoRemoveAllSMs(de_ctx, s);  /*  中 DETECT_IPPROTO 类型的规则 */
-
-    SCReturnInt(ret);
+    DetectIPProtoRemoveAllSMs(de_ctx, s);  /* 中 DETECT_IPPROTO 类型的规则; 因为此规则要求的L3/L4协议已 */
+                                           /* 写入Signature->proto.proto[], 且在匹配流程上优先匹配协议 */
+    SCReturnInt(ret);                      /* 以加速筛选(如果防止在匹配中,则它之前的匹配都需要过, 浪费不少时间) */
 }
 
 Signature *SigAlloc (void)
@@ -2410,7 +2410,7 @@ error:
     return NULL;
 }
 
-static DetectParseRegex *g_detect_parse_regex_list = NULL; /* */
+static DetectParseRegex *g_detect_parse_regex_list = NULL; /* 注册的pcre解析器 */
 int DetectParsePcreExecLen(DetectParseRegex *parse_regex, const char *str,
                    int str_len,
                    int start_offset, int options,
@@ -2465,7 +2465,7 @@ void DetectParseRegexAddToFreeList(DetectParseRegex *detect_parse)
     r->next = g_detect_parse_regex_list;
     g_detect_parse_regex_list = r;
 }
-
+/* 编译pcre匹配器 */
 bool DetectSetupParseRegexesOpts(const char *parse_str, DetectParseRegex *detect_parse, int opts)
 {
     const char *eb = NULL;

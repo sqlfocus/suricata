@@ -569,8 +569,8 @@ static uint32_t StreamTcpReassembleCheckDepth(TcpSession *ssn, TcpStream *stream
 #endif
     if (SEQ_GEQ(seq, stream->isn) && SEQ_LT(seq, (stream->isn + ssn->reassembly_depth))) {
         /* packet (partly?) fits the depth window */
-                                        /* 计算可缓存字节数 */
-        if (SEQ_LEQ((seq + size),(stream->isn + 1 + ssn->reassembly_depth))) {
+                                        /* 计算可缓存字节数: 前提, 报文起始序号在要求的缓存区间内 */
+        if (SEQ_LEQ((seq + size),(stream->isn + 1 + ssn->reassembly_depth))) {/* 此处前提判断与前置的seg_depth判断有重叠??? */
             /* complete fit */
             SCReturnUInt(size);
         } else {

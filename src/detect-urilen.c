@@ -286,12 +286,12 @@ static void DetectUrilenFree(DetectEngineCtx *de_ctx, void *ptr)
 
 /** \brief set prefilter dsize pair
  *  \param s signature to get dsize value from
- */
+ *//* 更具URI LEN调整内容匹配的检测长度 */
 void DetectUrilenApplyToContent(Signature *s, int list)
 {
     uint16_t high = 65535;
     bool found = false;
-
+    /* 提取URI长度上限 */
     SigMatch *sm = s->init_data->smlists[list];
     for ( ; sm != NULL; sm = sm->next) {
         if (sm->type != DETECT_AL_URILEN)
@@ -321,7 +321,7 @@ void DetectUrilenApplyToContent(Signature *s, int list)
         return;
 
     SCLogDebug("high %u", high);
-
+    /* 将其对应的检测类型, 中内容的长度加以限制  */
     sm = s->init_data->smlists[list];
     for ( ; sm != NULL;  sm = sm->next) {
         if (sm->type != DETECT_CONTENT) {

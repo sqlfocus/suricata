@@ -100,8 +100,8 @@ typedef struct StreamingBuffer_ {
     uint32_t buf_size;      /* 已分配的缓存大小 */
     uint32_t buf_offset;    /* 实际已缓存数据的右边界, 相对于->buf的偏移 */
 
-    struct SBB sbb_tree;    /* 维护空洞信息(存储缓存段信息), StreamingBufferBlock, red black tree of Stream Buffer Blocks */
-    StreamingBufferBlock *head; /**< head, should always be the same as RB_MIN */
+    struct SBB sbb_tree;    /* 维护空洞信息(存储空洞两边的数据段信息), StreamingBufferBlock, red black tree of Stream Buffer Blocks */
+    StreamingBufferBlock *head; /* 首个空洞信息块; head, should always be the same as RB_MIN */
 #ifdef DEBUG
     uint32_t buf_size_max;
 #endif

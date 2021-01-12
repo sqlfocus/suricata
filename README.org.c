@@ -177,7 +177,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
                   --DetectAppLayerEventPrepare()
                     --DetectAppLayerEventSetupP2()"app-layer-events"阶段2
                   --SigBuildAddressMatchArray()   规则源/目的IP列表变更为数组，以加速匹配
-                  --DetectBufferRunSetupCallback()进一步构建检测类型环境
+                  --DetectBufferRunSetupCallback()进一步构建检测类型环境, 如根据urilen设定限制内容检测长度/转换为小写
                     --DetectBufferType->SetupCallback()
                   --SignatureSetType()
                   --IPOnlySigParseAddress()       构建IPonly加速查找数据结构
@@ -412,7 +412,7 @@ FlowConfig flow_config;            流全局配置信息
     --FlowGetFlowFromHash()        新建/查找流, 设置 PKT_HAS_FLOW
   --FlowUpdate()
     --FlowHandlePacketUpdate()
-  --FlowWorkerProcessInjectedFlows() 处理本线程注入的超时的流
+  --FlowWorkerProcessInjectedFlows() 处理被管理线程注入的超时的流
   --FlowWorkerProcessLocalFlows()    处理本线程的移除的超时的流
 
                                        
@@ -538,7 +538,7 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
       --TmThreadCreateMgmtThread()        线程1: 设定统计量输出标志, StatsWakeupThread()
                                           线程2: 输出统计量到文件, StatsMgmtThread()
 
-    
+
 --TmThreadsSlotPktAcqLoop()     PCAP线程入口
   --PacketPoolInit()
   --TmSlot->SlotThreadInit()         PIPELINE函数初始化

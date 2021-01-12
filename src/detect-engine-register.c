@@ -575,7 +575,7 @@ void SigTableSetup(void)
     DetectPktDataRegister();
     DetectLuaRegister();
     DetectIPRepRegister();
-    DetectAppLayerProtocolRegister();
+    DetectAppLayerProtocolRegister();     /* app-layer-protocol, 匹配应用协议 */
     DetectBase64DecodeRegister();
     DetectBase64DataRegister();
     DetectTemplateRegister();

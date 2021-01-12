@@ -23,10 +23,10 @@
 
 #ifndef __DETECT_APP_LAYER_PROTOCOL__H__
 #define __DETECT_APP_LAYER_PROTOCOL__H__
-
+/* 关键字 "app-layer-protocol" */
 typedef struct DetectAppLayerProtocolData_ {
-    AppProto alproto;
-    uint8_t negated;
+    AppProto alproto;   /* 应用层协议 */
+    uint8_t negated;    /* 是否反匹配 */
 } DetectAppLayerProtocolData;
 
 void DetectAppLayerProtocolRegister(void);

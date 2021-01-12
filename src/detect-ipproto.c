@@ -45,7 +45,7 @@
 
 /**
  * \brief Regex for parsing our options
- */
+ *//* ip_proto: !TCP */
 #define PARSE_REGEX  "^([!<>]?)\\s*([^\\s]+)$"
 
 static DetectParseRegex parse_regex;
@@ -68,7 +68,7 @@ void DetectIPProtoRegister(void)
     sigmatch_table[DETECT_IPPROTO].RegisterTests = DetectIPProtoRegisterTests;
 #endif
     sigmatch_table[DETECT_IPPROTO].flags = SIGMATCH_QUOTES_OPTIONAL;
-
+    
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 }
 
@@ -79,7 +79,7 @@ void DetectIPProtoRegister(void)
  * \param optstr Options string to parse
  *
  * \return New ip_proto data structure
- */
+ *//* 解析"ip_proto:1", 或 "ip_proto:TCP" 等 */
 static DetectIPProtoData *DetectIPProtoParse(const char *optstr)
 {
     DetectIPProtoData *data = NULL;
@@ -89,7 +89,7 @@ static DetectIPProtoData *DetectIPProtoParse(const char *optstr)
     int i;
     const char *str_ptr;
 
-    /* Execute the regex and populate args with captures. */
+    /* 运行pcre解析器, Execute the regex and populate args with captures. */
     ret = DetectParsePcreExec(&parse_regex, optstr, 0, 0, ov, MAX_SUBSTRINGS);
     if (ret != 3) {
         SCLogError(SC_ERR_PCRE_MATCH, "pcre_exec parse error, ret"
@@ -114,12 +114,12 @@ static DetectIPProtoData *DetectIPProtoParse(const char *optstr)
     data->op = DETECT_IPPROTO_OP_EQ;
     data->proto = 0;
 
-    /* Operator */
+    /* 获取协议比较操作符号, Operator */
     if (*(args[0]) != '\0') {
         data->op = *(args[0]);
     }
 
-    /* Protocol name/number */
+    /* 获取协议对应的值, Protocol name/number */
     if (!isdigit((unsigned char)*(args[1]))) {
         struct protoent *pent = getprotobyname(args[1]);
         if (pent == NULL) {
@@ -181,7 +181,7 @@ static int DetectIPProtoTypePresentForOP(Signature *s, uint8_t op)
  * \param optstr Options string
  *
  * \return Non-zero on error
- */
+ *//* 解析"ip_proto:1", 或 "ip_proto:TCP" 等 */
 static int DetectIPProtoSetup(DetectEngineCtx *de_ctx, Signature *s, const char *optstr)
 {
     SigMatch *sm = NULL;
@@ -196,7 +196,7 @@ static int DetectIPProtoSetup(DetectEngineCtx *de_ctx, Signature *s, const char 
      * s->proto.proto have all bit set to 1 to be able to match any protocols. ipproto
      * will refined the protocol list and thus it needs to reset the bitfield to zero
      * before setting the value specified by the ip_proto keyword.
-     */
+     *//* 第一次遇到"ip_proto"关键字, 重置匹配协议bit位数组 */
     if (s->proto.flags & (DETECT_PROTO_ANY | DETECT_PROTO_IPV6 | DETECT_PROTO_IPV4)) {
         s->proto.flags &= ~DETECT_PROTO_ANY;
         memset(s->proto.proto, 0x00, sizeof(s->proto.proto));
@@ -216,12 +216,12 @@ static int DetectIPProtoSetup(DetectEngineCtx *de_ctx, Signature *s, const char 
             goto error;
         }
     }
-
+    /* 查看ip_proto的比较操作是否出现, 如eq_set=0代表等于比较已经出现 */
     int eq_set = DetectIPProtoTypePresentForOP(s, DETECT_IPPROTO_OP_EQ);
     int gt_set = DetectIPProtoTypePresentForOP(s, DETECT_IPPROTO_OP_GT);
     int lt_set = DetectIPProtoTypePresentForOP(s, DETECT_IPPROTO_OP_LT);
     int not_set = DetectIPProtoTypePresentForOP(s, DETECT_IPPROTO_OP_NOT);
-
+    /* 检查合理性, 并赋值到 Signature->proto.proto[] */
     switch (data->op) {
         case DETECT_IPPROTO_OP_EQ:
             if (eq_set || gt_set || lt_set || not_set) {
@@ -409,10 +409,10 @@ static int DetectIPProtoSetup(DetectEngineCtx *de_ctx, Signature *s, const char 
             }
             break;
     }
-
-    sm = SigMatchAlloc();
-    if (sm == NULL)
-        goto error;
+    /* 添加到 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
+    sm = SigMatchAlloc(); /* 由于检测协议已经设置到规则中, 因此在规则 */
+    if (sm == NULL)       /* 解析完毕后, 会删除此匹配; 在匹配流程中, */
+        goto error;       /* 会优先匹配L3/L4协议, 以做粗力度把控, 以加速 */
     sm->type = DETECT_IPPROTO;
     sm->ctx = (void *)data;
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);

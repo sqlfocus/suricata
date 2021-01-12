@@ -812,7 +812,7 @@ error:
  *
  * \retval  0 On success.
  * \retval -1 On failure.
- */
+ *//* 解析地址, 更新到 Signature->CidrSrc/CidrDst */
 int IPOnlySigParseAddress(const DetectEngineCtx *de_ctx,
                           Signature *s, const char *addrstr, char flag)
 {

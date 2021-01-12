@@ -86,8 +86,8 @@ struct SCSigSignatureWrapper_;
  * These codes are access points to particular lists in the array
  * Signature->sm_lists[DETECT_SM_LIST_MAX]. */
 enum DetectSigmatchListEnum {
-    DETECT_SM_LIST_MATCH = 0,  /* 非PCRE式匹配, 逐包检测 */
-    DETECT_SM_LIST_PMATCH,     /* PCRE式匹配，支持fast pattern, 加入 sm_fp_support_smlist_list */
+    DETECT_SM_LIST_MATCH = 0,  /* 逐包匹配 */
+    DETECT_SM_LIST_PMATCH,     /* pattern式匹配，支持fast pattern, 加入 sm_fp_support_smlist_list */
 
     /* base64_data keyword uses some hardcoded logic so consider
      * built-in
@@ -95,7 +95,7 @@ enum DetectSigmatchListEnum {
     DETECT_SM_LIST_BASE64_DATA,/* */
 
     /* list for post match actions: flowbit set, flowint increment, etc */
-    DETECT_SM_LIST_POSTMATCH,  /* 匹配规则后的动作 */
+    DETECT_SM_LIST_POSTMATCH,  /* 匹配规则后的动作, 如 DETECT_BYPASS/DETECT_CONFIG 等 */
 
     DETECT_SM_LIST_TMATCH,     /* 标签匹配, 由tag关键字设置, 用于给主机/流打标 */
 
@@ -216,7 +216,7 @@ typedef struct DetectPort_ {
 #define SIG_FLAG_NOALERT                BIT_U32(4)  /**< no alert flag is set */
 #define SIG_FLAG_DSIZE                  BIT_U32(5)  /**< signature has a dsize setting */
 #define SIG_FLAG_APPLAYER               BIT_U32(6)  /* 规则应用于应用层, 而不是报文 *< signature applies to app layer instead of packets */
-#define SIG_FLAG_IPONLY                 BIT_U32(7)  /**< ip only signature */
+#define SIG_FLAG_IPONLY                 BIT_U32(7)  /* 仅检测IP的规则 *< ip only signature */
 
 // vacancy
 

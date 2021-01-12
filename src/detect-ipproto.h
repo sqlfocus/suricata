@@ -30,10 +30,10 @@
 #define DETECT_IPPROTO_OP_LT     '<' /**< "less than" operator */
 #define DETECT_IPPROTO_OP_GT     '>' /**< "greater than" operator */
 
-/** ip_proto data */
+/* "ip_proto"关键字对应的解析结构 * ip_proto data */
 typedef struct DetectIPProtoData_ {
-    uint8_t op;                       /**< Operator used to compare */
-    uint8_t proto;                    /**< Protocol used to compare */
+    uint8_t op;         /* 比较符 *< Operator used to compare */
+    uint8_t proto;      /* 协议 *< Protocol used to compare */
 } DetectIPProtoData;
 
 /* prototypes */

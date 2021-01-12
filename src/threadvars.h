@@ -131,7 +131,7 @@ typedef struct ThreadVars_ {
     SCCtrlMutex *ctrl_mutex;
     SCCtrlCondT *ctrl_cond;
 
-    struct FlowQueue_ *flow_queue;          /* */
+    struct FlowQueue_ *flow_queue;          /* 过期的流但仍需要检测, 被管理线程放置于此, 后续被 FlowWorkerProcessInjectedFlows() 处理 */
 
 } ThreadVars;
 

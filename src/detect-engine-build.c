@@ -187,16 +187,16 @@ int SignatureIsFilesizeInspecting(const Signature *s)
 int SignatureIsIPOnly(DetectEngineCtx *de_ctx, const Signature *s)
 {
     if (s->alproto != ALPROTO_UNKNOWN)
-        return 0;
+        return 0;             /* 约定了应用层协议 */
 
     if (s->init_data->smlists[DETECT_SM_LIST_PMATCH] != NULL)
-        return 0;
+        return 0;             /* 配置了pattern类匹配 */
 
     /* if flow dir is set we can't process it in ip-only */
     if (!(((s->flags & (SIG_FLAG_TOSERVER|SIG_FLAG_TOCLIENT)) == 0) ||
             (s->flags & (SIG_FLAG_TOSERVER|SIG_FLAG_TOCLIENT)) ==
             (SIG_FLAG_TOSERVER|SIG_FLAG_TOCLIENT)))
-        return 0;
+        return 0;             /* 配置了特定的流方向 */
 
     /* for now assume that all registered buffer types are incompatible */
     const int nlists = s->init_data->smlists_array_size;
@@ -206,14 +206,14 @@ int SignatureIsIPOnly(DetectEngineCtx *de_ctx, const Signature *s)
         if (!(DetectBufferTypeGetNameById(de_ctx, i)))
             continue;
 
-        SCReturnInt(0);
+        SCReturnInt(0);       /* 注册了新检测类型, >DETECT_SM_LIST_DYNAMIC_START */
     }
 
     /* TMATCH list can be ignored, it contains TAGs and
      * tags are compatible to IP-only. */
 
     /* if any of the addresses uses negation, we don't support
-     * it in ip-only *//* 使用了"!"的地址段，不支持ip-only */
+     * it in ip-only */       /* 使用了"!"的地址段，不支持ip-only */
     if (s->init_data->src_contains_negation)
         return 0;
     if (s->init_data->dst_contains_negation)
@@ -225,7 +225,7 @@ int SignatureIsIPOnly(DetectEngineCtx *de_ctx, const Signature *s)
 
     for ( ; sm != NULL; sm = sm->next) {
         if ( !(sigmatch_table[sm->type].flags & SIGMATCH_IPONLY_COMPAT))
-            return 0;
+            return 0;         /* 仅和 DETECT_FLOWBITS 的set操作兼容 */
         /* we have enabled flowbits to be compatible with ip only sigs, as long
          * as the sig only has a "set" flowbits */
         if (sm->type == DETECT_FLOWBITS &&
@@ -276,13 +276,13 @@ static int SignatureIsPDOnly(const DetectEngineCtx *de_ctx, const Signature *s)
      * logic as IP-only so we can use that flag */
 
     SigMatch *sm = s->init_data->smlists[DETECT_SM_LIST_MATCH];
-    if (sm == NULL)      /* 未配置DETECT_SM_LIST_MATCH检测 */
+    if (sm == NULL)      /* 未配置 DETECT_SM_LIST_MATCH 检测 */
         return 0;
 
     int pd = 0;
     for ( ; sm != NULL; sm = sm->next) {
         if (sm->type == DETECT_AL_APP_LAYER_PROTOCOL) {
-            pd = 1;
+            pd = 1;      /* 配置了关键字"app-layer-protocol" */
         } else {
             /* flowbits are supported for dp only sigs, as long
              * as the sig only has a "set" flowbits */

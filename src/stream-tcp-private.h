@@ -59,7 +59,7 @@ RB_HEAD(TCPSACK, StreamTcpSackRecord);
 RB_PROTOTYPE(TCPSACK, StreamTcpSackRecord, rb, TcpSackCompare);
 
 typedef struct TcpSegment {
-    PoolThreadReserved res;
+    PoolThreadReserved res;  /* pool id */
     uint16_t payload_len;    /* 缓存段长度(当缓存报文一部分时，小于报文长度) */
     uint32_t seq;            /* 缓存段起始序号 */
     RB_ENTRY(TcpSegment) __attribute__((__packed__)) rb;
@@ -120,7 +120,7 @@ typedef struct TcpStream_ {
     uint32_t data_required;         /* 下次解析，需要提前准备的数据量, *< data required from STREAM_APP_PROGRESS before calling app-layer again */
 
     StreamingBuffer sb;             /* 缓存的数据 */
-    struct TCPSEG seg_tree;         /* 红黑树, 已缓存的数据段的序号和长度, TcpSegment, 数据在->sb中 */
+    struct TCPSEG seg_tree;         /* 红黑树, 已缓存的数据段的序号和长度, TcpSegment, 用于处理重叠策略; 数据在->sb中 */
     uint32_t segs_right_edge;       /* 已缓存数据右边界序号 */
 
     uint32_t sack_size;             /**< combined size of the SACK ranges currently in our tree. Updated
@@ -136,16 +136,16 @@ typedef struct TcpStream_ {
 /* from /usr/include/netinet/tcp.h */
 enum TcpState
 {
-    TCP_NONE,
+    TCP_NONE,        /* 0 */
     TCP_LISTEN,
     TCP_SYN_SENT,
     TCP_SYN_RECV,
-    TCP_ESTABLISHED,
+    TCP_ESTABLISHED, /* 4 */
     TCP_FIN_WAIT1,
     TCP_FIN_WAIT2,
     TCP_TIME_WAIT,
     TCP_LAST_ACK,
-    TCP_CLOSE_WAIT,
+    TCP_CLOSE_WAIT,  /* 9 */
     TCP_CLOSING,
     TCP_CLOSED,
 };

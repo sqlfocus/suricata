@@ -49,8 +49,8 @@
 #define DETECT_PKTVAR_TYPE_SET_READ 3
 #define DETECT_PKTVAR_TYPE_SET      4
 
-#define DETECT_FLOWBITS_NOT_USED      1
-#define DETECT_FLOWBITS_TYPE_READ     2
+#define DETECT_FLOWBITS_NOT_USED      1  /* 写操作优先级比读操作高 */
+#define DETECT_FLOWBITS_TYPE_READ     2  /* 但为什么"读+写"操作优先级比"写"优先级低??? */
 #define DETECT_FLOWBITS_TYPE_SET_READ 3
 #define DETECT_FLOWBITS_TYPE_SET      4
 
@@ -126,7 +126,7 @@ static void SCSigRegisterSignatureOrderingFunc(DetectEngineCtx *de_ctx,
  *
  * \retval flowbits The flowbits type for this signature if it is set; if it is
  *                  not set, return 0
- *//* 查看flowbits操作类型 */
+ *//* 通过flowbits操作类型, 确定其操作分数(优先级) */
 static inline int SCSigGetFlowbitsType(Signature *sig)
 {
     DetectFlowbitsData *fb = NULL;

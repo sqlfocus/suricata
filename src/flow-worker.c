@@ -172,13 +172,13 @@ static void CheckWorkQueue(ThreadVars *tv, FlowWorkerThreadData *fw,
 
         const FlowStateType state = f->flow_state;
         if (f->proto == IPPROTO_TCP) {
-            if (!(f->flags & FLOW_TIMEOUT_REASSEMBLY_DONE) &&
+            if (!(f->flags & FLOW_TIMEOUT_REASSEMBLY_DONE) &&   /* 已经走过此伪报文流程 */
 #ifdef CAPTURE_OFFLOAD
-                    state != FLOW_STATE_CAPTURE_BYPASSED &&
+                state != FLOW_STATE_CAPTURE_BYPASSED &&
 #endif
-                    state != FLOW_STATE_LOCAL_BYPASSED &&
-                    FlowForceReassemblyNeedReassembly(f) == 1 &&
-                    f->ffr != 0)
+                state != FLOW_STATE_LOCAL_BYPASSED &&           /* 本地bypass */
+                FlowForceReassemblyNeedReassembly(f) == 1 &&
+                f->ffr != 0)
             {/* 仍需要进一步检测, 构造伪报文, 走检测流程, 以释放第三方库的资源 */
                 int cnt = FlowFinish(tv, f, fw, detect_thread);
                 counters->flows_aside_pkt_inject += cnt;
@@ -429,7 +429,7 @@ static void FlowWorkerFlowTimeout(ThreadVars *tv, Packet *p, FlowWorkerThreadDat
 
 /** \internal
  *  \brief process flows injected into our queue by other threads
- */
+ *//* 管理线程回收流, 但发现还需要做最后的检测, 则交由此函数处理 */
 static inline void FlowWorkerProcessInjectedFlows(ThreadVars *tv,
         FlowWorkerThreadData *fw, Packet *p, void *detect_thread)
 {

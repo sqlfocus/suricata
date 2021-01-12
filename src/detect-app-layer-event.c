@@ -134,7 +134,7 @@ static int DetectEngineAptEventInspect(ThreadVars *tv,
     }
 }
 
-
+//
 static int DetectAppLayerEventPktMatch(DetectEngineThreadCtx *det_ctx,
                                 Packet *p, const Signature *s, const SigMatchCtx *ctx)
 {

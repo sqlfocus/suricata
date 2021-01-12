@@ -310,7 +310,7 @@ int FlowForceReassemblyNeedReassembly(Flow *f)
         server = STREAM_HAS_UNPROCESSED_SEGMENTS_NEED_ONLY_DETECTION;
     }
 
-    /* 有一些事物仍然在处理中, if app layer still needs some love, push through */
+    /* 有一些事务仍然在处理中, if app layer still needs some love, push through */
     if (f->alproto != ALPROTO_UNKNOWN && f->alstate != NULL) {
         const uint64_t total_txs = AppLayerParserGetTxCnt(f, f->alstate);
 

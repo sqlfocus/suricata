@@ -89,7 +89,7 @@ typedef struct AppLayerParserState_ AppLayerParserState;
 #define FLOW_TC_PP_ALPROTO_DETECT_DONE  BIT_U32(17)
 /** Expectation alproto detection done */
 #define FLOW_TC_PE_ALPROTO_DETECT_DONE  BIT_U32(18)
-#define FLOW_TIMEOUT_REASSEMBLY_DONE    BIT_U32(19)
+#define FLOW_TIMEOUT_REASSEMBLY_DONE    BIT_U32(19)   /* 流超时后, 已经完成重新组装报文的动作 */
 
 /** flow is ipv4 */
 #define FLOW_IPV4                       BIT_U32(20)
@@ -389,7 +389,7 @@ typedef struct Flow_
     uint32_t timeout_at;       /* 下次流超时的时间戳 */
 
     /** Thread ID for the stream/detect portion of this flow */
-    FlowThreadId thread_id[2]; /* */
+    FlowThreadId thread_id[2]; /* 流的处理线程（重组、检测） */
 
     struct Flow_ *next; /* (hash) list next */
     /** Incoming interface */
@@ -533,7 +533,7 @@ typedef struct FlowLookupStruct_ // TODO name
     /** thread store of spare queues */
     FlowQueuePrivate spare_queue;   /* 缓存在本线程的流表对象 */
     DecodeThreadVars *dtv;
-    FlowQueuePrivate work_queue;    /* 遍历桶时, 发现的超时的流(属于本线程), 临时存放至此 */
+    FlowQueuePrivate work_queue;    /* 遍历桶时, 发现的超时的流(属于本线程), 临时存放至此; 被 FlowWorkerProcessLocalFlows() 处理 */
     uint32_t emerg_spare_sync_stamp;/* */
 } FlowLookupStruct;
 
