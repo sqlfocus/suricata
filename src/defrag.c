@@ -648,13 +648,13 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 next = IP_FRAGMENTS_RB_NEXT(prev);
             }
         }                    /* 根据策略查看数据重叠，计算需要保存的数据 */
-        while (prev != NULL) {
+        while (prev != NULL) {/* 仅处理紧邻的1个分片, 其余分片根据插入排序后边覆盖前边 */
             if (prev->skip) {
                 goto next;
             }
 
             switch (tracker->policy) {
-            case DEFRAG_POLICY_BSD:
+            case DEFRAG_POLICY_BSD:      /* BSD不同于linux/windows, 起始序号未考虑截断, 是原报文起始; 较复杂 */
                 if (frag_offset < prev->offset + prev->data_len) {
                     if (frag_offset >= prev->offset) {
                         ltrim = prev->offset + prev->data_len - frag_offset;
@@ -672,7 +672,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                     goto insert;
                 }
                 break;
-            case DEFRAG_POLICY_LINUX:
+            case DEFRAG_POLICY_LINUX:       /* 起始序号不同, 前旧后新; 起始序号相同, 使用当前数据 */
                 /* Check if new fragment overlaps the end of previous
                  * fragment, if it does, trim the new fragment.
                  *
@@ -683,8 +683,8 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 if (prev->offset + prev->ltrim < frag_offset + ltrim &&
                         prev->offset + prev->data_len > frag_offset + ltrim) {
                     ltrim += prev->offset + prev->data_len - frag_offset;
-                    overlap++;
-                }
+                    overlap++;          /* 交集(prev在前), 被prev覆盖 */
+                }                       /* include 纯被prev包含, 被prev包含尾对齐 */
 
                 /* Check if new fragment overlaps the beginning of
                  * previous fragment, if it does, tim the previous
@@ -697,8 +697,8 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 if (frag_offset + ltrim < prev->offset + prev->ltrim &&
                         frag_end > prev->offset + prev->ltrim) {
                     prev->ltrim += frag_end - (prev->offset + prev->ltrim);
-                    overlap++;
-                    goto insert;
+                    overlap++;          /* 交集(自己在前), 覆盖prev */
+                    goto insert;        /* include 纯包含prev, 包含prev尾对齐 */
                 }
 
                 /* If the new fragment completely overlaps the
@@ -707,17 +707,17 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                  * this, but this will prevent the bytes from being
                  * copied just to be overwritten. */
                 if (frag_offset + ltrim <= prev->offset + prev->ltrim &&
-                        frag_end >= prev->offset + prev->data_len) {
-                    prev->skip = 1;
-                    goto insert;
+                    frag_end >= prev->offset + prev->data_len) {   /* 存在仅仅为了减少后续内存拷贝 */
+                    prev->skip = 1;     /* 起始序号不同的场景, 被‘交集(自己在前)’覆盖了 */
+                    goto insert;        /* 起始序号相同的场景, 被'插入排序靠后, 覆盖老数据'覆盖 */
                 }
 
-                break;
-            case DEFRAG_POLICY_WINDOWS:
+                break;                 
+            case DEFRAG_POLICY_WINDOWS:   /* 丢弃纯包含, 起始序号相同: old, 起始序号不同: 前旧后旧 */
                 /* If new fragment fits inside a previous fragment, drop it. */
                 if (frag_offset + ltrim >= prev->offset + ltrim &&
                         frag_end <= prev->offset + prev->data_len) {
-                    overlap++;
+                    overlap++;        /* 重叠/被包含, 丢弃自身 */
                     goto done;
                 }
 
@@ -725,7 +725,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                  * previous fragment, drop the previous fragment. */
                 if (frag_offset + ltrim < prev->offset + ltrim &&
                         frag_end > prev->offset + prev->data_len) {
-                    prev->skip = 1;
+                    prev->skip = 1;   /* 纯包含prev, 丢弃prev */
                     overlap++;
                     goto insert;
                 }
@@ -740,7 +740,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 if (frag_offset + ltrim > prev->offset + prev->ltrim &&
                         frag_offset + ltrim < prev->offset + prev->data_len) {
                     ltrim += prev->offset + prev->data_len - frag_offset;
-                    overlap++;
+                    overlap++;        /* 交集(prev在前), 被prev覆盖 */
                     goto insert;
                 }
 
@@ -750,7 +750,7 @@ DefragInsertFrag(ThreadVars *tv, DecodeThreadVars *dtv, DefragTracker *tracker, 
                 if (frag_offset + ltrim == prev->offset + ltrim &&
                         frag_end > prev->offset + prev->data_len) {
                     ltrim += prev->offset + prev->data_len - frag_offset;
-                    overlap++;
+                    overlap++;        /* 起始序号相同, 且包含prev, 被prev覆盖 */
                     goto insert;
                 }
                 break;

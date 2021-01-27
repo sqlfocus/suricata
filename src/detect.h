@@ -1034,7 +1034,7 @@ typedef struct DetectEngineThreadCtx_ {
 
     /* detection engine variables */
 
-    uint64_t raw_stream_progress;       /* */
+    uint64_t raw_stream_progress;       /* 负载检测时, 已经检测的数据的缓存偏移 */
 
     /** offset into the payload of the last match by:
      *  content, pcre, etc */

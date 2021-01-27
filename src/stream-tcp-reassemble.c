@@ -716,7 +716,7 @@ static int StreamTcpReassembleRawCheckLimit(const TcpSession *ssn,
         (   STREAMTCP_STREAM_FLAG_DEPTH_REACHED \
         |   STREAMTCP_STREAM_FLAG_TRIGGER_RAW   \
         |   STREAMTCP_STREAM_FLAG_NEW_RAW_DISABLED)
-
+    /* 流结束式的刷新操作, 都需要检测 */
     if (stream->flags & STREAMTCP_STREAM_FLAG_FLUSH_FLAGS) {
         if (stream->flags & STREAMTCP_STREAM_FLAG_DEPTH_REACHED) {
             SCLogDebug("reassembling now as STREAMTCP_STREAM_FLAG_DEPTH_REACHED "
@@ -734,14 +734,14 @@ static int StreamTcpReassembleRawCheckLimit(const TcpSession *ssn,
 #undef STREAMTCP_STREAM_FLAG_FLUSH_FLAGS
 
     /* some states mean we reassemble no matter how much data we have */
-    if (ssn->state > TCP_TIME_WAIT)
+    if (ssn->state > TCP_TIME_WAIT)       /* tcp流结束, 需要触发检测 */
         SCReturnInt(1);
 
-    if (p->flags & PKT_PSEUDO_STREAM_END)
+    if (p->flags & PKT_PSEUDO_STREAM_END) /* 伪结束报文, 需要触发检测 */
         SCReturnInt(1);
 
     /* check if we have enough data to do raw reassembly */
-    if (PKT_IS_TOSERVER(p)) {
+    if (PKT_IS_TOSERVER(p)) {             /* 需要满足最小限制, 默认值2560字节 */
         if (STREAM_LASTACK_GT_BASESEQ(stream)) {
             uint32_t delta = stream->last_ack - stream->base_seq;
             /* get max absolute offset */
@@ -1233,7 +1233,7 @@ int StreamTcpReassembleAppLayer (ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
 
 /** \internal
  *  \brief get stream data from offset
- *  \param offset stream offset */
+ *  \param offset stream offset *//* 获取缓存数据, raw data */
 static int GetRawBuffer(TcpStream *stream, const uint8_t **data, uint32_t *data_len,
         StreamingBufferBlock **iter, uint64_t offset, uint64_t *data_offset)
 {
@@ -1323,14 +1323,14 @@ bool StreamReassembleRawHasDataReady(TcpSession *ssn, Packet *p)
 
     if (StreamTcpInlineMode() == FALSE) {
         if ((STREAM_RAW_PROGRESS(stream) == STREAM_BASE_OFFSET(stream) + stream->sb.buf_offset)) {
-            return false;
-        }
+            return false;  /* 离线环境, 检查是否有未处理的缓存数据 */
+        }                  /*           并且未处理数据量需满足设定块检测最小值 */
         if (StreamTcpReassembleRawCheckLimit(ssn, stream, p) == 1) {
             return true;
         }
     } else {
         if (p->payload_len > 0 && (p->flags & PKT_STREAM_ADD)) {
-            return true;
+            return true;   /* 在线环境, 仅处理当前报文 */
         }
     }
     return false;
@@ -1356,13 +1356,13 @@ void StreamReassembleRawUpdateProgress(TcpSession *ssn, Packet *p, uint64_t prog
     } else {
         stream = &ssn->server;
     }
-
+    /* 更新已处理的原始缓存偏移 */
     if (progress > STREAM_RAW_PROGRESS(stream)) {
         uint32_t slide = progress - STREAM_RAW_PROGRESS(stream);
         stream->raw_progress_rel += slide;
         stream->flags &= ~STREAMTCP_STREAM_FLAG_TRIGGER_RAW;
 
-    /* if app is active and beyond raw, sync raw to app */
+    /* 如果应用解析仍然存活, 则与应用偏移同步; if app is active and beyond raw, sync raw to app */
     } else if (progress == 0 && STREAM_APP_PROGRESS(stream) > STREAM_RAW_PROGRESS(stream) &&
                !(ssn->flags & STREAMTCP_FLAG_APP_LAYER_DISABLED)) {
         /* if trigger raw is set we sync the 2 trackers */
@@ -1383,7 +1383,7 @@ void StreamReassembleRawUpdateProgress(TcpSession *ssn, Packet *p, uint64_t prog
                 }
             }
         }
-    /* app is dead */
+    /* 应用解析已不存在, app is dead */
     } else if (progress == 0) {
         uint64_t tcp_window = stream->window;
         uint64_t stream_right_edge = STREAM_BASE_OFFSET(stream) + stream->sb.buf_offset;
@@ -1402,7 +1402,7 @@ void StreamReassembleRawUpdateProgress(TcpSession *ssn, Packet *p, uint64_t prog
                 STREAM_RAW_PROGRESS(stream), stream->window);
     }
 
-    /* if we were told to accept no more raw data, we can mark raw as
+    /* 打标识, 不再继续接受原始缓存; if we were told to accept no more raw data, we can mark raw as
      * disabled now. */
     if (stream->flags & STREAMTCP_STREAM_FLAG_NEW_RAW_DISABLED) {
         stream->flags |= STREAMTCP_STREAM_FLAG_DISABLE_RAW;
@@ -1440,7 +1440,7 @@ static int StreamReassembleRawInline(TcpSession *ssn, const Packet *p,
     } else {
         stream = &ssn->server;
     }
-
+    /* 在线模式, 仅处理当前报文触发的缓存 */
     if (p->payload_len == 0 || (p->flags & PKT_STREAM_ADD) == 0 ||
             (stream->flags & STREAMTCP_STREAM_FLAG_NOREASSEMBLY))
     {
@@ -1471,7 +1471,7 @@ static int StreamReassembleRawInline(TcpSession *ssn, const Packet *p,
     uint64_t mydata_offset = 0;
     /* simply return progress from the block we inspected. */
     bool return_progress = false;
-
+    /* 获取数据 */
     if (RB_EMPTY(&stream->sb.sbb_tree)) {
         /* continues block */
         StreamingBufferGetData(&stream->sb, &mydata, &mydata_len, &mydata_offset);
@@ -1639,7 +1639,7 @@ static int StreamReassembleRawDo(TcpSession *ssn, TcpStream *stream,
      * use a minimal inspect depth, we actually take the app progress
      * as that is the right edge of the data. Then we take the window
      * of 'min_inspect_depth' before that. */
-
+    /* 如果应用层触发了刷新, 并且有最小检测深度限制, 则使用应用数据作为最小检测深度的参考边界 */
     SCLogDebug("respect_inspect_depth %s STREAMTCP_STREAM_FLAG_TRIGGER_RAW %s stream->min_inspect_depth %u",
             respect_inspect_depth ? "true" : "false",
             (stream->flags & STREAMTCP_STREAM_FLAG_TRIGGER_RAW) ? "true" : "false",
@@ -1680,7 +1680,7 @@ static int StreamReassembleRawDo(TcpSession *ssn, TcpStream *stream,
         const uint8_t *mydata;
         uint32_t mydata_len;
         uint64_t mydata_offset = 0;
-
+        /* 读取数据 */
         GetRawBuffer(stream, &mydata, &mydata_len, &iter, progress, &mydata_offset);
         if (mydata_len == 0) {
             SCLogDebug("no data");
@@ -1703,7 +1703,7 @@ static int StreamReassembleRawDo(TcpSession *ssn, TcpStream *stream,
             SCLogDebug("last_ack_abs %"PRIu64", raw_progress %"PRIu64, last_ack_abs, progress);
             SCLogDebug("raw_progress + mydata_len %"PRIu64", last_ack_abs %"PRIu64, progress + mydata_len, last_ack_abs);
 
-            /* see if the buffer contains unack'd data as well */
+            /* 仅处理已经ack的数据, see if the buffer contains unack'd data as well */
             if (progress + mydata_len > last_ack_abs) {
                 uint32_t check = mydata_len;
                 mydata_len = last_ack_abs - progress;
@@ -1718,11 +1718,11 @@ static int StreamReassembleRawDo(TcpSession *ssn, TcpStream *stream,
 
         SCLogDebug("data %p len %u", mydata, mydata_len);
 
-        /* we have data. */
+        /* 调用回调函数, we have data. */
         r = Callback(cb_data, mydata, mydata_len);
         BUG_ON(r < 0);
 
-        if (mydata_offset == progress) {
+        if (mydata_offset == progress) {  /* 正常数据 */
             SCLogDebug("progress %"PRIu64" increasing with data len %u to %"PRIu64,
                     progress, mydata_len, progress_in + mydata_len);
 
@@ -1733,7 +1733,7 @@ static int StreamReassembleRawDo(TcpSession *ssn, TcpStream *stream,
         } else if (mydata_offset > progress && mydata_offset < last_ack_abs) {
             SCLogDebug("GAP: data is missing from %"PRIu64" (%u bytes), setting to first data we have: %"PRIu64, progress, (uint32_t)(mydata_offset - progress), mydata_offset);
             SCLogDebug("last_ack_abs %"PRIu64, last_ack_abs);
-            progress = mydata_offset;
+            progress = mydata_offset;     /* 空洞数据 */
             SCLogDebug("raw progress now %"PRIu64, progress);
 
         } else {
@@ -1748,12 +1748,12 @@ end:
     *progress_out = progress;
     return r;
 }
-
+/* 检测引擎, 缓存原始负载预检测入口 */
 int StreamReassembleRaw(TcpSession *ssn, const Packet *p,
                         StreamReassembleRawFunc Callback, void *cb_data,
                         uint64_t *progress_out, bool respect_inspect_depth)
 {
-    /* handle inline separately as the logic is very different */
+    /* 特例: 在线模式, 如IPS; handle inline separately as the logic is very different */
     if (StreamTcpInlineMode() == TRUE) {
         return StreamReassembleRawInline(ssn, p, Callback, cb_data, progress_out);
     }
@@ -1764,19 +1764,19 @@ int StreamReassembleRaw(TcpSession *ssn, const Packet *p,
     } else {
         stream = &ssn->server;
     }
-
+    /* 检查是否需要检测 */
     if ((stream->flags & (STREAMTCP_STREAM_FLAG_NOREASSEMBLY|STREAMTCP_STREAM_FLAG_DISABLE_RAW)) ||
         StreamTcpReassembleRawCheckLimit(ssn, stream, p) == 0)
     {
         *progress_out = STREAM_RAW_PROGRESS(stream);
         return 0;
     }
-
+    /* 检测 */
     return StreamReassembleRawDo(ssn, stream, Callback, cb_data,
             STREAM_RAW_PROGRESS(stream), progress_out,
             (p->flags & PKT_PSEUDO_STREAM_END), respect_inspect_depth);
 }
-
+/* 日志输出, 缓存数据, 入口函数 */
 int StreamReassembleLog(TcpSession *ssn, TcpStream *stream,
                         StreamReassembleRawFunc Callback, void *cb_data,
                         uint64_t progress_in,

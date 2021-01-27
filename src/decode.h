@@ -1135,7 +1135,7 @@ void DecodeUnregisterCounters(void);
 
 #define PKT_REBUILT_FRAGMENT            (1<<25)     /**< Packet is rebuilt from
                                                      * fragments. */
-#define PKT_DETECT_HAS_STREAMDATA       (1<<26)     /**< Set by Detect() if raw stream data is available. */
+#define PKT_DETECT_HAS_STREAMDATA       (1<<26)     /* 有原始数据待检测 *< Set by Detect() if raw stream data is available. */
 
 #define PKT_PSEUDO_DETECTLOG_FLUSH      (1<<27)     /**< Detect/log flush for protocol upgrade */
 

@@ -520,7 +520,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
         }
                                                        /* 流重组(操作报文原始数据) */
         FlowWorkerStreamTCPUpdate(tv, fw, p, detect_thread);
-                                          /* CASE: UDP处理 */
+                                          /* CASE: UDP处理; 无流重组, 依赖当前报文的协议识别+解析 */
     /* handle the app layer part of the UDP packet payload */
     } else if (p->flow && p->proto == IPPROTO_UDP) {
         FLOWWORKER_PROFILING_START(p, PROFILE_FLOWWORKER_APPLAYERUDP);

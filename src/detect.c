@@ -817,7 +817,7 @@ next:
         continue;
     }
 }
-/* 构建检测过程中, 记录信息的数据结构 */
+/* 1) 构建检测过程中, 记录信息的数据结构; 2) 检查是否有数据待检测 */
 static DetectRunScratchpad DetectRunSetup(
     const DetectEngineCtx *de_ctx,
     DetectEngineThreadCtx *det_ctx,
@@ -952,7 +952,7 @@ static void DetectRunCleanup(DetectEngineThreadCtx *det_ctx,
         /* update inspected tracker for raw reassembly */
         if (p->proto == IPPROTO_TCP && pflow->protoctx != NULL &&
             (p->flags & PKT_STREAM_EST))
-        {
+        {   /* 调整已处理的原始缓存偏移 */
             StreamReassembleRawUpdateProgress(pflow->protoctx, p,
                     det_ctx->raw_stream_progress);
         }
@@ -1579,7 +1579,7 @@ static void DetectFlow(ThreadVars *tv,
                 flags = STREAM_TOSERVER;
             } else {
                 flags = STREAM_TOCLIENT;
-            }
+            }              /* 不再检测, 但仍需更新'已检测的事务ID' */
             flags = FlowGetDisruptionFlags(p->flow, flags);
             DeStateUpdateInspectTransactionId(p->flow, flags, true);
         }

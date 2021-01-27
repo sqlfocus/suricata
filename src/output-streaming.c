@@ -288,7 +288,7 @@ static int TcpDataLogger (Flow *f, TcpSession *ssn, TcpStream *stream,
 
     if (progress > STREAM_LOG_PROGRESS(stream)) {
         uint32_t slide = progress - STREAM_LOG_PROGRESS(stream);
-        stream->log_progress_rel += slide;
+        stream->log_progress_rel += slide; /* 调整 */
     }
 
     if (eof) {

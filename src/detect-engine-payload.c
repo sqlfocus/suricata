@@ -67,7 +67,7 @@ static int StreamMpmFunc(void *cb_data, const uint8_t *data, const uint32_t data
     }
     return 0;
 }
-
+/* 原始缓存数据预匹配 */
 static void PrefilterPktStream(DetectEngineThreadCtx *det_ctx,
         Packet *p, const void *pectx)
 {
@@ -75,7 +75,7 @@ static void PrefilterPktStream(DetectEngineThreadCtx *det_ctx,
 
     const MpmCtx *mpm_ctx = (MpmCtx *)pectx;
 
-    /* for established packets inspect any stream we may have queued up */
+    /* 检测缓存数据, for established packets inspect any stream we may have queued up */
     if (p->flags & PKT_DETECT_HAS_STREAMDATA) {
         SCLogDebug("PRE det_ctx->raw_stream_progress %"PRIu64,
                 det_ctx->raw_stream_progress);
@@ -90,7 +90,7 @@ static void PrefilterPktStream(DetectEngineThreadCtx *det_ctx,
         SCLogDebug("NOT p->flags & PKT_DETECT_HAS_STREAMDATA");
     }
 
-    /* packets that have not been added to the stream will be inspected
+    /* 检测报文负载, packets that have not been added to the stream will be inspected
      * as if they are stream chunks */
     if ((p->flags & (PKT_NOPAYLOAD_INSPECTION|PKT_STREAM_ADD)) == 0)
     {

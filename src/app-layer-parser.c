@@ -153,15 +153,15 @@ typedef struct AppLayerParserCtx_ {
 
 struct AppLayerParserState_ {
     /* coccinelle: AppLayerParserState:flags:APP_LAYER_PARSER_ */
-    uint8_t flags;              /* APP_LAYER_PARSER_EOF */
+    uint8_t flags;              /* APP_LAYER_PARSER_EOF_TS */
 
     /* Indicates the current transaction that is being inspected.
      * We have a var per direction. */
-    uint64_t inspect_id[2];     /* 当前解析的事务 */
+    uint64_t inspect_id[2];     /* 当前处理的事务 */
     /* Indicates the current transaction being logged.  Unlike inspect_id,
      * we don't need a var per direction since we don't log a transaction
      * unless we have the entire transaction. */
-    uint64_t log_id;
+    uint64_t log_id;            /* 已经记录日志的事务 */
 
     uint64_t min_id;
 
@@ -1252,7 +1252,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
     }
                                   /* 获取事务数 */
     p_tx_cnt = AppLayerParserGetTxCnt(f, f->alstate);
-    /* CASE: 协议解析, ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
+    /* CASE: 有输入数据或流结束了, 协议解析, ALPROTO_HTTP -> HTPHandleRequestData()/HTPHandleResponseData() */
     /* invoke the recursive parser, but only on data. We may get empty msgs on EOF */
     if (input_len > 0 || (flags & STREAM_EOF)) {
         /* invoke the parser */
@@ -1361,7 +1361,7 @@ int AppLayerParserParse(ThreadVars *tv, AppLayerParserThreadCtx *alp_tctx, Flow 
  error:
     /* Set the no app layer inspection flag for both
      * the stream in this Flow */
-    if (f->proto == IPPROTO_TCP) {
+    if (f->proto == IPPROTO_TCP) {    /* 有错误, 设置结束标识, 包括detect/parser/重组 */
         StreamTcpDisableAppLayer(f);
     }
     AppLayerParserSetEOF(pstate);

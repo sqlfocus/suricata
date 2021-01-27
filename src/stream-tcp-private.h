@@ -110,10 +110,10 @@ typedef struct TcpStream_ {
                                          longer time.(RFC 1323)*/
     /* reassembly */
     uint32_t base_seq;              /* 流缓存的起始序号, 一般为syn/synack序号+1,  seq where we are left with reassebly. Matches STREAM_BASE_OFFSET below. */
-
-    uint32_t app_progress_rel;      /* 已处理的缓存计数，相对于 STREAM_BASE_OFFSET */
-    uint32_t raw_progress_rel;      /**< raw reassembly progress relative to STREAM_BASE_OFFSET */
-    uint32_t log_progress_rel;      /**< streaming logger progress relative to STREAM_BASE_OFFSET */
+                                    /*                   如果主动释放seg_tree, 则+=slide */
+    uint32_t app_progress_rel;      /* 已处理的应用缓存计数, ReassembleUpdateAppLayer(), 相对于 STREAM_BASE_OFFSET */
+    uint32_t raw_progress_rel;      /* 已处理的检测缓存技术, StreamReassembleRaw() *< raw reassembly progress relative to STREAM_BASE_OFFSET */
+    uint32_t log_progress_rel;      /* 已处理的日志缓存计数, TcpDataLogger() *< streaming logger progress relative to STREAM_BASE_OFFSET */
 
     uint32_t min_inspect_depth;     /* 应用层设定的最小检测深度，*< min inspect size set by the app layer, to make sure enough data
                                      *   remains available for inspection together with app layer buffers */

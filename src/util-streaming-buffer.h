@@ -66,7 +66,7 @@
 
 typedef struct StreamingBufferConfig_ {
     uint32_t flags;
-    uint32_t buf_slide;
+    uint32_t buf_slide;     /* 默认0 */
     uint32_t buf_size;      /* 默认大小2k */
     void *(*Malloc)(size_t size);
     void *(*Calloc)(size_t n, size_t size);

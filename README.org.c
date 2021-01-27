@@ -212,6 +212,9 @@ SCLogConfig *sc_log_config         日志配置信息结构
           --DetectMpmPrepareAppMpms()             共享环境构建多模引擎
           --DetectMpmPreparePktMpms()
           --SigMatchPrepare()                     初始化单规则的检测引擎
+            --DetectEnginePktInspectionSetup()
+              --DetectEngineInspectRulePayloadMatches()
+              --DetectEngineInspectRulePacketMatches()
           --VarNameStoreActivateStaging()         激活变量命名空间
 
                                                        
@@ -231,6 +234,8 @@ SCLogConfig *sc_log_config         日志配置信息结构
       --DetectRun()
     --DetectNoFlow()            无流检测
       --DetectRun()
+        --DetectRunSetup()           构建检测环境, 检查是否有待检测重组原始数据
+          --StreamReassembleRawHasDataReady()
         --DetectRunInspectIPOnly()   IPonly规则引擎, DetectEngineIPOnlyCtx->tree_ipv4src
           --IPOnlyMatchPacket()
             --搜索DetectEngineCtx->io_ctx->tree_ipv4src/tree_ipv4dst
