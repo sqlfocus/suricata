@@ -29,8 +29,8 @@
 #include "decode.h"
 #include "util-file.h"
 
-#define OUTPUT_FILEDATA_FLAG_OPEN  0x01
-#define OUTPUT_FILEDATA_FLAG_CLOSE 0x02
+#define OUTPUT_FILEDATA_FLAG_OPEN  0x01     /* 首次打开缓存文件 */
+#define OUTPUT_FILEDATA_FLAG_CLOSE 0x02     /* 缓存文件写入完毕 */
 
 /** filedata logger function pointer type */
 typedef int (*FiledataLogger)(ThreadVars *, void *thread_data, const Packet *,

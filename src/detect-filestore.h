@@ -32,7 +32,7 @@
 #define FILESTORE_SCOPE_DEFAULT 0   /* per file */
 #define FILESTORE_SCOPE_TX      1   /* per transaction */
 #define FILESTORE_SCOPE_SSN     2   /* per flow/ssn */
-
+/* ‘filestore:<direction>,<scope>;’ */
 typedef struct DetectFilestoreData_ {
     int16_t direction;
     int16_t scope;

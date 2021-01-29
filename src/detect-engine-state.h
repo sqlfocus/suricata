@@ -67,7 +67,7 @@
  *
  * Used by app-layer-parsers to notify us that new files
  * are available in the tx.
- */
+ *//* 告知检测引擎, 有新文件 */
 #define DETECT_ENGINE_STATE_FLAG_FILE_NEW       BIT_U8(0)
 
 typedef struct DeStateStoreItem_ {
@@ -85,7 +85,7 @@ typedef struct DetectEngineStateDirection_ {
     DeStateStore *tail;
     SigIntId cnt;           /* 已匹配规则计数, head/tail链表长度 */
     uint16_t filestore_cnt; /* */
-    uint8_t flags;
+    uint8_t flags;          /* DETECT_ENGINE_STATE_FLAG_FILE_NEW */
     /* coccinelle: DetectEngineStateDirection:flags:DETECT_ENGINE_STATE_FLAG_ */
 } DetectEngineStateDirection;  /* 某方向上, 事务检测引擎状态 */
 

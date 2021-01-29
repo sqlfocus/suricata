@@ -113,8 +113,8 @@ static int CallLoggers(ThreadVars *tv, OutputLoggerThreadStore *store_list,
     while (logger && store) {
         DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL);
 
-        SCLogDebug("logger %p", logger);
-        PACKET_PROFILING_LOGGER_START(p, logger->logger_id);
+        SCLogDebug("logger %p", logger);  /* file-store ==> OutputFilestoreLogger() */
+        PACKET_PROFILING_LOGGER_START(p, logger->logger_id); /* 对文件内容处理, 如存储 */
         logger->LogFunc(tv, store->thread_data, (const Packet *)p, ff, data, data_len, flags, dir);
         PACKET_PROFILING_LOGGER_END(p, logger->logger_id);
 
@@ -144,12 +144,12 @@ static void OutputFiledataLogFfc(ThreadVars *tv, OutputLoggerThreadData *td,
             }
 #endif
             SCLogDebug("ff %p", ff);
-            if (ff->flags & FILE_STORED) {
+            if (ff->flags & FILE_STORED) {    /* 已经存储, 略过 */
                 SCLogDebug("stored flag set");
                 continue;
             }
 
-            if (!(ff->flags & FILE_STORE)) {
+            if (!(ff->flags & FILE_STORE)) {  /* 未设置需存储标识, 略过 */
                 SCLogDebug("ff FILE_STORE not set");
                 continue;
             }
@@ -157,7 +157,7 @@ static void OutputFiledataLogFfc(ThreadVars *tv, OutputLoggerThreadData *td,
             /* if we have no data chunks left to log, we should still
              * close the logger(s) */
             if (FileDataSize(ff) == ff->content_stored &&
-                (file_trunc || file_close)) {
+                (file_trunc || file_close)) { /* 无数据需要存储, 但数据流已关闭 */
                 if (ff->state < FILE_STATE_CLOSED) {
                     FileCloseFilePtr(ff, NULL, 0, FILE_TRUNCATED);
                 }
@@ -170,7 +170,7 @@ static void OutputFiledataLogFfc(ThreadVars *tv, OutputLoggerThreadData *td,
 
             /* if file_store_id == 0, this is the first store of this file */
             if (ff->file_store_id == 0) {
-                /* new file */
+                /* new file */                /* 首次存储, 赋唯一递增值 */
                 ff->file_store_id = SC_ATOMIC_ADD(g_file_store_id, 1);
                 file_flags |= OUTPUT_FILEDATA_FLAG_OPEN;
             } else {
@@ -178,26 +178,26 @@ static void OutputFiledataLogFfc(ThreadVars *tv, OutputLoggerThreadData *td,
             }
 
             /* if file needs to be closed or truncated, inform
-             * loggers */
+             * loggers */                     /* 被截断, 则做关闭文件前处理, 如计算hash等 */
             if ((file_close || file_trunc) && ff->state < FILE_STATE_CLOSED) {
                 FileCloseFilePtr(ff, NULL, 0, FILE_TRUNCATED);
             }
 
             /* tell the logger we're closing up */
-            if (ff->state >= FILE_STATE_CLOSED)
+            if (ff->state >= FILE_STATE_CLOSED)/* 文件内容输出关闭 */
                 file_flags |= OUTPUT_FILEDATA_FLAG_CLOSE;
 
             /* do the actual logging */
             const uint8_t *data = NULL;
             uint32_t data_len = 0;
-
+                                              /* 获取新增数据, 偏移->content_stored */
             StreamingBufferGetDataAtOffset(ff->sb,
                     &data, &data_len,
                     ff->content_stored);
-
+                                              /* 日志处理 */
             const int file_logged = CallLoggers(tv, store, p, ff, data, data_len, file_flags, dir);
             if (file_logged) {
-                ff->content_stored += data_len;
+                ff->content_stored += data_len;/* 更新已处理偏移 */
 
                 /* all done */
                 if (file_flags & OUTPUT_FILEDATA_FLAG_CLOSE) {
@@ -321,7 +321,7 @@ static TmEcode OutputFiledataLogThreadInit(ThreadVars *tv, const void *initdata,
     OutputFiledataLogger *logger = list;
     while (logger) {
         if (logger->ThreadInit) {
-            void *retptr = NULL;
+            void *retptr = NULL;     /* file-store ==> OutputFilestoreLogThreadInit() */
             if (logger->ThreadInit(tv, (void *)logger->output_ctx, &retptr) == TM_ECODE_OK) {
                 OutputLoggerThreadStore *ts = SCMalloc(sizeof(*ts));
 /* todo */      BUG_ON(ts == NULL);

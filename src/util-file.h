@@ -41,7 +41,7 @@
 #define FILE_SHA1       BIT_U16(5)
 #define FILE_NOSHA256   BIT_U16(6)
 #define FILE_SHA256     BIT_U16(7)
-#define FILE_LOGGED     BIT_U16(8)
+#define FILE_LOGGED     BIT_U16(8)  /* 已经日志 */
 #define FILE_NOSTORE    BIT_U16(9)
 #define FILE_STORE      BIT_U16(10)
 #define FILE_STORED     BIT_U16(11)
@@ -61,14 +61,14 @@ typedef enum FileState_ {
 } FileState;
 
 typedef struct File_ {
-    uint16_t flags;
+    uint16_t flags;           /* 标识, FILE_MD5 */
     uint16_t name_len;
-    FileState state;
-    StreamingBuffer *sb;
+    FileState state;          /* 文件状态, FILE_STATE_CLOSED */
+    StreamingBuffer *sb;      /* 缓存 */
     uint64_t txid;                  /**< tx this file is part of */
     uint32_t file_track_id;         /**< id used by protocol parser */
-    uint32_t file_store_id;         /**< id used in store file name file.<id> */
-    int fd;                         /**< file descriptor for filestore, not
+    uint32_t file_store_id;   /* 唯一标识, 作为临时文件的后缀 *< id used in store file name file.<id> */
+    int fd;                   /* 磁盘文件句柄, *< file descriptor for filestore, not
                                         open if equal to -1 */
     uint8_t *name;
 #ifdef HAVE_MAGIC
@@ -85,8 +85,8 @@ typedef struct File_ {
 #endif
     uint64_t content_inspected;     /**< used in pruning if FILE_USE_DETECT
                                      *   flag is set */
-    uint64_t content_stored;
-    uint64_t size;
+    uint64_t content_stored;        /* 日志系统已处理的数据长度 */
+    uint64_t size;                  /* 文件数据量 */
     uint32_t inspect_window;
     uint32_t inspect_min_size;
     uint64_t start;

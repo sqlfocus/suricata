@@ -74,7 +74,7 @@ static int g_file_match_list_id = 0;
 
 /**
  * \brief Registration function for keyword: filestore
- */
+ *//* 关键字filestore, 用于定制文件存储 */
 void DetectFilestoreRegister(void)
 {
     sigmatch_table[DETECT_FILESTORE].name = "filestore";
@@ -233,7 +233,7 @@ static int DetectFilestorePostMatch(DetectEngineThreadCtx *det_ctx,
 
     FileContainer *ffc = AppLayerParserGetFiles(p->flow, flags);
 
-    /* filestore for single files only */
+    /* 存储文件, filestore for single files only */
     if (s->filestore_ctx == NULL) {
         for (uint16_t u = 0; u < det_ctx->filestore_cnt; u++) {
             FileStoreFileById(ffc, det_ctx->filestore[u].file_id);
@@ -278,7 +278,7 @@ static int DetectFilestoreMatch (DetectEngineThreadCtx *det_ctx, Flow *f,
 
     /* file can be NULL when a rule with filestore scope > file
      * matches. */
-    if (file != NULL) {
+    if (file != NULL) {     /* 记录匹配的规则ID */
         file_id = file->file_track_id;
         if (file->sid != NULL && s->id > 0) {
             if (file->sid_cnt >= file->sid_max) {
@@ -300,7 +300,7 @@ static int DetectFilestoreMatch (DetectEngineThreadCtx *det_ctx, Flow *f,
     }
 
 continue_after_realloc_fail:
-
+                            /* 记录文件索引 */
     det_ctx->filestore[det_ctx->filestore_cnt].file_id = file_id;
     det_ctx->filestore[det_ctx->filestore_cnt].tx_id = det_ctx->tx_id;
 
@@ -322,7 +322,7 @@ continue_after_realloc_fail:
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 'alert http any any -> any any (msg:"FILE magic executable"; flow:established,to_client; filemagic:"executable"; filestore; sid:18; rev:1;)' */
 static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     SCEnter();
@@ -330,13 +330,13 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
     static bool warn_not_configured = false;
     static uint32_t de_version = 0;
 
-    /* Check on first-time loads (includes following a reload) */
+    /* 检查配置依赖, Check on first-time loads (includes following a reload) */
     if (!warn_not_configured || (de_ctx->version != de_version)) {
         if (de_version != de_ctx->version) {
             SCLogDebug("reload-detected; re-checking feature presence; DE version now %"PRIu32,
                        de_ctx->version);
         }
-        if (!RequiresFeature(FEATURE_OUTPUT_FILESTORE)) {
+        if (!RequiresFeature(FEATURE_OUTPUT_FILESTORE)) { /* 依赖 ‘output.file-store’ 配置 */
             SCLogWarning(SC_WARN_ALERT_CONFIG, "One or more rule(s) depends on the "
                          "file-store output log which is not enabled. "
                          "Enable the output \"file-store\".");
@@ -351,7 +351,7 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
     int ret = 0, res = 0;
     int ov[MAX_SUBSTRINGS];
 
-    /* filestore and bypass keywords can't work together */
+    /* 和bypass不能共存, 因为需要走http解码流程才能存储; filestore and bypass keywords can't work together */
     if (s->flags & SIG_FLAG_BYPASS) {
         SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS,
                    "filestore can't work with bypass keyword");
@@ -363,7 +363,7 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
         goto error;
 
     sm->type = DETECT_FILESTORE;
-
+    /* 解析配置选项, "filestore:<direction>,<scope>;" */
     if (str != NULL && strlen(str) > 0) {
         char str_0[32];
         char str_1[32];
@@ -406,7 +406,7 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
         if (unlikely(fd == NULL))
             goto error;
         memset(fd, 0x00, sizeof(DetectFilestoreData));
-
+        /* 方向 */
         if (args[0] != NULL) {
             SCLogDebug("first arg %s", args[0]);
 
@@ -430,7 +430,7 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
         } else {
             fd->direction = FILESTORE_DIR_DEFAULT;
         }
-
+        /* 范围 */
         if (args[1] != NULL) {
             SCLogDebug("second arg %s", args[1]);
 
@@ -454,11 +454,11 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
     } else {
         sm->ctx = (SigMatchCtx*)NULL;
     }
-
+    /* 告知http需要文件存储 */
     if (s->alproto == ALPROTO_HTTP) {
         AppLayerHtpNeedFileInspection();
     }
-
+    /* 加入匹配链表 */
     SigMatchAppendSMToList(s, sm, g_file_match_list_id);
     s->filestore_ctx = (const DetectFilestoreData *)sm->ctx;
 
@@ -469,7 +469,7 @@ static int DetectFilestoreSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
     sm->ctx = NULL;
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_POSTMATCH);
 
-
+    /* 设置文件存储标识 */
     s->flags |= SIG_FLAG_FILESTORE;
     return 0;
 

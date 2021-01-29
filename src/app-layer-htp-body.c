@@ -99,19 +99,19 @@ int HtpBodyAppendChunk(const HTPCfgDir *hcfg, HtpBody *body,
     if (bd == NULL) {
         SCReturnInt(-1);
     }
-    /* 缓存数据, 并初始化描述块结构 */
+    /* 缓存数据, 加入红黑树 */
     if (StreamingBufferAppend(body->sb, &bd->sbseg, data, len) != 0) {
         HTPFree(bd, sizeof(HtpBodyChunk));
         SCReturnInt(-1);
     }
-    /* 更新计数 */
+    /* 描述结构加入双向链表 */
     if (body->first == NULL) {
         body->first = body->last = bd;
     } else {
         body->last->next = bd;
         body->last = bd;
     }
-    body->content_len_so_far += len;
+    body->content_len_so_far += len;    /* 更新缓存长度 */
 
     SCLogDebug("body %p", body);
 

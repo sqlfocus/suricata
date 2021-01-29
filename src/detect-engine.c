@@ -3069,7 +3069,7 @@ int DetectRegisterThreadCtxFuncs(DetectEngineCtx *de_ctx, const char *name, void
     item->data = data;
     item->name = name;
 
-    item->next = de_ctx->keyword_list;
+    item->next = de_ctx->keyword_list;  /* 加入全局关键字 */
     de_ctx->keyword_list = item;
     item->id = de_ctx->keyword_id++;
 

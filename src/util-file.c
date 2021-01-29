@@ -48,7 +48,7 @@ static uint16_t g_file_flow_mask = 0;
 /** \brief switch to force filestore on all files
  *         regardless of the rules.
  */
-static int g_file_force_filestore = 0;
+static int g_file_force_filestore = 0;   /* 强制存储所有文件, output.file-store.force-filestore */
 
 /** \brief switch to force magic checks on all files
  *         regardless of the rules.
@@ -58,17 +58,17 @@ static int g_file_force_magic = 0;
 /** \brief switch to force md5 calculation on all files
  *         regardless of the rules.
  */
-static int g_file_force_md5 = 0;
+static int g_file_force_md5 = 0;         /* output.file-store.force-hash:[md5] */
 
 /** \brief switch to force sha1 calculation on all files
  *         regardless of the rules.
  */
-static int g_file_force_sha1 = 0;
+static int g_file_force_sha1 = 0;        /* output.file-store.force-hash:[sha1] */
 
 /** \brief switch to force sha256 calculation on all files
  *         regardless of the rules.
  */
-static int g_file_force_sha256 = 0;
+static int g_file_force_sha256 = 0;      /* 默认开启, output.file-store.force-hash:[sha256] */
 
 /** \brief switch to force tracking off all files
  *         regardless of the rules.
@@ -83,7 +83,7 @@ static int g_file_store_enable = 0;
 /** \brief stream_config.reassembly_depth equivalent
  *         for files
  */
-static uint32_t g_file_store_reassembly_depth = 0;
+static uint32_t g_file_store_reassembly_depth = 0;  /* 文件缓存限制 */
 
 /* prototypes */
 static void FileFree(File *);
@@ -661,7 +661,7 @@ static int FileAppendDataDo(File *ff, const uint8_t *data, uint32_t data_len)
     }
 
     if (ff->state != FILE_STATE_OPENED) {
-        if (ff->flags & FILE_NOSTORE) {
+        if (ff->flags & FILE_NOSTORE) {  /* 不存储数据 */
             SCReturnInt(-2);
         }
         SCReturnInt(-1);
@@ -670,7 +670,7 @@ static int FileAppendDataDo(File *ff, const uint8_t *data, uint32_t data_len)
     if ((ff->flags & FILE_USE_DETECT) == 0 &&
             FileStoreNoStoreCheck(ff) == 1) {
 #ifdef HAVE_NSS
-        int hash_done = 0;
+        int hash_done = 0;               /* 未开启dt检测, 且存储数据够magic使用 */
         /* no storage but forced hashing */
         if (ff->md5_ctx) {
             HASH_Update(ff->md5_ctx, data, data_len);
@@ -697,7 +697,7 @@ static int FileAppendDataDo(File *ff, const uint8_t *data, uint32_t data_len)
     }
 
     SCLogDebug("appending %"PRIu32" bytes", data_len);
-
+                                         /* 存储数据 */
     int r = AppendData(ff, data, data_len);
     if (r != 0) {
         ff->state = FILE_STATE_ERROR;

@@ -1128,9 +1128,9 @@ typedef struct DetectEngineThreadCtx_ {
     /* Array in which the filestore keyword stores file id and tx id. If the
      * full signature matches, these are processed by a post-match filestore
      * function to finalize the store. */
-    struct {                           /* */
-        uint32_t file_id;
-        uint64_t tx_id;
+    struct {                           /* 匹配到‘filestore’规则后, 存储文件信息 */
+        uint32_t file_id; /* File->file_track_id */
+        uint64_t tx_id;   /* ->tx_id */
     } filestore[DETECT_FILESTORE_MAX];
 
     DetectEngineCtx *de_ctx;           /* 当前的检测环境 */

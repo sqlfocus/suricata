@@ -144,7 +144,7 @@ int HTPFileOpen(HtpState *s, const uint8_t *filename, uint16_t filename_len,
         retval = -1;
     }
 
-    FileSetTx(files->tail, txid);
+    FileSetTx(files->tail, txid);   /* 记录事务ID */
 
 end:
     SCReturnInt(retval);

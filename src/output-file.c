@@ -131,7 +131,7 @@ static void OutputFileLogFfc(ThreadVars *tv,
                     DEBUG_VALIDATE_BUG_ON(logger->LogFunc == NULL);
 
                     SCLogDebug("logger %p", logger);
-                    PACKET_PROFILING_LOGGER_START(p, logger->logger_id);
+                    PACKET_PROFILING_LOGGER_START(p, logger->logger_id); /* OutputFilestoreLogger() */
                     logger->LogFunc(tv, store->thread_data, (const Packet *)p, (const File *)ff, dir);
                     PACKET_PROFILING_LOGGER_END(p, logger->logger_id);
                     file_logged = true;
@@ -285,7 +285,7 @@ static uint32_t OutputFileLoggerGetActiveCount(void)
     }
     return cnt;
 }
-
+/* 注册文件输出方式 */
 void OutputFileLoggerRegister(void)
 {
     OutputRegisterRootLogger(OutputFileLogThreadInit,

@@ -516,7 +516,7 @@ static TmEcode FlowWorker(ThreadVars *tv, Packet *p, void *data)
                 ((PKT_IS_TOSERVER(p) && (p->flowflags & FLOW_PKT_TOSERVER_FIRST)) ||
                  (PKT_IS_TOCLIENT(p) && (p->flowflags & FLOW_PKT_TOCLIENT_FIRST))))
         {
-            DisableDetectFlowFileFlags(p->flow);
+            DisableDetectFlowFileFlags(p->flow);       /* 关闭报文体存储相关的附加操作, 但报文体依旧存储 */
         }
                                                        /* 流重组(操作报文原始数据) */
         FlowWorkerStreamTCPUpdate(tv, fw, p, detect_thread);

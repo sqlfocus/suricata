@@ -817,7 +817,7 @@ void RunModeInitializeOutputs(void)
                 if (!r.ok) {                /* "eve-log" -> OutputJsonInitCtx() *//* "eve-log.http" -> OutputHttpLogInitSub() */
                     FatalErrorOnInit(SC_ERR_INVALID_ARGUMENT,
                         "output module \"%s\": setup failed", output->val);
-                    continue;
+                    continue;               /* "file-store" -> OutputFilestoreLogInitCtx() */
                 } else if (r.ctx == NULL) {
                     continue;
                 }

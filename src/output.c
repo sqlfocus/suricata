@@ -502,7 +502,7 @@ error:
  * configured with the configuration file.
  *
  * \retval Returns 0 on success, -1 on failure.
- */
+ *//* 注册输出模块, 添加到 output_modules 列表 */
 void OutputRegisterFiledataModule(LoggerId id, const char *name,
     const char *conf_name, OutputInitFunc InitFunc,
     FiledataLogger FiledataLogFunc, ThreadInitFunc ThreadInit,
@@ -878,7 +878,7 @@ TmEcode OutputLoggerLog(ThreadVars *tv, Packet *p, void *thread_data)
     LoggerThreadStore *thread_store = (LoggerThreadStore *)thread_data;
     RootLogger *logger = TAILQ_FIRST(&active_loggers);
     LoggerThreadStoreNode *thread_store_node = TAILQ_FIRST(thread_store);
-    while (logger && thread_store_node) {
+    while (logger && thread_store_node) { /* file-store ==> OutputFiledataLog() */
         logger->LogFunc(tv, p, thread_store_node->thread_data);
 
         logger = TAILQ_NEXT(logger, entries);
@@ -900,7 +900,7 @@ TmEcode OutputLoggerThreadInit(ThreadVars *tv, const void *initdata, void **data
     RootLogger *logger;
     TAILQ_FOREACH(logger, &active_loggers, entries) {
 
-        void *child_thread_data = NULL;
+        void *child_thread_data = NULL;      /* 文件存储 -> OutputFiledataLogThreadInit() */
         if (logger->ThreadInit != NULL) {    /* 报文输出方式 -> OutputPacketLogThreadInit() */
             if (logger->ThreadInit(tv, initdata, &child_thread_data) == TM_ECODE_OK) {
                 LoggerThreadStoreNode *thread_store_node =

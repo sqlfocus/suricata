@@ -144,7 +144,7 @@ static int HashMatchHashTable(ROHashTable *hash_table, uint8_t *hash,
  *
  * \retval 0 no match
  * \retval 1 match
- */
+ *//* 匹配hash值 */
 int DetectFileHashMatch (DetectEngineThreadCtx *det_ctx,
         Flow *f, uint8_t flags, File *file, const Signature *s, const SigMatchCtx *m)
 {
@@ -347,7 +347,7 @@ int DetectFileHashSetup (DetectEngineCtx *de_ctx, Signature *s, const char *str,
 
     // Setup the file flags depending on the hashing algorithm
     if (type == DETECT_FILEMD5) {
-        s->file_flags |= FILE_SIG_NEED_MD5;
+        s->file_flags |= FILE_SIG_NEED_MD5;    /* 设置需要计算的hash值类型 */
     }
     if (type == DETECT_FILESHA1) {
         s->file_flags |= FILE_SIG_NEED_SHA1;

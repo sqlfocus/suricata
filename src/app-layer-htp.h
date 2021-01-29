@@ -191,7 +191,7 @@ typedef struct HtpBody_ {
     /* Holds the length of the htp request body seen so far */
     uint64_t content_len_so_far;  /* 数据量长度 */
     /* parser tracker */
-    uint64_t body_parsed;
+    uint64_t body_parsed;         /* 已存储到内存文件的数据量 /
     /* inspection tracker */
     uint64_t body_inspected;      /* 已检测等数据量长度 */
 } HtpBody;
@@ -199,7 +199,7 @@ typedef struct HtpBody_ {
 #define HTP_CONTENTTYPE_SET     BIT_U8(0)    /**< We have the content type */
 #define HTP_BOUNDARY_SET        BIT_U8(1)    /**< We have a boundary string */
 #define HTP_BOUNDARY_OPEN       BIT_U8(2)    /**< We have a boundary string */
-#define HTP_FILENAME_SET        BIT_U8(3)    /**< filename is registered in the flow */
+#define HTP_FILENAME_SET        BIT_U8(3)    /* 已创建了新文件 *< filename is registered in the flow */
 #define HTP_DONTSTORE           BIT_U8(4)    /**< not storing this file */
 #define HTP_STREAM_DEPTH_SET    BIT_U8(5)    /**< stream-depth is set */
 
@@ -247,7 +247,7 @@ typedef struct HtpState_ {
     htp_conn_t *conn;
     Flow *f;                /**< Needed to retrieve the original flow when using HTPLib callbacks */
     uint64_t transaction_cnt;
-    uint64_t store_tx_id;
+    uint64_t store_tx_id;       /* 当前处理的事务ID */
     FileContainer *files_ts;    /* 文件列表, to server */
     FileContainer *files_tc;
     const struct HTPCfgRec_ *cfg;

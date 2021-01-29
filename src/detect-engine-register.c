@@ -463,7 +463,7 @@ void SigTableSetup(void)
     DetectFilenameRegister();          /* filename/file.name(files) */
     DetectFileextRegister();
     DetectFilestoreRegister();         /* "filestore" 匹配后支持文件存储 */
-    DetectFilemagicRegister();
+    DetectFilemagicRegister();         /* "filemagic"关键字 */
     DetectFileMd5Register();
     DetectFileSha1Register();
     DetectFileSha256Register();

@@ -1224,8 +1224,8 @@ static int HtpRequestBodySetupMultipart(htp_tx_t *tx, HtpTxUserData *htud)
 #define C_D_HDR "content-disposition:"
 #define C_D_HDR_LEN 20
 #define C_T_HDR "content-type:"
-#define C_T_HDR_LEN 13
-
+#define C_T_HDR_LEN 13  /* Content-Type: application/octet-stream */
+/* Content-Disposition: form-data; name="file000"; filename="HTTP协议详解.pdf" */
 static void HtpRequestBodyMultipartParseHeader(HtpState *hstate,
         HtpTxUserData *htud,
         uint8_t *header, uint32_t header_len,
@@ -1320,7 +1320,7 @@ static void HtpRequestBodyReassemble(HtpTxUserData *htud,
             chunks_buffer, chunks_buffer_len,
             htud->request_body.body_parsed);
 }
-
+/* 告知检测引擎, 有新文件 */
 static void FlagDetectStateNewFile(HtpTxUserData *tx, int dir)
 {
     SCEnter();
@@ -1386,7 +1386,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
     if (htud->tsflags & HTP_FILENAME_SET) {
         if (header_start != NULL || (tx_progress > HTP_REQUEST_BODY)) {
             SCLogDebug("reached the end of the file");
-                                        /* CASE: 到达文件尾, 关闭文件 */
+                                        /* CASE: 报文体结束, 到达文件尾, 关闭文件 */
             const uint8_t *filedata = chunks_buffer;
             uint32_t filedata_len = 0;
             uint8_t flags = 0;
@@ -1500,7 +1500,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
             SCLogDebug("header_end %p", header_end);
             SCLogDebug("form_end %p", form_end);
 
-            /* everything until the final boundary is the file */
+            /* 紧跟文件名描述后的为文件内容, everything until the final boundary is the file */
             if (form_end != NULL) {
                 SCLogDebug("have form_end");
 
@@ -1536,7 +1536,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
                 PrintRawDataFp(stdout, filedata, filedata_len);
                 printf("FILEDATA END: \n");
 #endif
-
+                /* 存储文件 */
                 result = HTPFileOpen(hstate, filename, filename_len,
                             filedata, filedata_len, HtpGetActiveRequestTxID(hstate),
                             STREAM_TOSERVER);
@@ -1549,7 +1549,7 @@ static int HtpRequestBodyHandleMultipart(HtpState *hstate, HtpTxUserData *htud, 
                         goto end;
                     }
                 }
-                FlagDetectStateNewFile(htud, STREAM_TOSERVER);
+                FlagDetectStateNewFile(htud, STREAM_TOSERVER); /* 告知检测引擎有新文件 */
 
                 htud->request_body.body_parsed += (header_end - chunks_buffer);
                 htud->tsflags &= ~HTP_FILENAME_SET;
@@ -1685,7 +1685,7 @@ static int HtpRequestBodyHandlePOSTorPUT(HtpState *hstate, HtpTxUserData *htud,
                 goto end;
             } else if (result == -2) {
                 htud->tsflags |= HTP_DONTSTORE;
-            } else {
+            } else {                      /* 设置标识, 发现新文件 */
                 FlagDetectStateNewFile(htud, STREAM_TOSERVER);
                 htud->tsflags |= HTP_FILENAME_SET;
                 htud->tsflags &= ~HTP_DONTSTORE;
@@ -1731,7 +1731,7 @@ static int HtpResponseBodyHandle(HtpState *hstate, HtpTxUserData *htud,
         uint8_t *filename = NULL;
         size_t filename_len = 0;
 
-        /* try Content-Disposition header first */
+        /* 通过Content-Disposition提取文件名, try Content-Disposition header first */
         htp_header_t *h = (htp_header_t *)htp_table_get_c(tx->response_headers,
                 "Content-Disposition");
         if (h != NULL && bstr_len(h->value) > 0) {
@@ -1740,7 +1740,7 @@ static int HtpResponseBodyHandle(HtpState *hstate, HtpTxUserData *htud,
                     (uint8_t *) bstr_ptr(h->value), bstr_len(h->value), &filename, &filename_len);
         }
 
-        /* fall back to name from the uri */
+        /* 否则利用uri计算文件名, fall back to name from the uri */
         if (filename == NULL) {
             /* get the name */
             if (tx->parsed_uri != NULL && tx->parsed_uri->path != NULL) {
@@ -1748,7 +1748,7 @@ static int HtpResponseBodyHandle(HtpState *hstate, HtpTxUserData *htud,
                 filename_len = bstr_len(tx->parsed_uri->path);
             }
         }
-
+        /* 缓存到文件 */
         if (filename != NULL) {
             result = HTPFileOpen(hstate, filename, (uint32_t)filename_len,
                     data, data_len, HtpGetActiveResponseTxID(hstate), STREAM_TOCLIENT);

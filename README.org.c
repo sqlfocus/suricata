@@ -127,6 +127,8 @@ SCLogConfig *sc_log_config         日志配置信息结构
   --HTPCallbackResponseStart()          应答开始
   --HTPCallbackResponseHeaderData()     收到应答头
   --HTPCallbackResponseBodyData()
+    --HtpResponseBodyHandle()
+      --HTPFileOpen()                       缓存文件
   --HTPCallbackResponse()
 
 --OutputFilestoreLogger()     日志阶段, 输出缓存文件
@@ -611,6 +613,72 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
       --OutputStatsLogger->LogFunc()
       ==JsonStatsLogger()
 
+
+* 文件存储
+‘filestore’关键字可用于定制需要存储的文件; 配置文件'output.file-store'用于
+管理文件存储行为
+
+--SuricataMain()
+  --PostConfLoadedSetup()
+    --SigTableSetup()
+      --DetectFilemagicRegister()       filemagic关键字
+      --DetectFilestoreRegister()       filestore关键字
+    --RegisterAllModules()
+      --TmModuleLoggerRegister()
+        --OutputRegisterRootLoggers()
+          --OutputFiledataLoggerRegister() 注册文件输出方式, 添加到 registered_loggers
+        --OutputRegisterLoggers()
+          --OutputFilestoreRegister()      注册文件存储模块, 添加到 output_modules
+  --PreRunPostPrivsDropInit()
+    --RunModeInitializeOutputs()
+      --OutputModule->InitFunc()
+      -->OutputFilestoreLogInitCtx()     output.file-store配置解析
+      --SetupOutput()
+        --OutputRegisterFiledataLogger() 注册模块到输出方式对应的列表, list/output_filedata.c
+
+--TmThreadsSlotPktAcqLoop()
+  --TmSlot->SlotThreadInit()
+  -->FlowWorkerThreadInit()
+    --OutputLoggerThreadInit()
+      --RootLogger->ThreadInit()
+      -->OutputFilestoreLogThreadInit() 初始化文件存储模块
+                                               
+--AppLayerHandleTCPData()               应用识别入口
+  --AppLayerParserParse()
+    --AppLayerParserProtoCtx->Parser()
+      ==HTPHandleRequestData()            http请求解析
+      ==HTPHandleResponseData()           http应答解析
+
+--HTPConfigSetDefaultsPhase1()          各阶段回调
+  --HTPCallbackRequestStart()
+  --HTPCallbackRequestHeaderData()        收到请求头
+  --HTPCallbackRequestBodyData()          收到请求体
+    --HtpRequestBodyHandleMultipart()
+    --HtpRequestBodyHandlePOSTorPUT()
+      --HTPFileOpen()                     缓存文件
+      --HTPFileStoreChunk()
+      --HTPFileClose()
+  --HTPCallbackRequest()                  请求结束
+  --HTPCallbackResponseStart()            应答开始
+  --HTPCallbackResponseHeaderData()       收到应答头
+  --HTPCallbackResponseBodyData()
+    --HtpResponseBodyHandle()
+      --HTPFileOpen()                     缓存文件
+  --HTPCallbackResponse()
+
+--FlowWorker()
+  --OutputLoggerLog()
+    --RootLogger->LogFunc()
+    -->OutputFiledataLog()
+      --OutputFiledataLogFfc()
+        --CallLoggers()
+          --OutputFiledataLogger->LogFunc()
+          -->OutputFilestoreLogger()      日志阶段, 输出缓存文件
+  --FlowPruneFiles()
+    --FilePrune()                         清理文件/内存
+      --FilePruneFile()
+      --FileFree()
+                                       
 * 单元测试
 单元测试是整个suricata稳定性的重要一环
 编译时需引入 ~UNITTESTS~ 宏定义, 可通过 ~./configure --enable-unittests~ 引入

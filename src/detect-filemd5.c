@@ -63,7 +63,7 @@ static void DetectFileMd5RegisterTests(void);
 
 /**
  * \brief Registration function for keyword: filemd5
- */
+ *//* filemd5关键字 */
 void DetectFileMd5Register(void)
 {
     sigmatch_table[DETECT_FILEMD5].name = "filemd5";
@@ -91,7 +91,7 @@ void DetectFileMd5Register(void)
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 解析配置, "filemd5:[!]filename;", 构建哈希表 */
 static int DetectFileMd5Setup (DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     return DetectFileHashSetup(de_ctx, s, str, DETECT_FILEMD5, g_file_match_list_id);

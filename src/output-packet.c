@@ -147,7 +147,7 @@ static TmEcode OutputPacketLogThreadInit(ThreadVars *tv, const void *initdata, v
             void *retptr = NULL;            /* fast -> AlertFastLogThreadInit() */
             if (logger->ThreadInit(tv, (void *)logger->output_ctx, &retptr) == TM_ECODE_OK) {
                 OutputLoggerThreadStore *ts = SCMalloc(sizeof(*ts));
-/* todo */      BUG_ON(ts == NULL);
+/* todo */      BUG_ON(ts == NULL);          
                 memset(ts, 0x00, sizeof(*ts));
 
                 /* store thread handle */

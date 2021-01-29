@@ -380,7 +380,7 @@ static int DetectFilemagicSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
 
     SigMatchAppendSMToList(s, sm, g_file_match_list_id);
 
-    s->file_flags |= (FILE_SIG_NEED_FILE|FILE_SIG_NEED_MAGIC);
+    s->file_flags |= (FILE_SIG_NEED_FILE|FILE_SIG_NEED_MAGIC); /* 设置标识, 需要缓存文件, 需要计算magic */
     return 0;
 
 error:

@@ -434,7 +434,7 @@ DetectPostInspectFileFlagsUpdate(Flow *f, const SigGroupHead *sgh, uint8_t direc
         FileUpdateFlowFileFlags(f, flow_file_flags, direction);
     }
 }
-
+/* 首次运行规则集合, 设置对缓存文件的检测标识 */
 static inline void
 DetectRunPostGetFirstRuleGroup(const Packet *p, Flow *pflow, const SigGroupHead *sgh)
 {
@@ -450,7 +450,7 @@ DetectRunPostGetFirstRuleGroup(const Packet *p, Flow *pflow, const SigGroupHead 
                 ssn->client.flags |= STREAMTCP_STREAM_FLAG_DISABLE_RAW;
             }
         }
-        /* 设置文件检测标识 */
+        /* 设置缓存文件(如http应答报文体)检测标识 */
         DetectPostInspectFileFlagsUpdate(pflow,
                 pflow->sgh_toserver, STREAM_TOSERVER);
 
@@ -508,7 +508,7 @@ static inline void DetectRunGetRuleGroup(
             } else {
                 /* store the found sgh (or NULL) in the flow to save us
                  * from looking it up again for the next packet.
-                 * Also run other tasks */
+                 * Also run other tasks *//* 设定缓存文件的处理标识, 如存储等 */
                 DetectRunPostGetFirstRuleGroup(p, pflow, sgh);
             }
         }
@@ -1674,7 +1674,7 @@ error:
 
 /** \brief disable file features we don't need
  *  Called if we have no detection engine.
- */
+ *//* 缓存文件时, 关闭hash计算、关闭magic匹配、关闭文件存储等 */
 void DisableDetectFlowFileFlags(Flow *f)
 {
     DetectPostInspectFileFlagsUpdate(f, NULL /* no sgh */, STREAM_TOSERVER);

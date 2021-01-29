@@ -51,10 +51,10 @@ static SC_ATOMIC_DECLARE(uint32_t, filestore_open_file_cnt);
 
 typedef struct OutputFilestoreCtx_ {
     char prefix[FILESTORE_PREFIX_MAX];
-    char tmpdir[FILESTORE_PREFIX_MAX];
-    bool fileinfo;
-    HttpXFFCfg *xff_cfg;
-} OutputFilestoreCtx;
+    char tmpdir[FILESTORE_PREFIX_MAX]; /* 临时目录 */
+    bool fileinfo;                     /* 是否单独输出文件信息 */
+    HttpXFFCfg *xff_cfg;               /* output.file-store.xff 配置信息 */
+} OutputFilestoreCtx;         /* 文件输出模块信息结构, output.file-store */
 
 typedef struct OutputFilestoreLogThread_ {
     OutputFilestoreCtx *ctx;
@@ -141,7 +141,7 @@ static void OutputFilestoreFinalizeFiles(ThreadVars *tv,
     snprintf(final_filename, sizeof(final_filename), "%s/%c%c/%s",
             ctx->prefix, sha256string[0], sha256string[1], sha256string);
 
-    if (SCPathExists(final_filename)) {
+    if (SCPathExists(final_filename)) {       /* 文件已存在, 则更新时间 */
         OutputFilestoreUpdateFileTime(tmp_filename, final_filename);
         if (unlink(tmp_filename) != 0) {
             StatsIncr(tv, oft->fs_error_counter);
@@ -150,7 +150,7 @@ static void OutputFilestoreFinalizeFiles(ThreadVars *tv,
                     strerror(errno));
         }
     } else if (rename(tmp_filename, final_filename) != 0) {
-        StatsIncr(tv, oft->fs_error_counter);
+        StatsIncr(tv, oft->fs_error_counter); /* 变更文件名, 以移动到正式文件夹 */
         WARN_ONCE(SC_WARN_RENAMING_FILE, "Failed to rename %s to %s: %s",
                 tmp_filename, final_filename, strerror(errno));
         if (unlink(tmp_filename) != 0) {
@@ -161,7 +161,7 @@ static void OutputFilestoreFinalizeFiles(ThreadVars *tv,
         return;
     }
 
-    if (ctx->fileinfo) {
+    if (ctx->fileinfo) {                      /* 如有必要, 添加附加摘要信息 */
         char js_metadata_filename[PATH_MAX];
         if (snprintf(js_metadata_filename, sizeof(js_metadata_filename),
                         "%s.%"PRIuMAX".%u.json", final_filename,
@@ -207,12 +207,12 @@ static int OutputFilestoreLogger(ThreadVars *tv, void *thread_data,
 
     SCLogDebug("ff %p, data %p, data_len %u", ff, data, data_len);
 
-    char base_filename[PATH_MAX] = "";
+    char base_filename[PATH_MAX] = "";        /* 组装临时文件名 */
     snprintf(base_filename, sizeof(base_filename), "%s/file.%u",
             ctx->tmpdir, ff->file_store_id);
     snprintf(filename, sizeof(filename), "%s", base_filename);
 
-    if (flags & OUTPUT_FILEDATA_FLAG_OPEN) {
+    if (flags & OUTPUT_FILEDATA_FLAG_OPEN) {  /* 首次打开磁盘文件 */
         file_fd = open(filename, O_CREAT | O_TRUNC | O_NOFOLLOW | O_WRONLY,
                 0644);
         if (file_fd == -1) {
@@ -233,7 +233,7 @@ static int OutputFilestoreLogger(ThreadVars *tv, void *thread_data,
             ff->fd = -1;
         }
     /* we can get called with a NULL ffd when we need to close */
-    } else if (data != NULL) {
+    } else if (data != NULL) {                /* 后续打开 */
         if (ff->fd == -1) {
             file_fd = open(filename, O_APPEND | O_NOFOLLOW | O_WRONLY);
             if (file_fd == -1) {
@@ -248,7 +248,7 @@ static int OutputFilestoreLogger(ThreadVars *tv, void *thread_data,
         }
     }
 
-    if (file_fd != -1) {
+    if (file_fd != -1) {                      /* 落盘 */
         ssize_t r = write(file_fd, (const void *)data, (size_t)data_len);
         if (r == -1) {
             StatsIncr(tv, aft->fs_error_counter);
@@ -265,8 +265,8 @@ static int OutputFilestoreLogger(ThreadVars *tv, void *thread_data,
         }
     }
 
-    if (flags & OUTPUT_FILEDATA_FLAG_CLOSE) {
-        if (ff->fd != -1) {
+    if (flags & OUTPUT_FILEDATA_FLAG_CLOSE) { /* 文件写入完毕, 通过变更文件名, 由临时 */
+        if (ff->fd != -1) {                   /* 文件目录写入正式文件目录 */
             close(ff->fd);
             ff->fd = -1;
             SC_ATOMIC_SUB(filestore_open_file_cnt, 1);
@@ -412,31 +412,31 @@ static OutputInitResult OutputFilestoreLogInitCtx(ConfNode *conf)
     if (!ConfGetChildValueInt(conf, "version", &version) || version < 2) {
         SCLogWarning(SC_WARN_DEPRECATED,
             "File-store v1 been removed. Please update to file-store v2.");
-        return result;
+        return result;                        /* 版本校验 */
     }
 
-    if (RunModeOutputFiledataEnabled()) {
+    if (RunModeOutputFiledataEnabled()) {     /* 仅能存在一个文件内容输出日志模块 */
         SCLogWarning(SC_ERR_NOT_SUPPORTED,
                 "A file data logger is already enabled. Filestore (v2) "
                 "will not be enabled.");
         return result;
     }
 
-    char log_directory[PATH_MAX] = "";
+    char log_directory[PATH_MAX] = "";        /* 初始化存储目录 */
     GetLogDirectory(conf, log_directory, sizeof(log_directory));
     if (!InitFilestoreDirectory(log_directory)) {
         return result;
     }
 
     OutputFilestoreCtx *ctx = SCCalloc(1, sizeof(*ctx));
-    if (unlikely(ctx == NULL)) {
+    if (unlikely(ctx == NULL)) {              /* 文件输出, 模块信息 */
         return result;
     }
 
     strlcpy(ctx->prefix, log_directory, sizeof(ctx->prefix));
     int written = snprintf(ctx->tmpdir, sizeof(ctx->tmpdir) - 1, "%s/tmp",
             log_directory);
-    if (written == sizeof(ctx->tmpdir)) {
+    if (written == sizeof(ctx->tmpdir)) {     /* 创建临时文件目录 */
         SCLogError(SC_ERR_SPRINTF, "File-store output directory overflow.");
         SCFree(ctx);
         return result;
@@ -444,7 +444,7 @@ static OutputInitResult OutputFilestoreLogInitCtx(ConfNode *conf)
 
     ctx->xff_cfg = SCCalloc(1, sizeof(HttpXFFCfg));
     if (ctx->xff_cfg != NULL) {
-        HttpXFFGetCfg(conf, ctx->xff_cfg);
+        HttpXFFGetCfg(conf, ctx->xff_cfg);    /* 解析output.file-store.xff */
     }
 
     OutputCtx *output_ctx = SCCalloc(1, sizeof(OutputCtx));
@@ -466,27 +466,27 @@ static OutputInitResult OutputFilestoreLogInitCtx(ConfNode *conf)
     const char *force_filestore = ConfNodeLookupChildValue(conf,
             "force-filestore");
     if (force_filestore != NULL && ConfValIsTrue(force_filestore)) {
-        FileForceFilestoreEnable();
+        FileForceFilestoreEnable();           /* 是否强制存储所有文件 */
         SCLogInfo("forcing filestore of all files");
     }
 
     const char *force_magic = ConfNodeLookupChildValue(conf, "force-magic");
     if (force_magic != NULL && ConfValIsTrue(force_magic)) {
-        FileForceMagicEnable();
+        FileForceMagicEnable();               /* 是否强制计算hash值 */
         SCLogConfig("Filestore (v2) forcing magic lookup for stored files");
     }
 
-    FileForceHashParseCfg(conf);
+    FileForceHashParseCfg(conf);              /* 分析 force-hash:[] 配置 */
 
-    /* The new filestore requires SHA256. */
-    FileForceSha256Enable();
+    /* <TK!!!>默认开启sha256, The new filestore requires SHA256. */
+    FileForceSha256Enable();                  /* <TK!!!>默认开启sha256 */
 
     ProvidesFeature(FEATURE_OUTPUT_FILESTORE);
 
     const char *stream_depth_str = ConfNodeLookupChildValue(conf,
             "stream-depth");
     if (stream_depth_str != NULL && strcmp(stream_depth_str, "no")) {
-        uint32_t stream_depth = 0;
+        uint32_t stream_depth = 0;            /* 缓存限制, 0无限制 */
         if (ParseSizeStringU32(stream_depth_str,
                                &stream_depth) < 0) {
             SCLogError(SC_ERR_SIZE_PARSE, "Error parsing "
@@ -509,7 +509,7 @@ static OutputInitResult OutputFilestoreLogInitCtx(ConfNode *conf)
 
     const char *file_count_str = ConfNodeLookupChildValue(conf,
             "max-open-files");
-    if (file_count_str != NULL) {
+    if (file_count_str != NULL) {             /* 最大同时打开文件数 */
         uint32_t file_count = 0;
         if (ParseSizeStringU32(file_count_str,
                                &file_count) < 0) {
@@ -536,7 +536,7 @@ static OutputInitResult OutputFilestoreLogInitCtx(ConfNode *conf)
 }
 
 #endif /* HAVE_NSS */
-
+/* 注册文件输出模块 */
 void OutputFilestoreRegister(void)
 {
 #ifdef HAVE_NSS
