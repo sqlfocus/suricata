@@ -243,9 +243,9 @@ void PacketAlertFinalize(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx
     while (i < p->alerts.cnt) {
         SCLogDebug("Sig->num: %"PRIu32, p->alerts.alerts[i].num);
         const Signature *s = de_ctx->sig_array[p->alerts.alerts[i].num];
-
+        /* 限速处理 */
         int res = PacketAlertHandle(de_ctx, det_ctx, s, p, &p->alerts.alerts[i]);
-        if (res > 0) {
+        if (res > 0) {     /* 打tag */
             /* 试图打tag，Now, if we have an alert, we have to check if we want
              * to tag this session or src/dst host */
             if (s->sm_arrays[DETECT_SM_LIST_TMATCH] != NULL) {

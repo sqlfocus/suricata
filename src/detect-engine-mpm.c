@@ -299,8 +299,8 @@ void DetectPktMpmRegister(const char *name,
         abort();
     }
 
-    DetectBufferTypeSupportsMpm(name);
-    DetectBufferTypeSupportsTransformations(name);
+    DetectBufferTypeSupportsMpm(name);             /* 支持多模式检测 */
+    DetectBufferTypeSupportsTransformations(name); /* 支持字符转换 */
     int sm_list = DetectBufferTypeGetByName(name);
     if (sm_list == -1) {
         FatalError(SC_ERR_INITIALIZATION,
@@ -313,14 +313,14 @@ void DetectPktMpmRegister(const char *name,
     snprintf(am->pname, sizeof(am->pname), "%s", am->name);
     am->sm_list = sm_list;
     am->priority = priority;
-    am->type = DETECT_BUFFER_MPM_TYPE_PKT;
+    am->type = DETECT_BUFFER_MPM_TYPE_PKT;         /* 多模引擎是针对报文的 */
 
     am->PrefilterRegisterWithListId = PrefilterRegister;
-    am->pkt_v1.GetData = GetData;
+    am->pkt_v1.GetData = GetData;                  /* 关键函数指针 */
 
     if (g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] == NULL) {
         g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] = am;
-    } else {
+    } else {                                       /* 加入 g_mpm_list 链表 */
         DetectBufferMpmRegistery *t = g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT];
         while (t->next != NULL) {
             t = t->next;
@@ -329,7 +329,7 @@ void DetectPktMpmRegister(const char *name,
         am->id = t->id + 1;
     }
     g_mpm_list_cnt[DETECT_BUFFER_MPM_TYPE_PKT]++;
-
+                                                   /* 加入 sm_fp_support_smlist_list 快速匹配链表 */
     SupportFastPatternForSigMatchList(sm_list, priority);
     SCLogDebug("%s/%d done", name, sm_list);
 }
@@ -840,7 +840,7 @@ static SigMatch *GetMpmForList(const Signature *s, const int list, SigMatch *mpm
     }
     return mpm_sm;
 }
-/* 选择支持fast pattern的规则匹配, 赋值到 Signature->init->mpm_sm */
+/* 选择支持fast pattern的content匹配, 赋值到 Signature->init->mpm_sm */
 void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 {
     if (s->init_data->mpm_sm != NULL)  /* 已提取了fast pattern，返回 */
@@ -866,18 +866,18 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
 
         for (sm = s->init_data->smlists[list_id]; sm != NULL; sm = sm->next) {
             if (sm->type != DETECT_CONTENT)
-                continue;   /* 跳过非 DETECT_CONTENT */
+                continue;   /* 只选择 DETECT_CONTENT */
 
             const DetectContentData *cd = (DetectContentData *)sm->ctx;
             /* fast_pattern set in rule, so using this pattern */
             if ((cd->flags & DETECT_CONTENT_FAST_PATTERN)) {
-                SetMpm(s, sm);       /* 带有快速匹配标识 */
+                SetMpm(s, sm);       /* 带有fast_pattern/快速匹配标识 */
                 return;
             }
 
             if (cd->flags & DETECT_CONTENT_NEGATED) {
                 n_sm_list[list_id] = 1;
-                count_n_sm_list++;   /* 不带快速匹配标识 */
+                count_n_sm_list++;   /* 不带快速匹配标识, 通过强度计算筛选 */
             } else {
                 nn_sm_list[list_id] = 1;
                 count_nn_sm_list++;
@@ -888,7 +888,7 @@ void RetrieveFPForSig(const DetectEngineCtx *de_ctx, Signature *s)
     /* prefer normal not-negated over negated */
     int *curr_sm_list = NULL;
     int skip_negated_content = 1;
-    if (count_nn_sm_list > 0) {
+    if (count_nn_sm_list > 0) {      /* 筛选时, 尽量选择不带"!"的匹配 */
         curr_sm_list = nn_sm_list;
     } else if (count_n_sm_list > 0) {
         curr_sm_list = n_sm_list;
@@ -1662,16 +1662,16 @@ static void PreparePktMpms(DetectEngineCtx *de_ctx, SigGroupHead *sh)
  *
  */
 int PatternMatchPrepareGroup(DetectEngineCtx *de_ctx, SigGroupHead *sh)
-{   /* 构建本规则组的多模匹配环境: 基于报文负载, 流负载 */
+{   /* 构建DETECT_SM_LIST_PMATCH的prefilter多模匹配环境: 基于报文负载, 流负载 */
     MpmStore *mpm_store = NULL;
     if (SGH_PROTO(sh, IPPROTO_TCP)) {
         if (SGH_DIRECTION_TS(sh)) {
-            mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_PKT_TS);
+            mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_PKT_TS);    /* 构建基于报文的fast pattern的prefilter多模引擎 */
             if (mpm_store != NULL) {       /* 加入 SigGroupHead->init->payload_engines */
                 PrefilterPktPayloadRegister(de_ctx, sh, mpm_store->mpm_ctx);
             }
 
-            mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_STREAM_TS);
+            mpm_store = MpmStorePrepareBuffer(de_ctx, sh, MPMB_TCP_STREAM_TS); /* 构建基于流的fast pattern的prefilter多模引擎 */
             if (mpm_store != NULL) {       /* 加入 SigGroupHead->init->payload_engines */
                 PrefilterPktStreamRegister(de_ctx, sh, mpm_store->mpm_ctx);
             }
@@ -1710,9 +1710,9 @@ int PatternMatchPrepareGroup(DetectEngineCtx *de_ctx, SigGroupHead *sh)
             PrefilterPktPayloadRegister(de_ctx, sh, mpm_store->mpm_ctx);
         }
     }
-    /* 构建全局注册的关键字多模引擎(DetectEngineCtx->app_mpms_list/pkt_mpms_list), 并加入此规则组 */
-    PrepareAppMpms(de_ctx, sh);    /* 构建 SigGroupHead->init->app_mpms[] */
-    PreparePktMpms(de_ctx, sh);    /* 构建 SigGroupHead->init->pkt_mpms[] */
+    /* 构建动态检测类型的prefilter多模引擎(DetectEngineCtx->app_mpms_list/pkt_mpms_list), 并加入 SigGroupHead->init->tx_engines */
+    PrepareAppMpms(de_ctx, sh);    /* 构建并存储上下文 SigGroupHead->init->app_mpms[] */
+    PreparePktMpms(de_ctx, sh);    /* 构建并存储上下文 SigGroupHead->init->pkt_mpms[] */
     return 0;
 }
 
@@ -1743,18 +1743,18 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
     /* Count the amount of memory needed to store all the structures
      * and the content of those structures. This will over estimate the
      * true size, since duplicates are removed below, but counted here.
-     */
+     *//* 查找支持fast pattern的匹配 */
     for (s = de_ctx->sig_list; s != NULL; s = s->next) {
         if (s->flags & SIG_FLAG_PREFILTER)
             continue;
 
-        RetrieveFPForSig(de_ctx, s);          /* 提取规则的快速匹配, 初始化 Signature->init_data->mpm_sm */
+        RetrieveFPForSig(de_ctx, s);          /* 提取某content作为fast pattern/快速匹配, 初始化 Signature->init_data->mpm_sm */
         if (s->init_data->mpm_sm != NULL) {   /* 统计所需内存 */
             DetectContentData *cd = (DetectContentData *)s->init_data->mpm_sm->ctx;
             struct_total_size += sizeof(DetectFPAndItsId);
             content_total_size += cd->content_len;
 
-            s->flags |= SIG_FLAG_PREFILTER;
+            s->flags |= SIG_FLAG_PREFILTER;   /* 设定标识, 以支持prefilter */
         }
     }
     /* no rules */
@@ -1773,7 +1773,7 @@ int DetectSetFastPatternAndItsId(DetectEngineCtx *de_ctx)
     uint8_t *content_offset = ahb + struct_total_size;
 
     for (s = de_ctx->sig_list; s != NULL; s = s->next) {
-        if (s->init_data->mpm_sm != NULL) {   /* 去重, 计数支持fast pattern的 SigMatch 数 */
+        if (s->init_data->mpm_sm != NULL) {   /* 去重（因为content匹配可能相同）, 计数支持fast pattern的 SigMatch 数 */
             int sm_list = SigMatchListSMBelongsTo(s, s->init_data->mpm_sm);
             BUG_ON(sm_list == -1);
 

@@ -84,22 +84,22 @@ static int DetectWithinSetup(DetectEngineCtx *de_ctx, Signature *s, const char *
 
     /* verify other conditions */
     DetectContentData *cd = (DetectContentData *)pm->ctx;
-    if (cd->flags & DETECT_CONTENT_WITHIN) {
+    if (cd->flags & DETECT_CONTENT_WITHIN) { /* within仅允许配置一次 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use multiple withins for the same content.");
         goto end;
-    }
+    }                                        /* 与depth或offset不能同时使用 */
     if ((cd->flags & DETECT_CONTENT_DEPTH) || (cd->flags & DETECT_CONTENT_OFFSET)) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use a relative "
                    "keyword like within/distance with a absolute "
                    "relative keyword like depth/offset for the same "
                    "content." );
         goto end;
-    }
+    }                                        /* */
     if (cd->flags & DETECT_CONTENT_NEGATED && cd->flags & DETECT_CONTENT_FAST_PATTERN) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't have a relative "
                    "negated keyword set along with a fast_pattern");
         goto end;
-    }
+    }                                        /* */
     if (cd->flags & DETECT_CONTENT_FAST_PATTERN_ONLY) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't have a relative "
                    "keyword set along with a fast_pattern:only;");
@@ -112,7 +112,7 @@ static int DetectWithinSetup(DetectEngineCtx *de_ctx, Signature *s, const char *
                        "seen in within - %s\n", str);
             goto end;
         }
-        cd->within = index;
+        cd->within = index;                  /* 引用了变量 */
         cd->flags |= DETECT_CONTENT_WITHIN_VAR;
     } else {
         if (StringParseInt32(&cd->within, 0, 0, str) < 0) {
@@ -129,7 +129,7 @@ static int DetectWithinSetup(DetectEngineCtx *de_ctx, Signature *s, const char *
             goto end;
         }
     }
-    cd->flags |= DETECT_CONTENT_WITHIN;
+    cd->flags |= DETECT_CONTENT_WITHIN;      /* 设置标识 */
 
     /* these are the only ones against which we set a flag.  We have other
      * relative keywords like byttest, isdataat, bytejump, but we don't
@@ -148,7 +148,7 @@ static int DetectWithinSetup(DetectEngineCtx *de_ctx, Signature *s, const char *
                        "have relative keywords around a fast_pattern "
                        "only content");
             goto end;
-        }
+        }                                    /* 相对匹配更新: 更新上一个匹配, 告知当前匹配需要其先匹配, 才能继续匹配 */
         prev_cd->flags |= DETECT_CONTENT_WITHIN_NEXT;
     } else if (prev_pm->type == DETECT_PCRE) {
         DetectPcreData *pd = (DetectPcreData *)prev_pm->ctx;

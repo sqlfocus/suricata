@@ -191,10 +191,10 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
                    "be used with the replace rule keyword",
                    sigmatch_table[sm_type].name);
         goto end;
-    }
+    }                                            /* 后续要移动, 因此变更within/distance标识 */
     if (cd->flags & (DETECT_CONTENT_WITHIN | DETECT_CONTENT_DISTANCE)) {
-        SigMatch *pm = DetectGetLastSMByListPtr(s, sm->prev,
-            DETECT_CONTENT, DETECT_PCRE, -1);
+        SigMatch *pm = DetectGetLastSMByListPtr(s, sm->prev, /* 移动前所在列表的前一个content */
+            DETECT_CONTENT, DETECT_PCRE, -1); 
         if (pm != NULL) {
             if (pm->type == DETECT_CONTENT) {
                 DetectContentData *tmp_cd = (DetectContentData *)pm->ctx;
@@ -205,7 +205,7 @@ int DetectEngineContentModifierBufferSetup(DetectEngineCtx *de_ctx,
             }
         }
 
-        pm = DetectGetLastSMByListId(s, sm_list,
+        pm = DetectGetLastSMByListId(s, sm_list,             /* 移动后所在列表的前一个content */
             DETECT_CONTENT, DETECT_PCRE, -1);
         if (pm != NULL) {
             if (pm->type == DETECT_CONTENT) {
@@ -425,14 +425,14 @@ static SigMatch *SigMatchGetLastSMByType(SigMatch *sm, int type)
  *         MPM.
  *  \note only supports the lists that are registered through
  *        DetectBufferTypeSupportsMpm().
- */
+ *//* 获取支持MPM的最后的CONTENT匹配 */
 SigMatch *DetectGetLastSMFromMpmLists(const DetectEngineCtx *de_ctx, const Signature *s)
 {
     SigMatch *sm_last = NULL;
     SigMatch *sm_new;
     uint32_t sm_type;
 
-    /* if we have a sticky buffer, use that */
+    /* 从sticky buffer选择支持MPM的content匹配, if we have a sticky buffer, use that */
     if (s->init_data->list != DETECT_SM_LIST_NOTSET) {
         if (!(DetectBufferTypeSupportsMpmGetById(de_ctx, s->init_data->list))) {
             return NULL;
@@ -444,7 +444,7 @@ SigMatch *DetectGetLastSMFromMpmLists(const DetectEngineCtx *de_ctx, const Signa
         return sm_last;
     }
 
-    /* otherwise brute force it */
+    /* 遍历获取支持MPM的content匹配, otherwise brute force it */
     for (sm_type = 0; sm_type < s->init_data->smlists_array_size; sm_type++) {
         if (!DetectBufferTypeSupportsMpmGetById(de_ctx, sm_type))
             continue;
@@ -474,7 +474,7 @@ SigMatch *DetectGetLastSMFromLists(const Signature *s, ...)
     for (int buf_type = 0; buf_type < (int)s->init_data->smlists_array_size; buf_type++) {
         if (s->init_data->smlists[buf_type] == NULL)
             continue;
-        if (s->init_data->list != DETECT_SM_LIST_NOTSET &&
+        if (s->init_data->list != DETECT_SM_LIST_NOTSET &&  /* 如果存在sticky buffer, "只能!!!"从其中搜索 */
             buf_type != s->init_data->list)
             continue;
 
@@ -571,8 +571,8 @@ SigMatch *DetectGetLastSMByListId(const Signature *s, int list_id, ...)
  * \brief Returns the sm with the largest index (added latest) from this sig
  *
  * \retval sm_last Pointer to last sm
- */
-SigMatch *DetectGetLastSM(const Signature *s)
+ *//* 提取最后注册的匹配: 按类型遍历规则的匹配列表, 只比较尾端元素, 选择 */
+SigMatch *DetectGetLastSM(const Signature *s) /* 索引最大的（注册越晚索引越大） */
 {
     const int nlists = s->init_data->smlists_array_size;
     SigMatch *sm_last = NULL;
@@ -824,7 +824,7 @@ static int SigParseOptions(DetectEngineCtx *de_ctx, Signature *s, char *optstr, 
         }
         return setup_ret;
     }
-    s->init_data->negated = false;
+    s->init_data->negated = false;       /* 新的关键字解析前清除 */
 
     if (strlen(optend) > 0) {   /* 去除已解析的部分，等待下一次解析 */
         strlcpy(output, optend, output_size);
@@ -1249,9 +1249,9 @@ static int SigParse(DetectEngineCtx *de_ctx, Signature *s,
         } while (ret == 1);
     }
                                       /* 去除 Signature->init_data->smlists[DETECT_SM_LIST_MATCH] */
-    DetectIPProtoRemoveAllSMs(de_ctx, s);  /* 中 DETECT_IPPROTO 类型的规则; 因为此规则要求的L3/L4协议已 */
-                                           /* 写入Signature->proto.proto[], 且在匹配流程上优先匹配协议 */
-    SCReturnInt(ret);                      /* 以加速筛选(如果防止在匹配中,则它之前的匹配都需要过, 浪费不少时间) */
+    DetectIPProtoRemoveAllSMs(de_ctx, s);  /* 中 DETECT_IPPROTO 类型的规则; 因为此规则要求的L3/L4协议已在 */
+                                           /* setup()时写入Signature->proto.proto[], 且在主流程上先匹配协议, 再 */
+    SCReturnInt(ret);                      /* 进行具体"匹配", 此类型匹配算是冗余了 */
 }
 
 Signature *SigAlloc (void)
@@ -1455,13 +1455,13 @@ void SigFree(DetectEngineCtx *de_ctx, Signature *s)
 int DetectSignatureAddTransform(Signature *s, int transform, void *options)
 {
     /* we only support buffers */
-    if (s->init_data->list == 0) {
+    if (s->init_data->list == 0) {  /* 必须基于sticky buffer, 如 http.uri/DETECT_HTTP_URI 关键字 */
         SCReturnInt(-1);
     }
     if (!s->init_data->list_set) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "transforms must directly follow stickybuffers");
         SCReturnInt(-1);
-    }
+    }                               /* 不能超规格 */
     if (s->init_data->transforms.cnt >= DETECT_TRANSFORMS_MAX) {
         SCReturnInt(-1);
     }
@@ -1469,7 +1469,7 @@ int DetectSignatureAddTransform(Signature *s, int transform, void *options)
     s->init_data->transforms.transforms[s->init_data->transforms.cnt].transform = transform;
     s->init_data->transforms.transforms[s->init_data->transforms.cnt].options = options;
 
-    s->init_data->transforms.cnt++;
+    s->init_data->transforms.cnt++; /* 注册内容转换操作 */
     SCLogDebug("Added transform #%d [%s]",
             s->init_data->transforms.cnt,
             s->sig_str);
@@ -1654,7 +1654,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
 
     SCEnter();
 
-    /* check for sticky buffers that were set w/o matches
+    /* 检测sticky buffer, 它必须设置匹配; check for sticky buffers that were set w/o matches
      * e.g. alert ... (file_data; sid:1;) */
     if (s->init_data->list != DETECT_SM_LIST_NOTSET) {
         if (s->init_data->smlists[s->init_data->list] == NULL) {
@@ -1664,7 +1664,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
         }
     }
 
-    /* run buffer type validation callbacks if any */
+    /* 检测dsize关键字和content关键字之间是否存在长度冲突; run buffer type validation callbacks if any */
     if (s->init_data->smlists[DETECT_SM_LIST_PMATCH]) {
         if (DetectContentPMATCHValidateCallback(s) == FALSE)
             SCReturnInt(0);
@@ -1675,7 +1675,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
         int tc;
     } bufdir[nlists];
     memset(&bufdir, 0, nlists * sizeof(struct BufferVsDir));
-
+    /* 具有验证回调的检测类型，验证其对应的规则是否valid? */
     int x;
     for (x = 0; x < nlists; x++) {
         if (s->init_data->smlists[x]) {
@@ -1696,7 +1696,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
             }
         }
     }
-
+    /* 检查规则方向是否正确, 如流 */
     int ts_excl = 0;
     int tc_excl = 0;
     int dir_amb = 0;
@@ -1760,7 +1760,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
                    "support keywords in one direction within a rule.");
         SCReturnInt(0);
     }
-
+    /* 检查是否满足必备条件, 如基于逐包的匹配和基于状态的匹配不能混配 */
     if (s->flags & SIG_FLAG_REQUIRE_PACKET) {
         for (int i = 0; i < nlists; i++) {
             if (s->init_data->smlists[i] == NULL)
@@ -1781,7 +1781,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
     /* TCP: corner cases:
      * - pkt vs stream vs depth/offset
      * - pkt vs stream vs stream_size
-     */
+     *//* 补充TCP相关规则标识 */
     if (s->proto.proto[IPPROTO_TCP / 8] & (1 << (IPPROTO_TCP % 8))) {
         if (s->init_data->smlists[DETECT_SM_LIST_PMATCH]) {
             if (!(s->flags & (SIG_FLAG_REQUIRE_PACKET | SIG_FLAG_REQUIRE_STREAM))) {
@@ -1808,7 +1808,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
             }
         }
     }
-
+    /* 如果存在base64检测类型, 则不应该存在其他buffer检测类型; 因为设计上, 不能基于base64 */
     if (s->init_data->smlists[DETECT_SM_LIST_BASE64_DATA] != NULL) {
         int list;
         uint16_t idx = s->init_data->smlists[DETECT_SM_LIST_BASE64_DATA]->idx;
@@ -1847,7 +1847,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
         }
     }
 #endif
-
+    /* 如果规则需要文件匹配, 则相应的协议应该支持文件 */
     if ((s->flags & SIG_FLAG_FILESTORE) || s->file_flags != 0 ||
         (s->init_data->init_flags & SIG_FLAG_INIT_FILEDATA)) {
         if (s->alproto != ALPROTO_UNKNOWN &&
@@ -1866,7 +1866,7 @@ static int SigValidate(DetectEngineCtx *de_ctx, Signature *s)
         if (s->alproto == ALPROTO_HTTP) {
             AppLayerHtpNeedFileInspection();
         }
-    }
+    }/* DCERPC关键字检测 */
     if (s->init_data->init_flags & SIG_FLAG_INIT_DCERPC) {
         if (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_DCERPC &&
                 s->alproto != ALPROTO_SMB) {
@@ -1918,7 +1918,7 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     if (sig->alproto != ALPROTO_UNKNOWN) {
         int override_needed = 0;  /* 解析规则时，已赋值应用层协议 */
         if (sig->proto.flags & DETECT_PROTO_ANY) { /* 例如option中包含 http.protocol */
-            sig->proto.flags &= ~DETECT_PROTO_ANY; /* 未明确指定协议的, 需要重新指定 */
+            sig->proto.flags &= ~DETECT_PROTO_ANY; /* 未明确指定L4协议的, 需要重新指定 */
             memset(sig->proto.proto, 0x00, sizeof(sig->proto.proto));
             override_needed = 1;
         } else {
@@ -1939,7 +1939,7 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
             AppLayerProtoDetectSupportedIpprotos(sig->alproto, sig->proto.proto);
     }
                                   /* "app-layer-events"事件匹配列表阶段2处理，初始化 DetectAppLayerEventData->event_id */
-    ret = DetectAppLayerEventPrepare(de_ctx, sig);
+    ret = DetectAppLayerEventPrepare(de_ctx, sig); /* 因为解析阶段, sig->proto.proto可能没有正确赋值（前置代码根据app类型更新它） */
     if (ret == -3) {
         de_ctx->sigerror_silent = true;
         de_ctx->sigerror_ok = true;
@@ -1961,8 +1961,8 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
             for ( ; sm != NULL; sm = sm->next) {
                 if (sigmatch_table[sm->type].Match != NULL)
                     sig->init_data->init_flags |= SIG_FLAG_INIT_PACKET;
-            }
-        } else {
+            }                      /* 如果设置了 SIG_FLAG_APPLAYER, 则只考虑应用层 */
+        } else {                   /* 否则设置报文检测标识 */
             sig->init_data->init_flags |= SIG_FLAG_INIT_PACKET;
         }
     }
@@ -1971,7 +1971,7 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
         if ((sig->flags & (SIG_FLAG_TOSERVER|SIG_FLAG_TOCLIENT)) == 0) {
             sig->flags |= SIG_FLAG_TOSERVER;
             sig->flags |= SIG_FLAG_TOCLIENT;
-        }
+        }                          /* 没有流明确方向, 则双向检测 */
     }
 
     SCLogDebug("sig %"PRIu32" SIG_FLAG_APPLAYER: %s, SIG_FLAG_PACKET: %s",
@@ -1984,11 +1984,11 @@ static Signature *SigInitHelper(DetectEngineCtx *de_ctx, const char *sigstr,
     for (uint32_t x = 0; x < sig->init_data->smlists_array_size; x++) {
         if (sig->init_data->smlists[x])
             DetectBufferRunSetupCallback(de_ctx, x, sig);
-    }                              /* 根据检测类型，完善规则字段 */
+    }                              /* 某些检测类型, 做优化调整, 如http.uri中包含了urilen关键字, 则会调整content的匹配深度 */
 
     /* validate signature, SigValidate will report the error reason */
     if (SigValidate(de_ctx, sig) == 0) {
-        goto error;
+        goto error;                /* 合法性检测, 并依赖回调函数等调整某些标识 */
     }
 
     /* check what the type of this sig is */

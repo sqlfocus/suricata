@@ -1,6 +1,24 @@
 本文档介绍至关重要的suricata规则，以期更加深入了解，并借此能够优
 化suricata的检测流程
 
+suricata是由规则驱动起来的, 规则分为"action header(option)"几部分组
+成; 其中option是关键, 它由若干关键字组成, 而关键字又分为内容关键字、
+修饰关键字等。
+
+其中内容关键字如content、pcre等, 其结果解析为"匹配"; 修饰关键字如
+depth、within等作用于内容关键字, 提供多个内容匹配的相对关系.
+
+还有http.uri、http.user_agent、tcp.hdr等sticky buffer关键字, 将转
+换关键字(to_md5)、内容关键字(content、pcre)等铆钉在特定内存上, 而
+不是泛泛的报文的payload.
+
+“匹配”被注册到特定类型链表(DETECT_SM_LIST_PMATCH)上, 以提供逐包、
+打tag、匹配后动作等不同的匹配行为. 其中sticky buffer注册时, 创建
+新类型, 以支持针对特定内存的"匹配"
+
+为了加速匹配, 将规则组织到不同的组内, 如IPonly、app event、基于协
+议+端口的组等
+
 * 参考
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricata_Rules][官网规则简介]]
 - [[https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Fast_pattern][fast pattern关键字]]

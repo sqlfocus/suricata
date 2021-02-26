@@ -106,21 +106,21 @@ void DetectHttpUriRegister (void)
     sigmatch_table[DETECT_HTTP_URI].Setup = DetectHttpUriSetupSticky;
     sigmatch_table[DETECT_HTTP_URI].flags |= SIGMATCH_NOOPT|SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("http_uri", ALPROTO_HTTP,  /* 注册到应用检测引擎 */
+    DetectAppLayerInspectEngineRegister2("http_uri", ALPROTO_HTTP,  /* 注册到应用检测引擎, g_app_inspect_engines */
             SIG_FLAG_TOSERVER, HTP_REQUEST_LINE,
             DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("http_uri", SIG_FLAG_TOSERVER, 2,    /* 注册到多模引擎列表, g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
+    DetectAppLayerMpmRegister2("http_uri", SIG_FLAG_TOSERVER, 2,    /* 注册到多模检测引擎, g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
             PrefilterGenericMpmRegister, GetData, ALPROTO_HTTP,
             HTP_REQUEST_LINE);
 
     DetectBufferTypeSetDescriptionByName("http_uri",      /* 添加描述性语句 */
             "http request uri");
 
-    DetectBufferTypeRegisterSetupCallback("http_uri",     /* 添加构建回调函数 */
+    DetectBufferTypeRegisterSetupCallback("http_uri",     /* 添加构建回调函数, 一条规则解析完毕(调用setup()后), 调用此函数 */
             DetectHttpUriSetupCallback);
 
-    DetectBufferTypeRegisterValidateCallback("http_uri",  /* 添加验证回调函数 */
+    DetectBufferTypeRegisterValidateCallback("http_uri",  /* 添加验证回调函数, 一条规则解析完毕后由 SigValidate() 调用 */
             DetectHttpUriValidateCallback);
                                                           /* 存储检测类型 */
     g_http_uri_buffer_id = DetectBufferTypeGetByName("http_uri");

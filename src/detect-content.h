@@ -28,22 +28,22 @@
 
 #define DETECT_CONTENT_NOCASE            BIT_U32(0)
 #define DETECT_CONTENT_DISTANCE          BIT_U32(1)
-#define DETECT_CONTENT_WITHIN            BIT_U32(2)
+#define DETECT_CONTENT_WITHIN            BIT_U32(2)   /* within关键字 */
 #define DETECT_CONTENT_OFFSET            BIT_U32(3)
-#define DETECT_CONTENT_DEPTH             BIT_U32(4)
-#define DETECT_CONTENT_FAST_PATTERN      BIT_U32(5)   /* 支持多模式匹配 */
-#define DETECT_CONTENT_FAST_PATTERN_ONLY BIT_U32(6)
-#define DETECT_CONTENT_FAST_PATTERN_CHOP BIT_U32(7)
+#define DETECT_CONTENT_DEPTH             BIT_U32(4)   /* depth关键字 */
+#define DETECT_CONTENT_FAST_PATTERN      BIT_U32(5)   /* prefilter修饰content/fast_pattern关键字, 支持prefilter匹配 */
+#define DETECT_CONTENT_FAST_PATTERN_ONLY BIT_U32(6)   /* fast_pattern:only */
+#define DETECT_CONTENT_FAST_PATTERN_CHOP BIT_U32(7)   /* fast_pattern:offset,len */
 /** content applies to a "raw"/undecoded field if applicable */
 #define DETECT_CONTENT_RAWBYTES          BIT_U32(8)
 /** content is negated */
-#define DETECT_CONTENT_NEGATED           BIT_U32(9)
+#define DETECT_CONTENT_NEGATED           BIT_U32(9)   /* 匹配为前置了否定符号, "!" */
 
-#define DETECT_CONTENT_ENDS_WITH         BIT_U32(10)
+#define DETECT_CONTENT_ENDS_WITH         BIT_U32(10)  /* endswith关键字 */
 
 /* BE - byte extract */
 #define DETECT_CONTENT_OFFSET_VAR        BIT_U32(11)
-#define DETECT_CONTENT_DEPTH_VAR         BIT_U32(12)
+#define DETECT_CONTENT_DEPTH_VAR         BIT_U32(12)  /* depth, 引用了变量 */
 #define DETECT_CONTENT_DISTANCE_VAR      BIT_U32(13)
 #define DETECT_CONTENT_WITHIN_VAR        BIT_U32(14)
 
@@ -54,13 +54,13 @@
  * the inspection phase */
 #define DETECT_CONTENT_NO_DOUBLE_INSPECTION_REQUIRED BIT_U32(16)
 
-#define DETECT_CONTENT_WITHIN_NEXT      BIT_U32(17)
+#define DETECT_CONTENT_WITHIN_NEXT      BIT_U32(17)   /* 下一个匹配设定了within关键字 */
 #define DETECT_CONTENT_DISTANCE_NEXT    BIT_U32(18)
 #define DETECT_CONTENT_STARTS_WITH      BIT_U32(19)
 /** MPM pattern selected by the engine or forced by fast_pattern keyword */
 #define DETECT_CONTENT_MPM              BIT_U32(20)
 
-/** a relative match to this content is next, used in matching phase */
+/* 此匹配后, 紧跟的匹配依赖此匹配结果; * a relative match to this content is next, used in matching phase */
 #define DETECT_CONTENT_RELATIVE_NEXT    (DETECT_CONTENT_WITHIN_NEXT|DETECT_CONTENT_DISTANCE_NEXT)
 
 #define DETECT_CONTENT_IS_SINGLE(c) (!( ((c)->flags & DETECT_CONTENT_DISTANCE) || \
@@ -82,13 +82,13 @@
 
 
 #include "util-spm.h"
-/* 基于内容的匹配规则结构 */
+/* 基于"content"/DETECT_CONTENT 内容的匹配规则结构 */
 typedef struct DetectContentData_ {
-    uint8_t *content;      /* 规则的字节数组 */
+    uint8_t *content;      /* 规则的16进制字节数组(指向此结构结尾处) */
     uint16_t content_len;
     uint16_t replace_len;
     /* for chopped fast pattern, the length */
-    uint16_t fp_chop_len;
+    uint16_t fp_chop_len;  /* "fast_pattern:offset,len" */
     /* for chopped fast pattern, the offset */
     uint16_t fp_chop_offset;
     /* would want to move PatIntId here and flags down to remove the padding

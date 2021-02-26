@@ -65,7 +65,7 @@ static int DetectNocaseSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
         goto end;
     }
 
-    /* retrive the sm to apply the nocase against */
+    /* 查找待修饰的content关键字匹配, retrive the sm to apply the nocase against */
     pm = DetectGetLastSMFromLists(s, DETECT_CONTENT, -1);
     if (pm == NULL) {
         SCLogError(SC_ERR_NOCASE_MISSING_PATTERN, "nocase needs "
@@ -76,7 +76,7 @@ static int DetectNocaseSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
     /* verify other conditions. */
     DetectContentData *cd = (DetectContentData *)pm->ctx;;
 
-    if (cd->flags & DETECT_CONTENT_NOCASE) {
+    if (cd->flags & DETECT_CONTENT_NOCASE) {  /* nocase仅能出现一次 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use multiple nocase modifiers with the same content");
         goto end;
     }
@@ -84,12 +84,12 @@ static int DetectNocaseSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
     /* for consistency in later use (e.g. by MPM construction and hashing),
      * coerce the content string to lower-case. */
     for (uint8_t *c = cd->content; c < cd->content + cd->content_len; c++) {
-        *c = u8_tolower(*c);
+        *c = u8_tolower(*c);                  /* 转为小写 */
     }
 
     cd->flags |= DETECT_CONTENT_NOCASE;
     /* Recreate the context with nocase chars */
-    SpmDestroyCtx(cd->spm_ctx);
+    SpmDestroyCtx(cd->spm_ctx);               /* 更新模式匹配环境 */
     cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 1,
                              de_ctx->spm_global_thread_ctx);
     if (cd->spm_ctx == NULL) {

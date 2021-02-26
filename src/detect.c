@@ -130,7 +130,7 @@ static void DetectRun(ThreadVars *th_v,
     DetectRulePacketRules(th_v, de_ctx, det_ctx, p, pflow, &scratch);
     PACKET_PROFILING_DETECT_END(p, PROF_DETECT_RULES);
 
-    /* 运行事务检测，run tx/state inspection. Don't call for ICMP error msgs. */
+    /* 运行事务/应用检测，run tx/state inspection. Don't call for ICMP error msgs. */
     if (pflow && pflow->alstate && likely(pflow->proto == p->proto)) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_TX);
         DetectRunTx(th_v, de_ctx, det_ctx, p, pflow, &scratch);
@@ -139,7 +139,7 @@ static void DetectRun(ThreadVars *th_v,
 
 end:/* 检测后处理：打标签，汇总动作等 */
     DetectRunPostRules(th_v, de_ctx, det_ctx, p, pflow, &scratch);
-
+    /* 清理缓存, 暂存结果等 */
     DetectRunCleanup(det_ctx, p, pflow);
     SCReturn;
 }
@@ -755,7 +755,7 @@ static inline void DetectRulePacketRules(
 
         if (s->app_inspect != NULL) {
             goto next; // handle sig in DetectRunTx
-        }                      /* 掠过携带 应用检测 的Signature */
+        }                      /* 掠过携带 应用检测 的Signature; 在事务中处理处理 */
 
         /* don't run mask check for stateful rules.
          * There we depend on prefilter */
@@ -788,7 +788,7 @@ static inline void DetectRulePacketRules(
         }
 
         if (DetectRunInspectRuleHeader(p, pflow, s, sflags, s_proto_flags) == 0) {
-            goto next;         /* 快速匹配，包括L3协议、地址，L4协议等 */
+            goto next;         /* 五元组匹配，包括L3协议、地址，L4协议等 */
         }
 
         if (DetectEnginePktInspectionRun(tv, det_ctx, s, pflow, p, &alert_flags) == false) {
@@ -797,9 +797,9 @@ static inline void DetectRulePacketRules(
 
 #ifdef PROFILING
         smatch = true;
-#endif                         /* 提取执行动作 */
+#endif                         /* 匹配DETECT_SM_LIST_POSTMATCH */
         DetectRunPostMatch(tv, det_ctx, p, s);
-
+                               /* 记录告警信息 */
         if (!(sflags & SIG_FLAG_NOALERT)) {
             /* stateful sigs call PacketAlertAppend from DeStateDetectStartDetection */
             if (!state_alert)
@@ -946,7 +946,7 @@ static void DetectRunCleanup(DetectEngineThreadCtx *det_ctx,
     PACKET_PROFILING_DETECT_START(p, PROF_DETECT_CLEANUP);
     /* cleanup pkt specific part of the patternmatcher */
     PacketPatternCleanup(det_ctx);
-    InspectionBufferClean(det_ctx);
+    InspectionBufferClean(det_ctx);    /* 清理缓存 */
 
     if (pflow != NULL) {
         /* update inspected tracker for raw reassembly */
@@ -1082,7 +1082,7 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
         }
         if (DetectEnginePktInspectionRun(tv, det_ctx, s, f, p, NULL) == false) {
             TRACE_SID_TXS(s->id, tx, "DetectEnginePktInspectionRun no match");
-            return false;    /* 跑规则对应的逐包检测引擎 */
+            return false;    /* 跑规则对应的逐包检测引擎, ->pkt_inspect */
         }
         /* stream mpm and negated mpm sigs can end up here with wrong proto */
         if (!(f->alproto == s->alproto || s->alproto == ALPROTO_UNKNOWN)) {
@@ -1159,11 +1159,11 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
                 inspect_flags |= BIT_U32(engine->id);
             } else if (match == DETECT_ENGINE_INSPECT_SIG_CANT_MATCH_FILES) {
                 inspect_flags |= DE_STATE_FLAG_SIG_CANT_MATCH;
-                inspect_flags |= BIT_U32(engine->id); /* */
+                inspect_flags |= BIT_U32(engine->id); /* 文件未匹配 */
                 file_no_match = 1;
             }
             /* implied DETECT_ENGINE_INSPECT_SIG_NO_MATCH */
-            if (engine->mpm && mpm_before_progress) { /* */
+            if (engine->mpm && mpm_before_progress) {
                 inspect_flags |= DE_STATE_FLAG_SIG_CANT_MATCH;
                 inspect_flags |= BIT_U32(engine->id);
             }
@@ -1240,7 +1240,7 @@ static DetectTransaction GetDetectTx(const uint8_t ipproto, const AppProto alpro
     } else {
         detect_flags = 0;
     }
-    if (detect_flags & APP_LAYER_TX_INSPECTED_FLAG) {  /* 已经完全检测 */
+    if (detect_flags & APP_LAYER_TX_INSPECTED_FLAG) {  /* 已完成事务检测 */
         SCLogDebug("%"PRIu64" tx already fully inspected for %s. Flags %016"PRIx64,
                 tx_id, flow_flags & STREAM_TOSERVER ? "toserver" : "toclient",
                 detect_flags);
@@ -1295,16 +1295,16 @@ static void DetectRunTx(ThreadVars *tv,
     const AppProto alproto = f->alproto;
 
     const uint64_t total_txs = AppLayerParserGetTxCnt(f, alstate);                       /* 获取事务数 */
-    uint64_t tx_id_min = AppLayerParserGetTransactionInspectId(f->alparser, flow_flags); /* 获取当前正解析的事务ID */
+    uint64_t tx_id_min = AppLayerParserGetTransactionInspectId(f->alparser, flow_flags); /* 获取当前正检测的事务ID */
     const int tx_end_state = AppLayerParserGetStateProgressCompletionStatus(alproto, flow_flags);  /* 获取对应应用的结束标识, 如 HTP_REQUEST_COMPLETE/HTP_RESPONSE_COMPLETE */
 
-    AppLayerGetTxIteratorFunc IterFunc = AppLayerGetTxIterator(ipproto, alproto);
+    AppLayerGetTxIteratorFunc IterFunc = AppLayerGetTxIterator(ipproto, alproto);        /* 事务遍历函数指针 */
     AppLayerGetTxIterState state;
     memset(&state, 0, sizeof(state));
     /* 遍历事务 */
     while (1) {
         AppLayerGetTxIterTuple ires = IterFunc(ipproto, alproto, alstate, tx_id_min, total_txs, &state);
-        if (ires.tx_ptr == NULL)
+        if (ires.tx_ptr == NULL)   /* http -->AppLayerDefaultGetTxIterator() */
             break;
         /* 收集事务相关信息 */
         DetectTransaction tx = GetDetectTx(ipproto, alproto,
@@ -1320,13 +1320,13 @@ static void DetectRunTx(ThreadVars *tv,
 
         uint32_t array_idx = 0;
         uint32_t total_rules = det_ctx->match_array_cnt;
-        total_rules += (tx.de_state ? tx.de_state->cnt : 0);
+        total_rules += (tx.de_state ? tx.de_state->cnt : 0);  /* 前置基于报文prefilter筛选的规则 + 历史匹配到的规则 */
 
-        /* 运行事务预检测引擎, run prefilter engines and merge results into a candidates array */
+        /* 运行事务prefilter检测引擎, run prefilter engines and merge results into a candidates array */
         if (sgh->tx_engines) {
             PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_TX);
             DetectRunPrefilterTx(det_ctx, sgh, p, ipproto, flow_flags, alproto,
-                    alstate, &tx);
+                                 alstate, &tx);
             PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_TX);
             SCLogDebug("%p/%"PRIu64" rules added from prefilter: %u candidates",
                     tx.tx_ptr, tx.tx_id, det_ctx->pmq.rule_id_array_cnt);
@@ -1355,9 +1355,9 @@ static void DetectRunTx(ThreadVars *tv,
         uint32_t x = array_idx;
         for (uint32_t i = 0; i < det_ctx->match_array_cnt; i++) {
             const Signature *s = det_ctx->match_array[i];
-            if (s->app_inspect != NULL) {    /* 需存在应用检测引擎 */
-                const SigIntId id = s->num;
-                det_ctx->tx_candidates[array_idx].s = s;
+            if (s->app_inspect != NULL) {    /* 在前置 DetectRulePacketRules()  */
+                const SigIntId id = s->num;  /* 的逐规则检测逻辑中, 如果有app_inspect引擎, 略过了 */
+                det_ctx->tx_candidates[array_idx].s = s;   /* 此处再加回来 */
                 det_ctx->tx_candidates[array_idx].id = id;
                 det_ctx->tx_candidates[array_idx].flags = NULL;
                 det_ctx->tx_candidates[array_idx].stream_reset = 0;
@@ -1408,7 +1408,7 @@ static void DetectRunTx(ThreadVars *tv,
                     array_idx++;
                 }
             }
-            if (old && old != array_idx) {
+            if (old && old != array_idx) {   /* 如果加入新规则, 重新排序 */
                 qsort(det_ctx->tx_candidates, array_idx, sizeof(RuleMatchCandidateTx),
                         DetectRunTxSortHelper);
 
@@ -1473,7 +1473,7 @@ static void DetectRunTx(ThreadVars *tv,
             RULE_PROFILING_START(p);      /* 规则匹配 */
             const int r = DetectRunTxInspectRule(tv, de_ctx, det_ctx, p, f, flow_flags,
                     alstate, &tx, s, inspect_flags, can, scratch);
-            if (r == 1) {                 /* 匹配后动作 */
+            if (r == 1) {                 /* 匹配 DETECT_SM_LIST_POSTMATCH */
                 /* match */
                 DetectRunPostMatch(tv, det_ctx, p, s);
 

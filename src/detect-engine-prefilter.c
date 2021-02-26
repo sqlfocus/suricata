@@ -113,7 +113,7 @@ void DetectRunPrefilterTx(DetectEngineThreadCtx *det_ctx,
             }
         }
 
-        PREFILTER_PROFILING_START;  /* 运行回调 */
+        PREFILTER_PROFILING_START;  /* 运行回调, 匹配规则存储在 DetectEngineThreadCtx->pmq, http.uri ==> PrefilterMpm() */
         engine->cb.PrefilterTx(det_ctx, engine->pectx,
                 p, p->flow, tx->tx_ptr, tx->tx_id, flow_flags);
         PREFILTER_PROFILING_END(det_ctx, engine->gid);
@@ -140,7 +140,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         Packet *p, const uint8_t flags)
 {
     SCEnter();
-    /* 引擎：报文引擎 */
+    /* 引擎：报文引擎, prefilter关键字 */
     if (sgh->pkt_engines) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_PKT);
         /* run packet engines */
@@ -157,7 +157,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_PKT);
     }
 
-    /* 引擎：报文负载引擎，run payload inspecting engines */
+    /* 引擎：报文负载引擎, fast_pattern关键字; run payload inspecting engines */
     if (sgh->payload_engines &&
         (p->payload_len || (p->flags & PKT_DETECT_HAS_STREAMDATA)) &&
         !(p->flags & PKT_NOPAYLOAD_INSPECTION))
@@ -176,7 +176,7 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_PAYLOAD);
     }
 
-    /* 按 Signature->id 排序已匹配的规则，Sort the rule list to lets look at pmq.
+    /* 按 Signature->num 排序已匹配的规则, 因为->num代表规则的优先级; Sort the rule list to lets look at pmq.
      * NOTE due to merging of 'stream' pmqs we *MAY* have duplicate entries */
     if (likely(det_ctx->pmq.rule_id_array_cnt > 1)) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_SORT1);
@@ -198,7 +198,7 @@ int PrefilterAppendEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
     if (e == NULL)
         return -1;
     memset(e, 0x00, sizeof(*e));
-
+                                   /* DETECT_TTL -> PrefilterPacketTtlMatch() */
     e->Prefilter = PrefilterFunc;  /* DETECT_ACK -> PrefilterPacketAckMatch() */
     e->pectx = pectx;              /* DETECT_ACK -> PrefilterPacketHeaderCtx */
     e->Free = FreeFunc;
@@ -233,8 +233,8 @@ int PrefilterAppendPayloadEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         return -1;
     memset(e, 0x00, sizeof(*e));
 
-    e->Prefilter = PrefilterFunc;
-    e->pectx = pectx;
+    e->Prefilter = PrefilterFunc;  /* "stream" -> PrefilterPktStream()/"payload" -> PrefilterPktPayload() */
+    e->pectx = pectx;              /* MpmCtx */
     e->Free = FreeFunc;
 
     if (sgh->init->payload_engines == NULL) {
@@ -270,7 +270,7 @@ int PrefilterAppendTxEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
         return -1;
     memset(e, 0x00, sizeof(*e));
 
-    e->PrefilterTx = PrefilterTxFunc;
+    e->PrefilterTx = PrefilterTxFunc;      /* PrefilterMpm() */
     e->pectx = pectx;
     e->alproto = alproto;
     e->tx_min_progress = tx_min_progress;
@@ -344,14 +344,14 @@ void PrefilterCleanupRuleGroup(const DetectEngineCtx *de_ctx, SigGroupHead *sgh)
         sgh->tx_engines = NULL;
     }
 }
-/* 构建prefilter规则组 */
+/* 构建规则组的prefilter多模引擎 */
 void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
-{   /* 构建 SigGroupHead 的多模引擎, 本规则组 + 全局关键字 */
+{   /* 内置检测类型 + 动态注册检测类型: 存储到 SigGroupHead->init->payload_engines/tx_engines */
     int r = PatternMatchPrepareGroup(de_ctx, sgh);
     if (r != 0) {
         FatalError(SC_ERR_INITIALIZATION, "failed to set up pattern matching");
     }
-    /* 按注册需求构建多模引擎: 特定关键字“prefilter” */
+    /* 指定关键字“prefilter”:  存储到 SigGroupHead->init->pkt_engines */
     /* set up engines if needed - when prefilter is set to auto we run
      * all engines, otherwise only those that have been forced by the
      * prefilter keyword. */
@@ -361,7 +361,7 @@ void PrefilterSetupRuleGroup(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
         if (sigmatch_table[i].SetupPrefilter != NULL &&
                 (setting == DETECT_PREFILTER_AUTO ||
                  de_ctx->sm_types_prefilter[i]))
-        {
+        {   /* DETECT_TTL -> PrefilterSetupTtl() */
             sigmatch_table[i].SetupPrefilter(de_ctx, sgh);
         }
     }
@@ -574,7 +574,7 @@ typedef struct PrefilterMpmCtx {
  *  \param f flow to inspect
  *  \param txv tx to inspect
  *  \param pectx inspection context
- */
+ *//* 通用事务perfilter入口 */
 static void PrefilterMpm(DetectEngineThreadCtx *det_ctx,
         const void *pectx,
         Packet *p, Flow *f, void *txv,
@@ -607,7 +607,7 @@ static void PrefilterGenericMpmFree(void *ptr)
 {
     SCFree(ptr);
 }
-/* 关键字多模式预处理, 如"http_uri" */
+/* 关键字多模式事务预处理, 如"http_uri" */
 int PrefilterGenericMpmRegister(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, MpmCtx *mpm_ctx,
         const DetectBufferMpmRegistery *mpm_reg, int list_id)

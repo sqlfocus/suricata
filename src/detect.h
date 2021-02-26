@@ -86,7 +86,7 @@ struct SCSigSignatureWrapper_;
  * These codes are access points to particular lists in the array
  * Signature->sm_lists[DETECT_SM_LIST_MAX]. */
 enum DetectSigmatchListEnum {
-    DETECT_SM_LIST_MATCH = 0,  /* 逐包匹配 */
+    DETECT_SM_LIST_MATCH = 0,  /* 逐包匹配, 如 DETECT_TCPMSS */
     DETECT_SM_LIST_PMATCH,     /* pattern式匹配，支持fast pattern, 加入 sm_fp_support_smlist_list */
 
     /* base64_data keyword uses some hardcoded logic so consider
@@ -214,16 +214,16 @@ typedef struct DetectPort_ {
 #define SIG_FLAG_DP_ANY                 BIT_U32(3)  /**< destination port is any */
 
 #define SIG_FLAG_NOALERT                BIT_U32(4)  /**< no alert flag is set */
-#define SIG_FLAG_DSIZE                  BIT_U32(5)  /**< signature has a dsize setting */
+#define SIG_FLAG_DSIZE                  BIT_U32(5)  /* dsize关键字 *< signature has a dsize setting */
 #define SIG_FLAG_APPLAYER               BIT_U32(6)  /* 规则应用于应用层, 而不是报文 *< signature applies to app layer instead of packets */
-#define SIG_FLAG_IPONLY                 BIT_U32(7)  /* 仅检测IP的规则 *< ip only signature */
+#define SIG_FLAG_IPONLY                 BIT_U32(7)  /* 无内容检测规则, 无方向, 基于IP数据的匹配 *< ip only signature */
 
 // vacancy
 
-#define SIG_FLAG_REQUIRE_PACKET         BIT_U32(9)  /**< signature is requiring packet match */
-#define SIG_FLAG_REQUIRE_STREAM         BIT_U32(10) /**< signature is requiring stream match */
+#define SIG_FLAG_REQUIRE_PACKET         BIT_U32(9)  /* 匹配时需要报文, 如ttl/DETECT_TTL *< signature is requiring packet match */
+#define SIG_FLAG_REQUIRE_STREAM         BIT_U32(10) /* flow关键字 *< signature is requiring stream match */
 
-#define SIG_FLAG_MPM_NEG                BIT_U32(11)
+#define SIG_FLAG_MPM_NEG                BIT_U32(11) /* 选做prefilter的匹配 Signature->init_data->mpm_sm 带有取反操作 */
 
 #define SIG_FLAG_FLUSH                  BIT_U32(12) /**< detection logic needs stream flush notification */
 
@@ -244,7 +244,7 @@ typedef struct DetectPort_ {
 
 /** Proto detect only signature.
  *  Inspected once per direction when protocol detection is done. */
-#define SIG_FLAG_PDONLY                 BIT_U32(24)
+#define SIG_FLAG_PDONLY                 BIT_U32(24) /* 仅用于协议识别的规则 */
 /** Info for Source and Target identification */
 #define SIG_FLAG_SRC_IS_TARGET          BIT_U32(25)
 /** Info for Source and Target identification */
@@ -259,10 +259,10 @@ typedef struct DetectPort_ {
 #define SIG_FLAG_INIT_BIDIREC               BIT_U32(3)  /* 五元组方向为'<>', *< signature has bidirectional operator */
 #define SIG_FLAG_INIT_FIRST_IPPROTO_SEEN    BIT_U32(4)  /** < signature has seen the first ip_proto keyword */
 #define SIG_FLAG_INIT_HAS_TRANSFORM         BIT_U32(5)
-#define SIG_FLAG_INIT_STATE_MATCH           BIT_U32(6)  /**< signature has matches that require stateful inspection */
+#define SIG_FLAG_INIT_STATE_MATCH           BIT_U32(6)  /* 应用检测, 需要状态 *< signature has matches that require stateful inspection */
 #define SIG_FLAG_INIT_NEED_FLUSH            BIT_U32(7)  /* 检测需要和流同步 */
 #define SIG_FLAG_INIT_PRIO_EXPLICT          BIT_U32(8)  /* 优先级由规则"priority"字段明确指定, *< priority is explicitly set by the priority keyword */
-#define SIG_FLAG_INIT_FILEDATA              BIT_U32(9)  /**< signature has filedata keyword */
+#define SIG_FLAG_INIT_FILEDATA              BIT_U32(9)  /* file.data/file_data关键字 *< signature has filedata keyword */
 #define SIG_FLAG_INIT_DCERPC                BIT_U32(10) /**< signature has DCERPC keyword */
 
 /* signature mask flags */
@@ -316,12 +316,12 @@ typedef struct SigMatchCtx_ {
     int foo;
 } SigMatchCtx;
 
-/** \brief a single match condition for a signature */
+/** 描述某规则的某个匹配; \brief a single match condition for a signature */
 typedef struct SigMatch_ {
     uint8_t type;     /* DETECT_FLOW */
     uint16_t idx;     /* 在->init_data->smlists[]链表中的索引, [0, N] */
     SigMatchCtx *ctx; /* 对应类型的特殊数据, DETECT_FLOW -> DetectFlowData */
-    struct SigMatch_ *next;
+    struct SigMatch_ *next;               /* DETECT_CONTENT -> DetectContentData */
     struct SigMatch_ *prev;
 } SigMatch;
 
@@ -344,7 +344,7 @@ struct DetectEngineThreadCtx_;// DetectEngineThreadCtx;
 typedef struct InspectionBuffer {
     const uint8_t *inspect; /* 指向待检测内存, = ->buf; *< active pointer, points either to ::buf or ::orig */
     uint64_t inspect_offset;
-    uint32_t inspect_len;   /**< size of active data. See to ::len or ::orig_len */
+    uint32_t inspect_len;   /* 待检测内存长度 *< size of active data. See to ::len or ::orig_len */
     uint8_t flags;          /**< DETECT_CI_FLAGS_* for use with DetectEngineContentInspection */
 
     uint32_t len;           /* ->buf有效数据长度, *< how much is in use */
@@ -402,8 +402,8 @@ typedef int (*InspectEngineFuncPtr2)(
 typedef struct DetectEngineAppInspectionEngine_ {
     AppProto alproto;         /* 应用层协议, ALPROTO_HTTP */
     uint8_t dir;              /* 0 - SIG_FLAG_TOSERVER */
-    uint8_t id;     /**< per sig id used in state keeping */
-    uint16_t mpm:1;           /* */
+    uint8_t id;               /* 单规则的引擎列表, 索引 *< per sig id used in state keeping */
+    uint16_t mpm:1;           /* 是否支持多模检测 */
     uint16_t stream:1;
     uint16_t sm_list:14;      /* 检测类型索引, DetectBufferType->id */
     int16_t progress;         /* 应用解析所处的阶段, 如 “http_uri” -> HTP_REQUEST_LINE */
@@ -432,7 +432,7 @@ typedef struct DetectBufferType_ {
     const char *string; /* 检测类型，如http_uri */
     const char *description;   /* 描述性字符串, 如"http request uri" */
     int id;             /* 检测类型ID, 如 g_http_uri_buffer_id; 由 g_buffer_type_id 递增控制ID值, 位于 DETECT_SM_LIST_DYNAMIC_START 之后 */
-    int parent_id;
+    int parent_id;      /* 注册"检测类型+转换"时, 对应"检测类型->id" */
     bool mpm;                  /* 是否支持多模引擎 */
     bool packet;               /* 是否支持报文检测 *< compat to packet matches */
     bool supports_transforms;              /* 是否定义了转换, 如去掉空字符 DETECT_TRANSFORM_STRIP_WHITESPACE */
@@ -494,18 +494,18 @@ typedef struct SignatureInitData_ {
     /* coccinelle: SignatureInitData:init_flags:SIG_FLAG_INIT_ */
 
     /* used at init to determine max dsize */
-    SigMatch *dsize_sm;     /* DetectDsizeData, 设定了检测长度的匹配 */
+    SigMatch *dsize_sm;     /* DetectDsizeData, dsize/DETECT_DSIZE 关键字, 设定了检测长度的匹配 */
 
     /* the fast pattern added from this signature */
     SigMatch *mpm_sm;       /* DetectContentData, 规则匹配列表支持fast pattern的匹配（且强度最高） */
     /* used to speed up init of prefilter */
-    SigMatch *prefilter_sm; /* 超前处理, prefilter关键字对应的配置项 */
+    SigMatch *prefilter_sm; /* prefilter关键字对应的匹配 */
 
     /* SigMatch list used for adding content and friends. E.g. file_data; */
-    int list;               /* 用于内容匹配的->smlists[]索引, DETECT_SM_LIST_PMATCH */
-    bool list_set;          /* 记录与此, 便于向此匹配添加修改关键词, 如"http_uri" */
+    int list;               /* 用于内容匹配的->smlists[]索引, 如 DETECT_SM_LIST_PMATCH/"http.uri"/"tcp.hdr" */
+    bool list_set;          /* 便于向此匹配添加修改关键词(to_md5/DETECT_TRANSFORM_MD5) */
 
-    DetectEngineTransforms transforms;
+    DetectEngineTransforms transforms;/* 记录内容转换, 如to_md5/DETECT_TRANSFORM_MD5 */
 
     /** score to influence rule grouping. A higher value leads to a higher
      *  likelihood of a rulegroup with this sig ending up as a contained
@@ -535,7 +535,7 @@ typedef struct Signature_ {
     uint16_t dsize_high;
 
     SignatureMask mask;  /* SIG_MASK_REQUIRE_DCERPC */
-    SigIntId num;        /* 内部ID, 由 DetectEngineCtx->signum 递增得到 */
+    SigIntId num;        /* 内部ID, 由 DetectEngineCtx->signum 递增得到; 按优先级排序后, 可作为优先级顺序 */
 
     /** inline -- action */
     uint8_t action;      /* 规则动作, ACTION_ALERT */
@@ -572,9 +572,9 @@ typedef struct Signature_ {
 
     /** netblocks and hosts specified at the sid, in CIDR format */
     IPOnlyCIDRItem *CidrSrc, *CidrDst;        /* 临时变量，存放规则IP地址信息；当 SIG_FLAG_IPONLY 时, 加速匹配 */
-    /* 自定义类型检测引擎, 包括 >DETECT_SM_LIST_DYNAMIC_START/自注册, DETECT_SM_LIST_MATCH, DETECT_SM_LIST_PMATCH */
-    DetectEngineAppInspectionEngine *app_inspect;  /* 应用引擎 */
-    DetectEnginePktInspectionEngine *pkt_inspect;  /* 逐包报文引擎 */
+    /* 本规则匹配检测引擎列表, 包括 >DETECT_SM_LIST_DYNAMIC_START/自注册, DETECT_SM_LIST_MATCH, DETECT_SM_LIST_PMATCH */
+    DetectEngineAppInspectionEngine *app_inspect;  /* 应用引擎, 来自 g_app_inspect_engines */
+    DetectEnginePktInspectionEngine *pkt_inspect;  /* 逐包报文引擎(prefilter多模式匹配在前), 来自 g_pkt_inspect_engines */
 
     /* Matching structures for the built-ins. The others are in
      * their inspect engines. *//* 内置类型的检测引擎, <DETECT_SM_LIST_MAX */
@@ -601,8 +601,8 @@ typedef struct Signature_ {
 } Signature;
 
 enum DetectBufferMpmType {
-    DETECT_BUFFER_MPM_TYPE_PKT,
-    DETECT_BUFFER_MPM_TYPE_APP,
+    DETECT_BUFFER_MPM_TYPE_PKT,  /* 针对报文的多模引擎 */
+    DETECT_BUFFER_MPM_TYPE_APP,  /* 针对应用的多模引擎 */
     /* must be last */
     DETECT_BUFFER_MPM_TYPE_SIZE,
 };
@@ -621,7 +621,7 @@ typedef struct DetectBufferMpmRegistery_ {
     int (*PrefilterRegisterWithListId)(struct DetectEngineCtx_ *de_ctx,
             struct SigGroupHead_ *sgh, MpmCtx *mpm_ctx,
             const struct DetectBufferMpmRegistery_ *mpm_reg, int list_id);
-    DetectEngineTransforms transforms;          /* 支持的内容修饰列表 */
+    DetectEngineTransforms transforms;          /* 支持的内容修饰列表, 如 to_md5/DETECT_TRANSFORM_MD5 关键字 */
 
     union {
         /* app-layer matching: use if type == DETECT_BUFFER_MPM_TYPE_APP */
@@ -669,7 +669,7 @@ typedef struct DetectVarList_ {
 typedef struct DetectEngineIPOnlyThreadCtx_ {
     uint8_t *sig_match_array; /* bit array of sig nums */
     uint32_t sig_match_size;  /* size in bytes of the array */
-} DetectEngineIPOnlyThreadCtx;   /* 记录IPonly引擎匹配到的规则集 */
+} DetectEngineIPOnlyThreadCtx;   /* 记录IPonly引擎'源+目的IP地址'匹配到的规则集, 待进一步过'匹配' */
 
 /** \brief IP only rules matching ctx. */
 typedef struct DetectEngineIPOnlyCtx_ {
@@ -697,12 +697,12 @@ typedef struct DetectEngineIPOnlyCtx_ {
 
     /* number of sigs in this head */
     uint32_t sig_cnt;
-    uint32_t *match_array;   /* */
+    uint32_t *match_array;   /* 归属到本组的规则 */
 } DetectEngineIPOnlyCtx;
 
 typedef struct DetectEngineLookupFlow_ {
-    DetectPort *tcp;      /* tcp协议规则组 */
-    DetectPort *udp;      /* udp协议规则组 */
+    DetectPort *tcp;      /* tcp协议规则组链表, 已按优先级排序 */
+    DetectPort *udp;      /* udp协议规则组链表 */
     struct SigGroupHead_ *sgh[256];  /* 非TCP/UDP协议规则组 */
 } DetectEngineLookupFlow;
 
@@ -771,7 +771,7 @@ typedef struct DetectEngineCtx_ {
     int tenant_id;
 
     Signature *sig_list;          /* 检测规则列表，<TK!!!>已按优先级排序 */
-    uint32_t sig_cnt;
+    uint32_t sig_cnt;             /* 规则数量, = ->signum */
 
     /* version of the srep data */
     uint32_t srep_version;
@@ -780,10 +780,10 @@ typedef struct DetectEngineCtx_ {
     SRepCIDRTree *srepCIDR_ctx;   /* IP信誉库 */
 
     Signature **sig_array;        /* 存放所有规则, ->sig_list, 以加速访问 */
-    uint32_t sig_array_size; /* size in bytes */
-    uint32_t sig_array_len;  /* size in array members */
+    uint32_t sig_array_size;      /* 占用内存大小, size in bytes */
+    uint32_t sig_array_len;       /* 数组大小, = ->signum; size in array members */
 
-    uint32_t signum;              /* 检测规则数量 */
+    uint32_t signum;              /* 解析时逐条++, 得到的检测规则数量; 按优先级排序后, 重新计数得到规则数量 */
 
     /** Maximum value of all our sgh's non_mpm_store_cnt setting,
      *  used to alloc det_ctx::non_mpm_id_array */
@@ -821,7 +821,7 @@ typedef struct DetectEngineCtx_ {
     SpmGlobalThreadCtx *spm_global_thread_ctx;  /* 单模引擎全局上下文 */
                                                 /* 用于构建各线程检测上下文 */
     /* Config options */
-                             /* "detect.profile", 性能指标：高性能使用内存多 */
+                             /* "detect.profile", 性能指标：高性能使用内存多; 指定的数字为组个数 */
     uint16_t max_uniq_toclient_groups;  /* 20 */  /* 低性能使用内存少；此选 */
     uint16_t max_uniq_toserver_groups;  /* 40 */  /* 项需要在性能和内存之间平衡 */
 
@@ -912,7 +912,7 @@ typedef struct DetectEngineCtx_ {
                                  /* 预检测仅使用mpm, DETECT_PREFILTER_MPM */
     HashListTable *dport_hash_table;  /* 临时hash表, DetectPort; 用于初始化流程 */
 
-    DetectPort *tcp_whitelist;   /* 配置的端口白名单 */
+    DetectPort *tcp_whitelist;   /* 配置的端口, 可形成单独的组 */
     DetectPort *udp_whitelist;
 
     /** table for storing the string representation with the parsers result */
@@ -931,15 +931,15 @@ typedef struct DetectEngineCtx_ {
 
     /* list with app inspect engines. Both the start-time registered ones and
      * the rule-time registered ones. */
-    DetectEngineAppInspectionEngine *app_inspect_engines; /* 复制自 g_app_inspect_engines */
-    DetectBufferMpmRegistery *app_mpms_list;  
-    uint32_t app_mpms_list_cnt;  /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
-    DetectEnginePktInspectionEngine *pkt_inspect_engines; /*  g_pkt_inspect_engines */
-    DetectBufferMpmRegistery *pkt_mpms_list;
-    uint32_t pkt_mpms_list_cnt;  /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] */
+    DetectEngineAppInspectionEngine *app_inspect_engines; /* 用于单规则的检测引擎, 复制自 g_app_inspect_engines */
+    DetectBufferMpmRegistery *app_mpms_list;  /* 用于prefilter的多模式引擎 */
+    uint32_t app_mpms_list_cnt;               /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
+    DetectEnginePktInspectionEngine *pkt_inspect_engines; /* 用于单规则的检测引擎,  g_pkt_inspect_engines */
+    DetectBufferMpmRegistery *pkt_mpms_list;  /* 用于prefilter的多模式引擎 */
+    uint32_t pkt_mpms_list_cnt;               /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] */
 
     uint32_t prefilter_id;
-    HashListTable *prefilter_hash_table; /* PrefilterStore, prefilter多模引擎哈希表 */
+    HashListTable *prefilter_hash_table; /* PrefilterStore, prefilter多模引擎哈希表, 记录prefilter引擎的种类 */
 
     /** time of last ruleset reload */
     struct timeval last_reload;          /* 规则加载后的时间 */
@@ -949,7 +949,7 @@ typedef struct DetectEngineCtx_ {
 
     /** per keyword flag indicating if a prefilter has been
      *  set for it. If true, the setup function will have to
-     *  run. */                          /* 检测类型已经被关键字prefilter修饰 */
+     *  run. */                          /* 被关键字prefilter修饰的匹配类型 */
     bool sm_types_prefilter[DETECT_TBLSIZE];
     bool sm_types_silent_error[DETECT_TBLSIZE];
 
@@ -968,7 +968,7 @@ enum {
 /* Siggroup mpm context profile */
 enum {
     ENGINE_SGH_MPM_FACTORY_CONTEXT_FULL,
-    ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE,  /* 不能共享, <默认值> */
+    ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE,  /* 规则组共享多模上下文, <默认值> */
     ENGINE_SGH_MPM_FACTORY_CONTEXT_AUTO
 };
 
@@ -984,9 +984,9 @@ typedef struct HttpReassembledBody_ {
 #define DETECT_FILESTORE_MAX 15
 
 typedef struct SignatureNonPrefilterStore_ {
-    SigIntId id;
-    SignatureMask mask;
-    uint8_t alproto;
+    SigIntId id;           /* 规则ID, Signature->num */
+    SignatureMask mask;    /* 需要的标识 */
+    uint8_t alproto;       /* 应用协议 */
 } SignatureNonPrefilterStore;
 
 /** array of TX inspect rule candidates */
@@ -1038,7 +1038,7 @@ typedef struct DetectEngineThreadCtx_ {
 
     /** offset into the payload of the last match by:
      *  content, pcre, etc */
-    uint32_t buffer_offset;
+    uint32_t buffer_offset;             /* 上次匹配结果尾对应的偏移, 以应对within/distance等相对位置关键字 */
     /* used by pcre match function alone */
     uint32_t pcre_match_start_offset;
 
@@ -1057,11 +1057,11 @@ typedef struct DetectEngineThreadCtx_ {
     int inspect_list; /**< list we're currently inspecting, DETECT_SM_LIST_* */
 
     struct {
-        InspectionBuffer *buffers;      /* 检测类型信息数组 */
-        uint32_t buffers_size;          /* 检测类型数量, = DetectEngineCtx->buffer_type_id  */
+        InspectionBuffer *buffers;      /* 待检测的缓存 */
+        uint32_t buffers_size;          /* 缓存种类, sizeof(buffers[])/sizeof(buffers[0]), = DetectEngineCtx->buffer_type_id  */
         uint32_t to_clear_idx;
         uint32_t *to_clear_queue;       /* 待清理的->buffers[]的索引数组 */
-    } inspect;
+    } inspect;      /* 检测类型对应的临时缓存 */
 
     struct {
         /** inspection buffers for more complex case. As we can inspect multiple
@@ -1070,17 +1070,17 @@ typedef struct DetectEngineThreadCtx_ {
         uint32_t buffers_size;                      /**< in number of elements */
         uint32_t to_clear_idx;
         uint32_t *to_clear_queue;
-    } multi_inspect;
+    } multi_inspect;/* 支持并行检测 */
 
     /* used to discontinue any more matching */
     uint16_t discontinue_matching;      /* */
     uint16_t flags;
 
     /* bool: if tx_id is set, this is 1, otherwise 0 */
-    uint16_t tx_id_set;
+    uint16_t tx_id_set;            /* tx_id是否已经设定/有效? */
     /** ID of the transaction currently being inspected. */
-    uint64_t tx_id;
-    Packet *p;
+    uint64_t tx_id;                /* 当前正检测的事务ID */
+    Packet *p;                     /* 当前正处理的报文 */
 
     SC_ATOMIC_DECLARE(int, so_far_used_by_detect);  /* 此线程检测结构, 是否被使用过 */
 
@@ -1097,7 +1097,7 @@ typedef struct DetectEngineThreadCtx_ {
     SigIntId match_array_cnt;
 
     RuleMatchCandidateTx *tx_candidates;
-    uint32_t tx_candidates_size;   /* 事务匹配规则列表，= match_array_len */
+    uint32_t tx_candidates_size;   /* 事务prefilter引擎匹配到的规则列表 + 前置未过匹配的已匹配规则 + 旧候选规则，= match_array_len */
 
     SignatureNonPrefilterStore *non_pf_store_ptr;
     uint32_t non_pf_store_cnt;     /* non-prefilter列表, 赋值为 SigGroupHead->non_pf_syn_store_array/->non_pf_other_store_array */
@@ -1108,7 +1108,7 @@ typedef struct DetectEngineThreadCtx_ {
     MpmThreadCtx mtc;   /**< thread ctx for the mpm */
     MpmThreadCtx mtcu;  /**< thread ctx for uricontent mpm */
     MpmThreadCtx mtcs;  /**< thread ctx for stream mpm */
-    PrefilterRuleStore pmq;        /* prefilter引擎匹配结果 */
+    PrefilterRuleStore pmq;        /* prefilter引擎匹配暂存结果, 因为有多种prefilter匹配引擎 */
 
     /** SPM thread context used for scanning. This has been cloned from the
      * prototype held by DetectEngineCtx. */
@@ -1195,8 +1195,8 @@ typedef struct SigTableElmt_ {
     /** keyword setup function pointer */
     int (*Setup)(DetectEngineCtx *, Signature *, const char *);
 
-    bool (*SupportsPrefilter)(const Signature *s);
-    int (*SetupPrefilter)(DetectEngineCtx *de_ctx, struct SigGroupHead_ *sgh);
+    bool (*SupportsPrefilter)(const Signature *s);  /* 判断是否支持prefilter过滤? 如 DETECT_TCPMSS/PrefilterTcpmssIsPrefilterable() */
+    int (*SetupPrefilter)(DetectEngineCtx *de_ctx, struct SigGroupHead_ *sgh); /* DETECT_TCPMSS/PrefilterSetupTcpmss() */
 
     void (*Free)(DetectEngineCtx *, void *);
 #ifdef UNITTESTS
@@ -1206,7 +1206,7 @@ typedef struct SigTableElmt_ {
     /* coccinelle: SigTableElmt:flags:SIGMATCH_ */
 
     /** better keyword to replace the current one */
-    uint16_t alternative;
+    uint16_t alternative; /* 可被替换的关键字别名 */
 
     const char *name;     /* 关键字名, 如http_uri *< keyword name alias */
     const char *alias;    /* 别名 *< name alias */
@@ -1298,7 +1298,7 @@ typedef struct PrefilterEngineList_ {
 } PrefilterEngineList;
 
 typedef struct PrefilterEngine_ {
-    uint16_t local_id;    /* */
+    uint16_t local_id;    /* 本类型prefilter引擎链表中的位置, 排序ID */
 
     /** App Proto this engine applies to: only used with Tx Engines */
     AppProto alproto;     /* 适用的应用协议 */
@@ -1332,12 +1332,12 @@ typedef struct SigGroupHeadInitData_ {
     uint32_t direction;  /* 对应的数据流方向, SIG_FLAG_TOSERVER, SIG_FLAG_TOCLIENT or both */
     int whitelist;       /* 值越大，越容易加入组 */
 
-    MpmCtx **app_mpms;
-    MpmCtx **pkt_mpms;
+    MpmCtx **app_mpms;   /* 存储->tx_engines对应的引擎上下文; 来自 DetectEngineCtx->app_mpms_list */
+    MpmCtx **pkt_mpms;   /*                                   来自 DetectEngineCtx->pkt_mpms_list */
 
-    PrefilterEngineList *pkt_engines;
-    PrefilterEngineList *payload_engines;
-    PrefilterEngineList *tx_engines;
+    PrefilterEngineList *pkt_engines;     /* prefilter多模式引擎: "prefilter"关键字 */
+    PrefilterEngineList *payload_engines; /*                    : "fast_patten"关键字 */
+    PrefilterEngineList *tx_engines;      /* 动态监测类型对应的事务prefilter多模引擎 */
 
     /* port ptr */
     struct DetectPort_ *port;
@@ -1364,9 +1364,9 @@ typedef struct SigGroupHead_ {
 
     uint32_t id;                /* 在 DetectEngineCtx->sgh_array[] 中的索引 */
 
-    PrefilterEngine *pkt_engines;      /* prefilter多模引擎 */
-    PrefilterEngine *payload_engines;
-    PrefilterEngine *tx_engines;
+    PrefilterEngine *pkt_engines;      /* 拷贝自->init->pkt_engines */
+    PrefilterEngine *payload_engines;  /*             ->payload_engines */
+    PrefilterEngine *tx_engines;       /*             ->tx_engines */
 
     /** Array with sig ptrs... size is sig_cnt * sizeof(Signature *) */
     Signature **match_array;    /* 大小为->sig_cnt, 存储本组包含的规则 */
@@ -1377,9 +1377,9 @@ typedef struct SigGroupHead_ {
 } SigGroupHead;
 
 /** sigmatch has no options, so the parser shouldn't expect any */
-#define SIGMATCH_NOOPT                  BIT_U16(0)
+#define SIGMATCH_NOOPT                  BIT_U16(0)   /* 关键字没有配置项, 如prefilter等 */
 /** sigmatch is compatible with a ip only rule */
-#define SIGMATCH_IPONLY_COMPAT          BIT_U16(1)
+#define SIGMATCH_IPONLY_COMPAT          BIT_U16(1)   /* 和IPONLY兼容, 如tag关键字 */
 /** sigmatch is compatible with a decode event only rule */
 #define SIGMATCH_DEONLY_COMPAT          BIT_U16(2)
 /**< Flag to indicate that the signature is not built-in */
@@ -1393,7 +1393,7 @@ typedef struct SigGroupHead_ {
 /** input MUST be wrapped in double quotes. They will be stripped before
  *  input data is passed to keyword parser. Missing double quotes lead to
  *  error and signature invalidation. */
-#define SIGMATCH_QUOTES_MANDATORY       BIT_U16(6)
+#define SIGMATCH_QUOTES_MANDATORY       BIT_U16(6)   /* 输入必须被双引号包围 */
 /** negation parsing is handled by the rule parser. Signature::init_data::negated
  *  will be set to true or false prior to calling the keyword parser. Exclamation
  *  mark is stripped from the input to the keyword parser. */
@@ -1401,7 +1401,7 @@ typedef struct SigGroupHead_ {
 /* 此关键字为内容修饰符, 如http_uri, * keyword is a content modifier */
 #define SIGMATCH_INFO_CONTENT_MODIFIER  BIT_U16(8)
 /** keyword is a sticky buffer */
-#define SIGMATCH_INFO_STICKY_BUFFER     BIT_U16(9)
+#define SIGMATCH_INFO_STICKY_BUFFER     BIT_U16(9)   /* sticky buffer, 如http.uri/tcp.hdr */
 /** keyword is deprecated: used to suggest an alternative */
 #define SIGMATCH_INFO_DEPRECATED        BIT_U16(10)
 /** 严格解析规则, 出错就退出程序; strict parsing is enabled */

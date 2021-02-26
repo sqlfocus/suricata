@@ -1016,8 +1016,8 @@ void OutputClearActiveLoggers(void)
 /* 注册支持的日志模块 */
 void TmModuleLoggerRegister(void)
 {
-    OutputRegisterRootLoggers();   /* root权限的底层输出方式 */
-    OutputRegisterLoggers();       /* 非root权限的功能性输出模块 */
+    OutputRegisterRootLoggers();   /* 以输出对象组织起来的列表, 如文件/内容/流等 */
+    OutputRegisterLoggers();       /* 适配具体业务需求的模块, 注册到以输出对象组织的列表 */
 }
 
 /**

@@ -99,7 +99,7 @@ static int HSBuildDatabase(const uint8_t *needle, uint16_t needle_len,
         exit(EXIT_FAILURE);
     }
     global_thread_ctx->ctx = scratch;
-    sctx->db = db;
+    sctx->db = db;           /* 存储编译结果 */
     sctx->needle_len = needle_len;
 
     return 0;
@@ -109,7 +109,7 @@ static SpmCtx *HSInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
                          SpmGlobalThreadCtx *global_thread_ctx)
 {
     SpmCtx *ctx = SCMalloc(sizeof(SpmCtx));
-    if (ctx == NULL) {
+    if (ctx == NULL) {                  /* 分配空间, 以存储内容单模匹配环境 */
         SCLogDebug("Unable to alloc SpmCtx.");
         return NULL;
     }
@@ -124,7 +124,7 @@ static SpmCtx *HSInitCtx(const uint8_t *needle, uint16_t needle_len, int nocase,
     }
     ctx->ctx = sctx;
 
-    memset(sctx, 0, sizeof(SpmHsCtx));  /* 编译规则 */
+    memset(sctx, 0, sizeof(SpmHsCtx));  /* 编译规则, 并存储结果 */
     if (HSBuildDatabase(needle, needle_len, nocase, sctx,
                         global_thread_ctx) != 0) {
         SCLogDebug("HSBuildDatabase failed.");

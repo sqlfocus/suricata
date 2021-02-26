@@ -33,8 +33,8 @@
 #include "util-debug.h"
 
 static int DetectPrefilterSetup (DetectEngineCtx *, Signature *, const char *);
-
-void DetectPrefilterRegister(void)
+/* 非content关键字, 需要用prefilter关键字指定某特定关键字(如ttl)做多模式匹配; */
+void DetectPrefilterRegister(void) /* 而选择多个content中之一, 则使用fast_pattern关键字 */
 {
     sigmatch_table[DETECT_PREFILTER].name = "prefilter";
     sigmatch_table[DETECT_PREFILTER].desc = "force a condition to be used as prefilter";
@@ -61,18 +61,18 @@ static int DetectPrefilterSetup (DetectEngineCtx *de_ctx, Signature *s, const ch
         SCReturnInt(-1);
     }
 
-    if (s->flags & SIG_FLAG_PREFILTER) {  /* 已经加入prefilter引擎 */
+    if (s->flags & SIG_FLAG_PREFILTER) {  /* prefilter关键字仅能出现一次 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "prefilter already set");
         SCReturnInt(-1);
     }
 
-    SigMatch *sm = DetectGetLastSM(s);    /* 查找最后的匹配 */
+    SigMatch *sm = DetectGetLastSM(s);    /* 查找prefilter关键字前的匹配 */
     if (sm == NULL) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "prefilter needs preceding match");
         SCReturnInt(-1);
     }
 
-    s->init_data->prefilter_sm = sm;      /* 记录 */
+    s->init_data->prefilter_sm = sm;      /* 记录此匹配 */
 
     /* if the sig match is content, prefilter should act like
      * 'fast_pattern' w/o options. */

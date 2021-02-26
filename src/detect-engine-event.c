@@ -63,19 +63,19 @@ void DetectEngineEventRegister (void)
 {
     sigmatch_table[DETECT_ENGINE_EVENT].name = "engine-event";
     sigmatch_table[DETECT_ENGINE_EVENT].Match = DetectEngineEventMatch;
-    sigmatch_table[DETECT_ENGINE_EVENT].Setup = DetectEngineEventSetup;
+    sigmatch_table[DETECT_ENGINE_EVENT].Setup = DetectEngineEventSetup;  /* 检测事件, 逐包检测 */
     sigmatch_table[DETECT_ENGINE_EVENT].Free  = DetectEngineEventFree;
 #ifdef UNITTESTS
     sigmatch_table[DETECT_ENGINE_EVENT].RegisterTests = EngineEventRegisterTests;
 #endif
 
-    sigmatch_table[DETECT_DECODE_EVENT].name = "decode-event";
+    sigmatch_table[DETECT_DECODE_EVENT].name = "decode-event";           /* 解码事件, 逐包检测 */
     sigmatch_table[DETECT_DECODE_EVENT].Match = DetectEngineEventMatch;
     sigmatch_table[DETECT_DECODE_EVENT].Setup = DetectDecodeEventSetup;
     sigmatch_table[DETECT_DECODE_EVENT].Free  = DetectEngineEventFree;
     sigmatch_table[DETECT_DECODE_EVENT].flags |= SIGMATCH_DEONLY_COMPAT;
 
-    sigmatch_table[DETECT_STREAM_EVENT].name = "stream-event";
+    sigmatch_table[DETECT_STREAM_EVENT].name = "stream-event";           /* 流重组事件, 逐包检测 */
     sigmatch_table[DETECT_STREAM_EVENT].Match = DetectEngineEventMatch;
     sigmatch_table[DETECT_STREAM_EVENT].Setup = DetectStreamEventSetup;
     sigmatch_table[DETECT_STREAM_EVENT].Free  = DetectEngineEventFree;

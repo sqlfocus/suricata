@@ -154,7 +154,7 @@ void DetectPcreRegister (void)
             SCLogDebug("Using PCRE match-limit-recursion setting of: %i", pcre_match_limit_recursion);
         }
     }
-
+    /* 初始化pcre关键字解析器, 并添加到 g_detect_parse_regex_list 列表 */
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 
     /* setup the capture regex, as it needs PCRE_UNGREEDY we do it manually */
@@ -893,12 +893,12 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
         if (DetectBufferGetActiveList(de_ctx, s) == -1)
             goto error;
 
-        s->flags |= SIG_FLAG_APPLAYER;
+        s->flags |= SIG_FLAG_APPLAYER;            /* 有前置sticky buffer, 则加入其所在的检测类型链表 */
         sm_list = s->init_data->list;
     } else {
         switch (parsed_sm_list) {
             case DETECT_SM_LIST_NOTSET:
-                sm_list = DETECT_SM_LIST_PMATCH;
+                sm_list = DETECT_SM_LIST_PMATCH;  /* 默认, 加入此类型链表 */
                 break;
             default: {
                 if (alproto != ALPROTO_UNKNOWN) {
@@ -911,7 +911,7 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
                     if (DetectSignatureSetAppProto(s, alproto) < 0)
                         goto error;
                 }
-                sm_list = parsed_sm_list;
+                sm_list = parsed_sm_list;         /* pcre规则中配置了针对性的内存, 则加入此内存所在的类型链表 */
                 break;
             }
         }
@@ -922,11 +922,11 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
     sm = SigMatchAlloc();
     if (sm == NULL)
         goto error;
-    sm->type = DETECT_PCRE;
+    sm->type = DETECT_PCRE;                       /* 分配匹配, 加入选定检测类型的链表 */
     sm->ctx = (void *)pd;
     SigMatchAppendSMToList(s, sm, sm_list);
 
-    for (uint8_t x = 0; x < pd->idx; x++) {
+    for (uint8_t x = 0; x < pd->idx; x++) {       /* ??? */
         if (DetectFlowvarPostMatchSetup(de_ctx, s, pd->capids[x]) < 0)
             goto error_nofree;
     }
@@ -946,7 +946,7 @@ static int DetectPcreSetup (DetectEngineCtx *de_ctx, Signature *s, const char *r
     } else if (prev_pm == NULL) {
         goto okay;
     }
-    if (prev_pm->type == DETECT_CONTENT) {
+    if (prev_pm->type == DETECT_CONTENT) {        /* 当前pcre配置了relative选项'R', 则设置其前置匹配标识 */
         DetectContentData *cd = (DetectContentData *)prev_pm->ctx;
         cd->flags |= DETECT_CONTENT_RELATIVE_NEXT;
     } else if (prev_pm->type == DETECT_PCRE) {

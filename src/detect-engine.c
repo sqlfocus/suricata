@@ -153,7 +153,7 @@ void DetectPktInspectEngineRegister(const char *name,
     new_engine->v1.Callback = Callback;
     new_engine->v1.GetData = GetPktData;
 
-    if (g_pkt_inspect_engines == NULL) {
+    if (g_pkt_inspect_engines == NULL) { /* 注册到报文检测引擎 */
         g_pkt_inspect_engines = new_engine;
     } else {
         DetectEnginePktInspectionEngine *t = g_pkt_inspect_engines;
@@ -491,7 +491,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
     while (e != NULL) {      /* 构建自定义类型的包检测引擎 Signature->pkt_inspect */
         SCLogDebug("e %p sm_list %u nlists %u ptrs[] %p", e, e->sm_list, nlists, e->sm_list < nlists ? ptrs[e->sm_list] : NULL);
         if (e->sm_list < nlists && ptrs[e->sm_list] != NULL) {
-            bool prepend = false;
+            bool prepend = false;   /* 标识是否为prefilter多模式匹配的检测类型 */
 
             DetectEnginePktInspectionEngine *new_engine = SCCalloc(1, sizeof(DetectEnginePktInspectionEngine));
             if (unlikely(new_engine == NULL)) {
@@ -512,7 +512,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
             if (s->pkt_inspect == NULL) {
                 s->pkt_inspect = new_engine;
-            } else if (prepend) {   /* 支持多模式的匹配在前 */
+            } else if (prepend) {   /* prefilter多模式匹配在前 */
                 new_engine->next = s->pkt_inspect;
                 s->pkt_inspect = new_engine;
             } else {                /* 其他匹配在后 */
@@ -576,7 +576,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
                 new_engine->v2.GetData, new_engine->v2.transforms);
 
         if (s->app_inspect == NULL) {
-            s->app_inspect = new_engine;
+            s->app_inspect = new_engine;          /* 第一个 */
             if (new_engine->sm_list == files_id) {
                 SCLogDebug("sid %u: engine %p/%u is FILE ENGINE", s->id, new_engine, new_engine->id);
                 new_engine->id = DE_STATE_ID_FILE_INSPECT;
@@ -586,7 +586,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
         /* prepend engine if forced or if our engine has a lower progress. */
         } else if (prepend || (!head_is_mpm && s->app_inspect->progress > new_engine->progress)) {
-            new_engine->next = s->app_inspect;
+            new_engine->next = s->app_inspect;    /* 多模式匹配引擎 */
             s->app_inspect = new_engine;
             if (new_engine->sm_list == files_id) {
                 SCLogDebug("sid %u: engine %p/%u is FILE ENGINE", s->id, new_engine, new_engine->id);
@@ -597,7 +597,7 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
         } else {
             DetectEngineAppInspectionEngine *a = s->app_inspect;
-            while (a->next != NULL) {
+            while (a->next != NULL) {             /* 其他普通情况, 按阶段排序 */
                 if (a->next && a->next->progress > new_engine->progress) {
                     break;
                 }
@@ -617,14 +617,14 @@ int DetectEngineAppInspectionEngine2Signature(DetectEngineCtx *de_ctx, Signature
 
         SCLogDebug("sid %u: engine %p/%u added", s->id, new_engine, new_engine->id);
 
-        s->init_data->init_flags |= SIG_FLAG_INIT_STATE_MATCH;
+        s->init_data->init_flags |= SIG_FLAG_INIT_STATE_MATCH;  /* 全状态检测 */
 next:
         t = t->next;
     }
 
     if ((s->init_data->init_flags & SIG_FLAG_INIT_STATE_MATCH) &&
             s->init_data->smlists[DETECT_SM_LIST_PMATCH] != NULL)
-    {                        /* 构建基于流的应用检测引擎 */
+    {                        /* 有状态检测, 将 DETECT_SM_LIST_PMATCH 加入->app_inspect */
         /* if engine is added multiple times, we pass it the same list */
         SigMatchData *stream = SigMatchList2DataArray(s->init_data->smlists[DETECT_SM_LIST_PMATCH]);
         BUG_ON(stream == NULL);
@@ -728,7 +728,7 @@ void DetectEngineAppInspectionEngineSignatureFree(DetectEngineCtx *de_ctx, Signa
 #include "util-hash-lookup3.h"
 
 static HashListTable *g_buffer_type_hash = NULL;   /* 保存动态注册的buffer检测关键字，如"http_uri"等 */
-static int g_buffer_type_id = DETECT_SM_LIST_DYNAMIC_START;
+static int g_buffer_type_id = DETECT_SM_LIST_DYNAMIC_START; /* 注册的动态类型, 1)各个关键字注册阶段阶段注册; 2)加载规则时, 将"类型+转换"打包注册 */
 static int g_buffer_type_reg_closed = 0;           /* 检测关键字是否注册完毕 */
 
 static DetectEngineTransforms no_transforms = {
@@ -846,7 +846,7 @@ int DetectBufferTypeRegister(const char *name)
         return exists->id;
     }
 }
-
+/* 设置某检测匹配类型, 支持针对报文检测 */
 void DetectBufferTypeSupportsPacket(const char *name)
 {
     BUG_ON(g_buffer_type_reg_closed);
@@ -983,12 +983,12 @@ bool DetectBufferRunValidateCallback(const DetectEngineCtx *de_ctx,
         const int id, const Signature *s, const char **sigerror)
 {
     const DetectBufferType *map = DetectBufferTypeGetById(de_ctx, id);
-    if (map && map->ValidateCallback) {
+    if (map && map->ValidateCallback) {  /* http.uri -> DetectHttpUriValidateCallback() */
         return map->ValidateCallback(s, sigerror);
     }
     return TRUE;
 }
-
+/* 对于sticky buffer关键字, 设置, 以识别后续的修改(如to_md5/DETECT_TRANSFORM_MD5) */
 int DetectBufferSetActiveList(Signature *s, const int list)
 {
     BUG_ON(s->init_data == NULL);
@@ -1001,14 +1001,14 @@ int DetectBufferSetActiveList(Signature *s, const int list)
 
     return 0;
 }
-
+/* 此函数的存在表明了规则的顺序: sticky buffer; transform; content */
 int DetectBufferGetActiveList(DetectEngineCtx *de_ctx, Signature *s)
 {
     BUG_ON(s->init_data == NULL);
 
     if (s->init_data->list && s->init_data->transforms.cnt) {
         if (s->init_data->list == DETECT_SM_LIST_NOTSET ||
-            s->init_data->list < DETECT_SM_LIST_DYNAMIC_START) {
+            s->init_data->list < DETECT_SM_LIST_DYNAMIC_START) {  /* 转换只能作用于, 自定义的匹配类型 */
             SCLogError(SC_ERR_INVALID_SIGNATURE, "previous transforms not consumed "
                     "(list: %u, transform_cnt %u)", s->init_data->list,
                     s->init_data->transforms.cnt);
@@ -1019,11 +1019,11 @@ int DetectBufferGetActiveList(DetectEngineCtx *de_ctx, Signature *s)
                 s->init_data->list, s->init_data->transforms.cnt);
         int new_list = DetectBufferTypeGetByIdTransforms(de_ctx, s->init_data->list,
                 s->init_data->transforms.transforms, s->init_data->transforms.cnt);
-        if (new_list == -1) {
+        if (new_list == -1) {            /* 将“检测类型+转换”注册为新检测类型, 并返回其id */
             SCReturnInt(-1);
         }
         SCLogDebug("new_list %d", new_list);
-        s->init_data->list = new_list;
+        s->init_data->list = new_list;   /* 设置其为新检测类型, 并清空转换列表 */
         s->init_data->list_set = false;
         // reset transforms now that we've set up the list
         s->init_data->transforms.cnt = 0;
@@ -1222,7 +1222,7 @@ void InspectionBufferApplyTransforms(InspectionBuffer *buffer,
         }
     }
 }
-
+/* 将注册的检测类型、各种检测引擎列表, 都记录到全局结构de_ctx */
 static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
 {
     const int size = g_buffer_type_id;
@@ -1235,8 +1235,8 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
 
     SCLogDebug("DETECT_SM_LIST_DYNAMIC_START %u", DETECT_SM_LIST_DYNAMIC_START);
     HashListTableBucket *b = HashListTableGetListHead(g_buffer_type_hash);
-    while (b) {   /* 从全局hash表，读取检测类型，初始化检测类型数组 */
-        DetectBufferType *map = HashListTableGetListData(b);
+    while (b) {   /* 从全局hash表，读取检测类型，初始化检测类型数组; 后续还有“已有检测类型+转换”捏合成的新类型 */
+        DetectBufferType *map = HashListTableGetListData(b); /* <TK!!!>并没有包含预留类型, 仅包含了动态注册类型 */
         de_ctx->buffer_type_map[map->id] = map;
         SCLogDebug("name %s id %d mpm %s packet %s -- %s. "
                 "Callbacks: Setup %p Validate %p", map->string, map->id,
@@ -1244,7 +1244,7 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
                 map->description, map->SetupCallback, map->ValidateCallback);
         b = HashListTableGetListNext(b);
     }
-                  /* 初始化检测类型哈希表 */
+                  /* 初始化检测类型哈希表, 后续存储"已有检测类型+转换"捏合成的新类型(快速检测去重) */
     de_ctx->buffer_type_hash = HashListTableInit(256,
             DetectBufferTypeHashFunc,
             DetectBufferTypeCompareFunc,
@@ -1255,10 +1255,10 @@ static void DetectBufferTypeSetupDetectEngine(DetectEngineCtx *de_ctx)
     de_ctx->buffer_type_id = g_buffer_type_id;
 
     PrefilterInit(de_ctx);
-    DetectMpmInitializeAppMpms(de_ctx);   /* 初始化 DetectEngineCtx->app_mpms_list */
-    DetectAppLayerInspectEngineCopyListToDetectCtx(de_ctx); /* 初始化 DetectEngineCtx->app_inspect_engines */
-    DetectMpmInitializePktMpms(de_ctx);   /* 初始化 DetectEngineCtx->pkt_mpms_list */
-    DetectPktInspectEngineCopyListToDetectCtx(de_ctx);      /* 初始化 DetectEngineCtx->pkt_inspect_engines */
+    DetectMpmInitializeAppMpms(de_ctx);   /* 拷贝 g_mpm_list[], 初始化 DetectEngineCtx->app_mpms_list */
+    DetectAppLayerInspectEngineCopyListToDetectCtx(de_ctx); /* 拷贝 g_app_inspect_engines, 初始化 DetectEngineCtx->app_inspect_engines */
+    DetectMpmInitializePktMpms(de_ctx);   /* 拷贝 g_mpm_list[], 初始化 DetectEngineCtx->pkt_mpms_list */
+    DetectPktInspectEngineCopyListToDetectCtx(de_ctx);      /* 拷贝 g_pkt_inspect_engines, 初始化 DetectEngineCtx->pkt_inspect_engines */
 }
 
 static void DetectBufferTypeFreeDetectEngine(DetectEngineCtx *de_ctx)
@@ -1303,10 +1303,10 @@ void DetectBufferTypeCloseRegistration(void)
 
     g_buffer_type_reg_closed = 1;
 }
-
+/* 汇集了"检测类型+转换", 将其看作新检测类型; 注册, 并返回其ID */
 int DetectBufferTypeGetByIdTransforms(DetectEngineCtx *de_ctx, const int id,
         TransformData *transforms, int transform_cnt)
-{
+{   /* 查找已注册的检测类型 */
     const DetectBufferType *base_map = DetectBufferTypeGetById(de_ctx, id);
     if (!base_map) {
         return -1;
@@ -1325,38 +1325,38 @@ int DetectBufferTypeGetByIdTransforms(DetectEngineCtx *de_ctx, const int id,
         t.transforms[i] = transforms[i];
     }
     t.cnt = transform_cnt;
-
+    /* 在 DetectEngineCtx->buffer_type_hash 中查找此类型: 打包了名字及对应的转换操作 */
     DetectBufferType lookup_map = { (char *)base_map->string, NULL, 0, 0, 0, 0, false, NULL, NULL, t };
     DetectBufferType *res = HashListTableLookup(de_ctx->buffer_type_hash, &lookup_map, 0);
 
     SCLogDebug("res %p", res);
     if (res != NULL) {
-        return res->id;
+        return res->id;  /* 找到则返回其ID */
     }
-
+    /* 未找到, 则分配新类型, 并存储在hash表 */
     DetectBufferType *map = SCCalloc(1, sizeof(*map));
     if (map == NULL)
         return -1;
 
     map->string = base_map->string;
-    map->id = de_ctx->buffer_type_id++;
-    map->parent_id = base_map->id;
+    map->id = de_ctx->buffer_type_id++;  /* 其ID排在内置类型(DETECT_SM_LIST_MAX)之后 */
+    map->parent_id = base_map->id;       /* 记录其父ID */
     map->transforms = t;
     map->mpm = base_map->mpm;
     map->packet = base_map->packet;
     map->SetupCallback = base_map->SetupCallback;
     map->ValidateCallback = base_map->ValidateCallback;
-    if (map->packet) {
+    if (map->packet) {                   /* 注册到多模式匹配引擎(逐包), DetectEngineCtx->pkt_mpms_list */
         DetectPktMpmRegisterByParentId(de_ctx,
                 map->id, map->parent_id, &map->transforms);
-    } else {
+    } else {                             /* 注册到多模式匹配引擎(应用), DetectEngineCtx->app_mpms_list */
         DetectAppLayerMpmRegisterByParentId(de_ctx,
                 map->id, map->parent_id, &map->transforms);
     }
 
     BUG_ON(HashListTableAdd(de_ctx->buffer_type_hash, (void *)map, 0) != 0);
     SCLogDebug("buffer %s registered with id %d, parent %d", map->string, map->id, map->parent_id);
-
+    /* 加入加速查找数组 */
     if (map->id >= 0 && (uint32_t)map->id >= de_ctx->buffer_type_map_elements) {
         void *ptr = SCRealloc(de_ctx->buffer_type_map, (map->id + 1) * sizeof(DetectBufferType *));
         BUG_ON(ptr == NULL);
@@ -1365,10 +1365,10 @@ int DetectBufferTypeGetByIdTransforms(DetectEngineCtx *de_ctx, const int id,
         de_ctx->buffer_type_map[map->id] = map;
         de_ctx->buffer_type_map_elements = map->id + 1;
 
-        if (map->packet) {
+        if (map->packet) {               /* 注册到逐包检测引擎, DetectEngineCtx->pkt_inspect_engines */
             DetectPktInspectEngineCopy(de_ctx, map->parent_id, map->id,
                     &map->transforms);
-        } else {
+        } else {                         /* 注册到应用检测引擎, DetectEngineCtx->app_inspect_engines */
             DetectAppLayerInspectEngineCopy(de_ctx, map->parent_id, map->id,
                     &map->transforms);
         }
@@ -1460,7 +1460,7 @@ bool DetectEnginePktInspectionRun(ThreadVars *tv,
         uint8_t *alert_flags)
 {
     SCEnter();
-    /* 报文引擎检测 */
+    /* 报文引擎检测; tcp.hdr ==> DetectEngineInspectPktBufferGeneric() */
     for (DetectEnginePktInspectionEngine *e = s->pkt_inspect; e != NULL; e = e->next) {
         if (e->v1.Callback(det_ctx, e, s, p, alert_flags) == false) {
             SCLogDebug("sid %u: e %p Callback returned false", s->id, e);
@@ -1657,7 +1657,7 @@ int DetectEngineInspectBufferGeneric(
     if (!engine->mpm) {
         transforms = engine->v2.transforms;
     }
-    /* 获取待检测数据 */
+    /* 获取待检测数据（并应用格式转换, 如果未运行prefilter - 即未成功获得数据） */
     const InspectionBuffer *buffer = engine->v2.GetData(det_ctx, transforms,
             f, flags, txv, list_id);
     if (unlikely(buffer == NULL)) {
@@ -2233,7 +2233,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
 #ifdef BUILD_HYPERSCAN
             de_ctx->mpm_matcher == MPM_HS ||
 #endif
-            de_ctx->mpm_matcher == MPM_AC_BS) { /* 设置多模匹配工厂模型 */
+            de_ctx->mpm_matcher == MPM_AC_BS) { /* 设置多模匹配工厂模型; 对于HS, 每个sig group head拥有自己的上下文 */
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_SINGLE;
         } else {
             de_ctx->sgh_mpm_context = ENGINE_SGH_MPM_FACTORY_CONTEXT_FULL;
@@ -2403,7 +2403,7 @@ static int DetectEngineCtxLoadConf(DetectEngineCtx *de_ctx)
         ports = "53, 80, 139, 443, 445, 1433, 3306, 3389, 6666, 6667, 8080";
         SCLogConfig("grouping: tcp-whitelist (default) %s", ports);
 
-    }                         /* 解析端口白名单，配置格式仅允许利用逗号隔开的单个端口组 */
+    }                         /* 解析端口组(可形成单独的group), 配置格式仅允许利用逗号隔开的单个端口组 */
     if (DetectPortParse(de_ctx, &de_ctx->tcp_whitelist, ports) != 0) {
         SCLogWarning(SC_ERR_INVALID_YAML_CONF_ENTRY, "'%s' is not a valid value "
                 "for detect.grouping.tcp-whitelist", ports);
@@ -2694,7 +2694,7 @@ static TmEcode ThreadCtxDoInit (DetectEngineCtx *de_ctx, DetectEngineThreadCtx *
     PatternMatchThreadPrepare(&det_ctx->mtc, de_ctx->mpm_matcher);
     PatternMatchThreadPrepare(&det_ctx->mtcs, de_ctx->mpm_matcher);
     PatternMatchThreadPrepare(&det_ctx->mtcu, de_ctx->mpm_matcher);
-    /* prefilter引擎环境 */
+    /* prefilter引擎匹配结果初始化 */
     PmqSetup(&det_ctx->pmq);
     /* 单模式匹配环境 */
     det_ctx->spm_thread_ctx = SpmMakeThreadCtx(de_ctx->spm_global_thread_ctx);

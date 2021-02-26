@@ -76,7 +76,7 @@ void DetectTagRegister(void)
 #ifdef UNITTESTS
     sigmatch_table[DETECT_TAG].RegisterTests = DetectTagRegisterTests;
 #endif
-    sigmatch_table[DETECT_TAG].flags |= SIGMATCH_IPONLY_COMPAT;
+    sigmatch_table[DETECT_TAG].flags |= SIGMATCH_IPONLY_COMPAT;  /* 与IPONLY兼容 */
 
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
 }

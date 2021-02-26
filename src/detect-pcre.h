@@ -31,7 +31,7 @@
 #define DETECT_PCRE_CASELESS            0x00004
 
 #define DETECT_PCRE_MATCH_LIMIT         0x00020
-#define DETECT_PCRE_RELATIVE_NEXT       0x00040
+#define DETECT_PCRE_RELATIVE_NEXT       0x00040   /* 下一个匹配, 其需要相对于当前匹配的结果  */
 #define DETECT_PCRE_NEGATE              0x00080
 
 #define DETECT_PCRE_CAPTURE_MAX         8

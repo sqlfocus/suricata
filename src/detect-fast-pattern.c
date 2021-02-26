@@ -37,7 +37,7 @@
 #include "util-debug.h"
 #include "util-unittest.h"
 #include "util-unittest-helper.h"
-
+/* "fast_pattern:only" 或 "fast_pattern:8,4" */
 #define PARSE_REGEX "^(\\s*only\\s*)|\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*$"
 
 static DetectParseRegex parse_regex;
@@ -70,7 +70,7 @@ int FastPatternSupportEnabledForSigMatchList(const DetectEngineCtx *de_ctx,
         return 1;    /* 此类型匹配，符合快速匹配 */
 
     return DetectBufferTypeSupportsMpmGetById(de_ctx, list_id);
-                     /* 检测类型是否支持多模匹配 */
+                     /* 动态buffer类型是否支持多模匹配 */
 #if 0
     SCFPSupportSMList *tmp_smlist_fp = sm_fp_support_smlist_list;
     while (tmp_smlist_fp != NULL) {
@@ -163,8 +163,8 @@ void SupportFastPatternForSigMatchTypes(void)
 
 /**
  * \brief Registration function for fast_pattern keyword
- */
-void DetectFastPatternRegister(void)
+ *//* fast_pattern关键字修饰content关键字, 以选定某个content/或某个content的一部分("fast_pattern:chop")做多模式匹配 */
+void DetectFastPatternRegister(void) /* 非content关键字, 需要用prefilter关键字指定做多模式匹配 */
 {
     sigmatch_table[DETECT_FAST_PATTERN].name = "fast_pattern";
     sigmatch_table[DETECT_FAST_PATTERN].desc = "force using preceding content in the multi pattern matcher";
@@ -199,10 +199,10 @@ static int DetectFastPatternSetup(DetectEngineCtx *de_ctx, Signature *s, const c
     int ov[MAX_SUBSTRINGS];
     char arg_substr[128] = "";
     DetectContentData *cd = NULL;
-
-    SigMatch *pm1 = DetectGetLastSMFromMpmLists(de_ctx, s);
-    SigMatch *pm2 = DetectGetLastSMFromLists(s, DETECT_CONTENT, -1);
-    if (pm1 == NULL && pm2 == NULL) {
+    /* fast_pattern必须修饰content关键字 */
+    SigMatch *pm1 = DetectGetLastSMFromMpmLists(de_ctx, s);           /* 支持MPM的最后的CONTENT */
+    SigMatch *pm2 = DetectGetLastSMFromLists(s, DETECT_CONTENT, -1);  /* 最后的CONTENT */
+    if (pm1 == NULL && pm2 == NULL) {                                 /* 如果存在sticky buffer, 则只从sticky buffer中选择 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "fast_pattern found inside "
                 "the rule, without a content context. Please use a "
                 "content based keyword before using fast_pattern");
@@ -220,7 +220,7 @@ static int DetectFastPatternSetup(DetectEngineCtx *de_ctx, Signature *s, const c
     } else {
         pm = pm2;
     }
-
+    /* fast_pattern不能与 "!"+"位置定位关键字" 同时存在 */
     cd = (DetectContentData *)pm->ctx;
     if ((cd->flags & DETECT_CONTENT_NEGATED) &&
         ((cd->flags & DETECT_CONTENT_DISTANCE) ||
@@ -233,7 +233,7 @@ static int DetectFastPatternSetup(DetectEngineCtx *de_ctx, Signature *s, const c
                    "used with negated content, along with relative modifiers");
         goto error;
     }
-
+    /* fast_pattern关键字仅能修饰单个content; 且支持配置一次 */
     if (arg == NULL|| strcmp(arg, "") == 0) {
         if (cd->flags & DETECT_CONTENT_FAST_PATTERN) {
             SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use multiple fast_pattern "
@@ -260,10 +260,10 @@ static int DetectFastPatternSetup(DetectEngineCtx *de_ctx, Signature *s, const c
         return 0;
     }
 
-    /* Execute the regex and populate args with captures. */
+    /* fast_pattern携带了选项字段; Execute the regex and populate args with captures. */
     ret = DetectParsePcreExec(&parse_regex, arg, 0, 0, ov, MAX_SUBSTRINGS);
     /* fast pattern only */
-    if (ret == 2) {
+    if (ret == 2) {           /* fast_pattern:only */
         if ((cd->flags & DETECT_CONTENT_NEGATED) ||
             (cd->flags & DETECT_CONTENT_DISTANCE) ||
             (cd->flags & DETECT_CONTENT_WITHIN) ||
@@ -279,7 +279,7 @@ static int DetectFastPatternSetup(DetectEngineCtx *de_ctx, Signature *s, const c
         cd->flags |= DETECT_CONTENT_FAST_PATTERN_ONLY;
 
         /* fast pattern chop */
-    } else if (ret == 4) {
+    } else if (ret == 4) {    /* fast_pattern:offset,len */
         res = pcre_copy_substring((char *)arg, ov, MAX_SUBSTRINGS,
                                  2, arg_substr, sizeof(arg_substr));
         if (res < 0) {

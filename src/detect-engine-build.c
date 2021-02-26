@@ -1357,20 +1357,20 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
         }
 #endif /* DEBUG */
 
-        if (RuleMpmIsNegated(s)) {        /* MPM匹配带有"!"，具备取反操作 */
+        if (RuleMpmIsNegated(s)) {        /* fast pattern MPM匹配带有"!"，具备取反操作 */
             s->flags |= SIG_FLAG_MPM_NEG;
         }
 
         SignatureCreateMask(s);           /* 创建规则标识（如获取报文内容等）, Signature->mask */
         DetectContentPropagateLimits(s);  /* 精确content匹配区间，减少MPM消耗 */
-        SigParseApplyDsizeToContent(s);   /* 依据信号设定的检测范围, 调整内容检测深度 */
+        SigParseApplyDsizeToContent(s);   /* 依据dsize设定的检测范围, 调整内容检测深度 */
 
         RuleSetWhitelist(s);              /* 计算特殊性, 设置 Signature->init_data->whitelist */
 
         /* if keyword engines are enabled in the config, handle them here */
         if (de_ctx->prefilter_setting == DETECT_PREFILTER_AUTO &&
                 !(s->flags & SIG_FLAG_PREFILTER))
-        {                                 /* 如果规则没有明确指定可作为prefilter，则检测器是否可作为prefilter */
+        {                                 /* 如果规则没有明确指定可作为prefilter，则检测其是否可作为prefilter */
             int prefilter_list = DETECT_TBLSIZE; /* 可作为prefilter设定 ->init_data->prefilter_sm */
 
             /* get the keyword supporting prefilter with the lowest type */
@@ -1409,7 +1409,7 @@ int SigAddressPrepareStage1(DetectEngineCtx *de_ctx)
                 DetectBufferRunSetupCallback(de_ctx, x, s);
         }
 
-        de_ctx->sig_cnt++;
+        de_ctx->sig_cnt++;                    /* 更新计数 */
     }
 
     if (!(de_ctx->flags & DE_QUIET)) {
@@ -1771,13 +1771,13 @@ int SigAddressPrepareStage4(DetectEngineCtx *de_ctx)
 
         SCLogDebug("sgh %p", sgh);
 
-        SigGroupHeadSetFilemagicFlag(de_ctx, sgh); /* 设置 SigGroupHead->flags */
+        SigGroupHeadSetFilemagicFlag(de_ctx, sgh); /* 设置规则组标识, 所有规则标识的或, SigGroupHead->flags */
         SigGroupHeadSetFileHashFlag(de_ctx, sgh);
         SigGroupHeadSetFilesizeFlag(de_ctx, sgh);
         SigGroupHeadSetFilestoreCount(de_ctx, sgh);
         SCLogDebug("filestore count %u", sgh->filestore_cnt);
 
-        PrefilterSetupRuleGroup(de_ctx, sgh);      /* 建立SigGroupHead的prefilter多模环境 */
+        PrefilterSetupRuleGroup(de_ctx, sgh);      /* 建立SigGroupHead的prefilter多模引擎 */
 
         SigGroupHeadBuildNonPrefilterArray(de_ctx, sgh);
                                                    /* 汇总SigGroupHead的非prefilter */
@@ -1835,7 +1835,7 @@ static int SigMatchPrepare(DetectEngineCtx *de_ctx)
         /* 构建自定义类型的检测引擎, Signature->app_inspect/pkt_inspect, set up inspect engines */
         DetectEngineAppInspectionEngine2Signature(de_ctx, s);
 
-        /* 构建内置类型的检测引擎, Signature->sm_arrays[], built-ins */
+        /* 构建内置类型的检测引擎, Signature->pkt_inspect  */
         int type;
         for (type = 0; type < DETECT_SM_LIST_MAX; type++) {
             /* skip PMATCH if it is used in a stream 'app engine' instead */
@@ -1844,7 +1844,7 @@ static int SigMatchPrepare(DetectEngineCtx *de_ctx)
             SigMatch *sm = s->init_data->smlists[type];
             s->sm_arrays[type] = SigMatchList2DataArray(sm);
         }
-        /* 构建报文检测引擎, DETECT_SM_LIST_MATCH/DETECT_SM_LIST_PMATCH, set up the pkt inspection engines */
+
         DetectEnginePktInspectionSetup(s);
 
         if (rule_engine_analysis_set) {

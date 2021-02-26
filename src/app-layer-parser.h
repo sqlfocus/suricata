@@ -49,7 +49,7 @@
 
 /* applies to DetectFlags uint64_t field */
 
-/** is tx fully inspected? */
+/* 已完成事务检测 * is tx fully inspected? */
 #define APP_LAYER_TX_INSPECTED_FLAG             BIT_U64(63)
 /** other 63 bits are for tracking which prefilter engine is already
  *  completely inspected */

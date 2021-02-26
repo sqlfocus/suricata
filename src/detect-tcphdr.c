@@ -59,13 +59,13 @@ void DetectTcphdrRegister(void)
 #endif
 
     g_tcphdr_buffer_id = DetectBufferTypeRegister("tcp.hdr");
-    BUG_ON(g_tcphdr_buffer_id < 0);
+    BUG_ON(g_tcphdr_buffer_id < 0);             /* 注册匹配类型 */
 
-    DetectBufferTypeSupportsPacket("tcp.hdr");
+    DetectBufferTypeSupportsPacket("tcp.hdr");  /* 支持基于报文的检测 */
 
     DetectPktMpmRegister("tcp.hdr", 2, PrefilterGenericMpmPktRegister, GetData);
-
-    DetectPktInspectEngineRegister("tcp.hdr", GetData,
+                                                       /* 支持基于报文的多模引擎, g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] */
+    DetectPktInspectEngineRegister("tcp.hdr", GetData, /* 注册到报文检测引擎, g_pkt_inspect_engines */
             DetectEngineInspectPktBufferGeneric);
 
     return;
@@ -86,10 +86,10 @@ static int DetectTcphdrSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
     if (!(DetectProtoContainsProto(&s->proto, IPPROTO_TCP)))
         return -1;
 
-    s->flags |= SIG_FLAG_REQUIRE_PACKET;
+    s->flags |= SIG_FLAG_REQUIRE_PACKET; /* 基于报文的检测 */
 
     if (DetectBufferSetActiveList(s, g_tcphdr_buffer_id) < 0)
-        return -1;
+        return -1;                       /* sticky buffer, 激活后续修改配置(如to_md5) */
 
     return 0;
 }

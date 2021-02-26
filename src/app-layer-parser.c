@@ -157,7 +157,7 @@ struct AppLayerParserState_ {
 
     /* Indicates the current transaction that is being inspected.
      * We have a var per direction. */
-    uint64_t inspect_id[2];     /* 当前处理的事务 */
+    uint64_t inspect_id[2];     /* 当前正检测的事务ID */
     /* Indicates the current transaction being logged.  Unlike inspect_id,
      * we don't need a var per direction since we don't log a transaction
      * unless we have the entire transaction. */
@@ -1164,7 +1164,7 @@ bool AppLayerParserSupportsTxDetectFlags(AppProto alproto)
     }
     SCReturnBool(false);
 }
-/* 获取事务对应的配置信息 */
+/* 获取事务的检测信息 */
 AppLayerTxData *AppLayerParserGetTxData(uint8_t ipproto, AppProto alproto, void *tx)
 {
     SCEnter();      /* HTTP -> HTPGetTxData() */

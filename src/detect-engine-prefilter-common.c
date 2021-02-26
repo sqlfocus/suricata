@@ -22,7 +22,7 @@
 typedef struct PrefilterPacketHeaderHashCtx_ {
     PrefilterPacketHeaderValue v1; /* 真实待比较的信息 */
 
-    uint16_t type;                 /* 额外匹配信息, 加速 *< PREFILTER_EXTRA_MATCH_* */
+    uint16_t type;                 /* 额外匹配信息, 加速; PREFILTER_EXTRA_MATCH_SRCPORT */
     uint16_t value;
 
     uint32_t cnt;                  /* 引用计数 */
@@ -111,13 +111,13 @@ SetupEngineForPacketHeader(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
     ctx->type = hctx->type;     /* 匹配信息, 额外匹配信息 */
     ctx->value = hctx->value;
 
-    ctx->sigs_cnt = hctx->cnt;  /* 复用的信号数 */
+    ctx->sigs_cnt = hctx->cnt;  /* 复用的规则数 */
     ctx->sigs_array = SCCalloc(ctx->sigs_cnt, sizeof(SigIntId));
     if (ctx->sigs_array == NULL) {
         SCFree(ctx);
         return -1;
     }
-                                /* 得到复用此信息结构的信号 */
+                                /* 得到复用此信息结构的规则 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)
@@ -322,7 +322,7 @@ static void SetupU8Hash(DetectEngineCtx *de_ctx, HashListTable *hash_table,
     SetupEngineForPacketHeaderPrefilterPacketU8HashCtx(de_ctx, sgh, sm_type,
             counts, Set, Compare, Match);
 }
-/* 构建某检测类型/sm_type的prefilter的通用入口函数 */
+/* 构建某规则组的“prefilter”关键字对应的prefilter引擎的通用入口函数 */
 static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, int sm_type,
         void (*Set)(PrefilterPacketHeaderValue *v, void *),
@@ -345,7 +345,7 @@ static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
             PrefilterPacketHeaderFreeFunc);
     if (hash_table == NULL)
         return -1;
-    /* 遍历规则组内的规则 */
+    /* 遍历规则组内的规则, 构建某检测类型的perfilter哈希散列表 */
     for (sig = 0; sig < sgh->sig_cnt; sig++) {
         s = sgh->match_array[sig];
         if (s == NULL)
@@ -355,7 +355,7 @@ static int PrefilterSetupPacketHeaderCommon(DetectEngineCtx *de_ctx,
 
         PrefilterPacketHeaderHashCtx ctx;
         memset(&ctx, 0, sizeof(ctx));            /* DETECT_ACK -> PrefilterPacketAckSet() */
-        Set(&ctx.v1, s->init_data->prefilter_sm->ctx);
+        Set(&ctx.v1, s->init_data->prefilter_sm->ctx); /* DETECT_TTL -> PrefilterPacketTtlSet() */
 
         GetExtraMatch(s, &ctx.type, &ctx.value); /* 试图获取额外匹配信息, 以最终匹配时加速 */
 

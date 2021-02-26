@@ -33,7 +33,7 @@
 
 /**
  * \brief Regex for parsing our options
- */
+ *//* "tcp.mss:<min>-<max>;" 或 "tcp.mss:[<|>]<number>;" 或 "tcp.mss:<value>;" */
 #define PARSE_REGEX  "^\\s*([0-9]*)?\\s*([<>=-]+)?\\s*([0-9]+)?\\s*$"
 
 static DetectParseRegex parse_regex;
@@ -59,15 +59,15 @@ void DetectTcpmssRegister(void)
     sigmatch_table[DETECT_TCPMSS].desc = "match on TCP MSS option field";
     sigmatch_table[DETECT_TCPMSS].url = "/rules/header-keywords.html#tcpmss";
     sigmatch_table[DETECT_TCPMSS].Match = DetectTcpmssMatch;
-    sigmatch_table[DETECT_TCPMSS].Setup = DetectTcpmssSetup;
+    sigmatch_table[DETECT_TCPMSS].Setup = DetectTcpmssSetup;  /* 属于逐包匹配 */
     sigmatch_table[DETECT_TCPMSS].Free = DetectTcpmssFree;
 #ifdef UNITTESTS
     sigmatch_table[DETECT_TCPMSS].RegisterTests = DetectTcpmssRegisterTests;
-#endif
+#endif                                                   /* 是否支持prefilter */
     sigmatch_table[DETECT_TCPMSS].SupportsPrefilter = PrefilterTcpmssIsPrefilterable;
     sigmatch_table[DETECT_TCPMSS].SetupPrefilter = PrefilterSetupTcpmss;
 
-    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
+    DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);  /* 注册pcre解析器 */
     return;
 }
 
@@ -293,7 +293,7 @@ static int DetectTcpmssSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
     sm->ctx = (SigMatchCtx *)tcpmssd;
 
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
-    s->flags |= SIG_FLAG_REQUIRE_PACKET;
+    s->flags |= SIG_FLAG_REQUIRE_PACKET;  /* 匹配时需要报文 */
 
     return 0;
 }

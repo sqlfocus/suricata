@@ -429,7 +429,7 @@ void SigTableSetup(void)
 
     DetectSidRegister();         /* 关键字sid注册到 sigmatch_table[] */
     DetectPriorityRegister();
-    DetectPrefilterRegister();
+    DetectPrefilterRegister();   /* prefilter关键字, 选用非MPM关键字作为prefilter指标 */
     DetectRevRegister();         /* 关键字rev, signature版本号 */
     DetectClasstypeRegister();   /* 关键字classtype */
     DetectReferenceRegister();   /* 关键字reference */
@@ -440,7 +440,7 @@ void SigTableSetup(void)
     DetectAckRegister();         /* 关键字ack */
     DetectSeqRegister();
     DetectContentRegister();     /* 关键字content */
-    DetectUricontentRegister();  /* 关键字uricontent; 已废弃, 使用"content:%s; http_uri;"替代 */
+    DetectUricontentRegister();  /* 关键字uricontent; 已废弃, 使用"http.uri;content:%s;"替代 */
 
     /* NOTE: the order of these currently affects inspect 此区间的代码顺序顺序将影响监测引擎的注册顺序
      * engine registration order and ultimately the order 并最终影响监测引擎规则的配置顺序;
@@ -499,8 +499,8 @@ void SigTableSetup(void)
     /* 以上区域的代码需保持排序状态, end of order dependent regs */
 
     DetectPcreRegister();             /* pcre */
-    DetectDepthRegister();            /* depth/startswith */
-    DetectNocaseRegister();
+    DetectDepthRegister();            /* depth/startswith(绝对匹配) */
+    DetectNocaseRegister();           /* nocase */
     DetectRawbytesRegister();
     DetectBytetestRegister();
     DetectBytejumpRegister();
@@ -508,19 +508,19 @@ void SigTableSetup(void)
     DetectSameipRegister();
     DetectGeoipRegister();
     DetectL3ProtoRegister();
-    DetectIPProtoRegister();
-    DetectWithinRegister();
-    DetectDistanceRegister();
-    DetectOffsetRegister();
+    DetectIPProtoRegister();          /* ip_proto */
+    DetectWithinRegister();           /* within(相对匹配) */
+    DetectDistanceRegister();         /* distance(相对匹配) */
+    DetectOffsetRegister();           /* offset(绝对匹配) */
     DetectReplaceRegister();
-    DetectFlowRegister();
+    DetectFlowRegister();             /* flow */
     DetectWindowRegister();
     DetectRpcRegister();
     DetectFtpbounceRegister();
     DetectFtpdataRegister();
-    DetectIsdataatRegister();
+    DetectIsdataatRegister();         /* isdataat, 检测负载某处是否有数据; endswith */
     DetectIdRegister();
-    DetectDsizeRegister();
+    DetectDsizeRegister();            /* dsize */
     DetectDatasetRegister();
     DetectDatarepRegister();
     DetectFlowvarRegister();
@@ -530,18 +530,18 @@ void SigTableSetup(void)
     DetectFlowbitsRegister();
     DetectHostbitsRegister();
     DetectXbitsRegister();
-    DetectEngineEventRegister();
+    DetectEngineEventRegister();      /* engine-event/decode-event/stream-event */
     DetectIpOptsRegister();
     DetectFlagsRegister();
     DetectFragBitsRegister();
     DetectFragOffsetRegister();
     DetectGidRegister();              /* gid */
     DetectMarkRegister();
-    DetectCsumRegister();
+    DetectCsumRegister();             /* ipv4-csum */
     DetectStreamSizeRegister();
-    DetectTtlRegister();
+    DetectTtlRegister();              /* ttl */
     DetectTosRegister();
-    DetectFastPatternRegister();
+    DetectFastPatternRegister();      /* fast_pattern */
     DetectITypeRegister();
     DetectICodeRegister();
     DetectIcmpIdRegister();
@@ -571,18 +571,18 @@ void SigTableSetup(void)
     DetectSslStateRegister();
     DetectSslVersionRegister();
     DetectByteExtractRegister();
-    DetectFiledataRegister();
+    DetectFiledataRegister();             /* file.data/file_data, sticky buffer */
     DetectPktDataRegister();
     DetectLuaRegister();
-    DetectIPRepRegister();
+    DetectIPRepRegister();                /* iprep */
     DetectAppLayerProtocolRegister();     /* app-layer-protocol, 匹配应用协议 */
     DetectBase64DecodeRegister();
     DetectBase64DataRegister();
     DetectTemplateRegister();
     DetectTemplate2Register();
-    DetectTcphdrRegister();
-    DetectUdphdrRegister();
-    DetectTcpmssRegister();
+    DetectTcphdrRegister();               /* tcp.hdr, 属于sticky buff, 可添加修改操作(如to_md5) */
+    DetectUdphdrRegister();               /* udp.hdr, 属于sticky buff */
+    DetectTcpmssRegister();               /* tcp.mss */
     DetectICMPv6hdrRegister();
     DetectICMPv6mtuRegister();
     DetectIpv4hdrRegister();
@@ -628,8 +628,8 @@ void SigTableSetup(void)
     DetectConfigRegister();
 
     DetectTransformCompressWhitespaceRegister();
-    DetectTransformStripWhitespaceRegister();
-    DetectTransformMd5Register();
+    DetectTransformStripWhitespaceRegister();/* strip_whitespace, 过滤空白字符 */
+    DetectTransformMd5Register();            /* to_md5, 转码为md5; 基于内容(如http.uri)的转换操作 */
     DetectTransformSha1Register();
     DetectTransformSha256Register();
     DetectTransformDotPrefixRegister();

@@ -282,7 +282,7 @@ static void PrefilterMpmHttpHeaderFree(void *ptr)
 {
     SCFree(ptr);
 }
-
+/* 注册事务预处理引擎, 如“http.requet” */
 static int PrefilterMpmHttpHeaderRequestRegister(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, MpmCtx *mpm_ctx,
         const DetectBufferMpmRegistery *mpm_reg, int list_id)

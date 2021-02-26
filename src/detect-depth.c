@@ -67,7 +67,7 @@ static int DetectDepthSetup (DetectEngineCtx *de_ctx, Signature *s, const char *
     SigMatch *pm = NULL;
     int ret = -1;
 
-    /* retrive the sm to apply the depth against */
+    /* 查找上一个内容匹配, 作为depth关键字修饰的对象, retrive the sm to apply the depth against */
     pm = DetectGetLastSMFromLists(s, DETECT_CONTENT, -1);
     if (pm == NULL) {
         SCLogError(SC_ERR_DEPTH_MISSING_CONTENT, "depth needs "
@@ -83,22 +83,22 @@ static int DetectDepthSetup (DetectEngineCtx *de_ctx, Signature *s, const char *
     /* verify other conditions. */
     DetectContentData *cd = (DetectContentData *)pm->ctx;
 
-    if (cd->flags & DETECT_CONTENT_DEPTH) {
+    if (cd->flags & DETECT_CONTENT_DEPTH) { /* depth关键字只能出现一次 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use multiple depths for the same content.");
         goto end;
-    }
+    }                                       /* 不能和within/distance等相对距离关键字同时使用 */
     if ((cd->flags & DETECT_CONTENT_WITHIN) || (cd->flags & DETECT_CONTENT_DISTANCE)) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use a relative "
                    "keyword like within/distance with a absolute "
                    "relative keyword like depth/offset for the same "
                    "content." );
         goto end;
-    }
+    }                                       /* 不能和 "fast_pattern + !" 同时存在*/
     if (cd->flags & DETECT_CONTENT_NEGATED && cd->flags & DETECT_CONTENT_FAST_PATTERN) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't have a relative "
                    "negated keyword set along with 'fast_pattern'.");
         goto end;
-    }
+    }                                       /* 不能和 "fast_pattern:only" 同时存在 */
     if (cd->flags & DETECT_CONTENT_FAST_PATTERN_ONLY) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't have a relative "
                    "keyword set along with 'fast_pattern:only;'.");
@@ -111,7 +111,7 @@ static int DetectDepthSetup (DetectEngineCtx *de_ctx, Signature *s, const char *
                        "seen in depth - %s.", str);
             goto end;
         }
-        cd->depth = index;
+        cd->depth = index;                  /* 引用变量索引 */
         cd->flags |= DETECT_CONTENT_DEPTH_VAR;
     } else {
         if (StringParseUint16(&cd->depth, 0, 0, str) < 0)
@@ -129,7 +129,7 @@ static int DetectDepthSetup (DetectEngineCtx *de_ctx, Signature *s, const char *
         /* Now update the real limit, as depth is relative to the offset */
         cd->depth += cd->offset;
     }
-    cd->flags |= DETECT_CONTENT_DEPTH;
+    cd->flags |= DETECT_CONTENT_DEPTH;      /* 设置标识 */
 
     ret = 0;
  end:

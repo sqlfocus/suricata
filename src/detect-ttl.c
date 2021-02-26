@@ -62,14 +62,14 @@ void DetectTtlRegister(void)
     sigmatch_table[DETECT_TTL].name = "ttl";
     sigmatch_table[DETECT_TTL].desc = "check for a specific IP time-to-live value";
     sigmatch_table[DETECT_TTL].url = "/rules/header-keywords.html#ttl";
-    sigmatch_table[DETECT_TTL].Match = DetectTtlMatch;
+    sigmatch_table[DETECT_TTL].Match = DetectTtlMatch;             /* 报文ttl匹配 */
     sigmatch_table[DETECT_TTL].Setup = DetectTtlSetup;
     sigmatch_table[DETECT_TTL].Free = DetectTtlFree;
 #ifdef UNITTESTS
     sigmatch_table[DETECT_TTL].RegisterTests = DetectTtlRegisterTests;
 #endif
     sigmatch_table[DETECT_TTL].SupportsPrefilter = PrefilterTtlIsPrefilterable;
-    sigmatch_table[DETECT_TTL].SetupPrefilter = PrefilterSetupTtl;
+    sigmatch_table[DETECT_TTL].SetupPrefilter = PrefilterSetupTtl; /* prefilter相关 */
 
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
     return;
@@ -290,7 +290,7 @@ static int DetectTtlSetup (DetectEngineCtx *de_ctx, Signature *s, const char *tt
     sm->ctx = (SigMatchCtx *)ttld;
 
     SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
-    s->flags |= SIG_FLAG_REQUIRE_PACKET;
+    s->flags |= SIG_FLAG_REQUIRE_PACKET;    /* 基于报文的逐包匹配 */
     return 0;
 }
 

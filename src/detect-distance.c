@@ -124,11 +124,11 @@ static int DetectDistanceSetup (DetectEngineCtx *de_ctx, Signature *s,
             goto end;
         }
     }
-    cd->flags |= DETECT_CONTENT_DISTANCE;
+    cd->flags |= DETECT_CONTENT_DISTANCE;   /* 设定标识 */
 
     SigMatch *prev_pm = DetectGetLastSMByListPtr(s, pm->prev,
             DETECT_CONTENT, DETECT_PCRE, -1);
-    if (prev_pm == NULL) {
+    if (prev_pm == NULL) {                  /* 设定前置匹配标识, 提示其后置匹配依赖其检测 */
         ret = 0;
         goto end;
     }

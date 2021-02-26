@@ -286,7 +286,7 @@ static void DetectUrilenFree(DetectEngineCtx *de_ctx, void *ptr)
 
 /** \brief set prefilter dsize pair
  *  \param s signature to get dsize value from
- *//* 更具URI LEN调整内容匹配的检测长度 */
+ *//* 更具URI LEN调整http.uri sticky buffer内容匹配的检测长度 */
 void DetectUrilenApplyToContent(Signature *s, int list)
 {
     uint16_t high = 65535;

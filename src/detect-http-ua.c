@@ -95,13 +95,13 @@ void DetectHttpUARegister(void)
     sigmatch_table[DETECT_HTTP_UA].flags |= SIGMATCH_NOOPT;
     sigmatch_table[DETECT_HTTP_UA].flags |= SIGMATCH_INFO_STICKY_BUFFER;
 
-    DetectAppLayerInspectEngineRegister2("http_user_agent", ALPROTO_HTTP,
-            SIG_FLAG_TOSERVER, HTP_REQUEST_HEADERS,
-            DetectEngineInspectBufferGeneric, GetData);
+    DetectAppLayerInspectEngineRegister2("http_user_agent", ALPROTO_HTTP,/* 注册到 g_app_inspect_engines 应用检测引擎 */
+                                         SIG_FLAG_TOSERVER, HTP_REQUEST_HEADERS,
+                                         DetectEngineInspectBufferGeneric, GetData);
 
-    DetectAppLayerMpmRegister2("http_user_agent", SIG_FLAG_TOSERVER, 2,
-            PrefilterGenericMpmRegister, GetData, ALPROTO_HTTP,
-            HTP_REQUEST_HEADERS);
+    DetectAppLayerMpmRegister2("http_user_agent", SIG_FLAG_TOSERVER, 2,  /* 设置支持多模式匹配, 注册到 g_mpm_list[DETECT_BUFFER_MPM_TYPE_APP] */
+                               PrefilterGenericMpmRegister, GetData, ALPROTO_HTTP,
+                               HTP_REQUEST_HEADERS);
 
     DetectBufferTypeSetDescriptionByName("http_user_agent",
             "http user agent");
@@ -142,9 +142,9 @@ int DetectHttpUASetup(DetectEngineCtx *de_ctx, Signature *s, const char *arg)
 static int DetectHttpUserAgentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     if (DetectBufferSetActiveList(s, g_http_ua_buffer_id) < 0)
-        return -1;
+        return -1;         /* 激活sticky buffer, 以便于后续修饰匹配 */
     if (DetectSignatureSetAppProto(s, ALPROTO_HTTP) < 0)
-        return -1;
+        return -1;         /* 设置应用层检测标识, SIG_FLAG_APPLAYER */
     return 0;
 }
 

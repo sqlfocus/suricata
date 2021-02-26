@@ -68,21 +68,21 @@ int DetectOffsetSetup (DetectEngineCtx *de_ctx, Signature *s, const char *offset
     /* verify other conditions */
     DetectContentData *cd = (DetectContentData *)pm->ctx;
 
-    if (cd->flags & DETECT_CONTENT_STARTS_WITH) {
+    if (cd->flags & DETECT_CONTENT_STARTS_WITH) {  /* 不能与startswith同时配置 */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use offset with startswith.");
         goto end;
     }
-    if (cd->flags & DETECT_CONTENT_OFFSET) {
+    if (cd->flags & DETECT_CONTENT_OFFSET) {       /* 只允许配置一次offset */
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use multiple offsets for the same content.");
         goto end;
-    }
+    }                                              /* offset为绝对关键字, 与相对关键字不能同时使用 */
     if ((cd->flags & DETECT_CONTENT_WITHIN) || (cd->flags & DETECT_CONTENT_DISTANCE)) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't use a relative "
                    "keyword like within/distance with a absolute "
                    "relative keyword like depth/offset for the same "
                    "content." );
         goto end;
-    }
+    }                                              /* 与prefilter/fast_pattern关键不同时使用 */
     if (cd->flags & DETECT_CONTENT_NEGATED && cd->flags & DETECT_CONTENT_FAST_PATTERN) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "can't have a relative "
                    "negated keyword set along with 'fast_pattern'.");
@@ -100,7 +100,7 @@ int DetectOffsetSetup (DetectEngineCtx *de_ctx, Signature *s, const char *offset
                        "seen in offset - %s.", str);
             goto end;
         }
-        cd->offset = index;
+        cd->offset = index;                        /* 索引, 指向的变量 */
         cd->flags |= DETECT_CONTENT_OFFSET_VAR;
     } else {
         if (StringParseUint16(&cd->offset, 0, 0, str) < 0)
@@ -115,10 +115,10 @@ int DetectOffsetSetup (DetectEngineCtx *de_ctx, Signature *s, const char *offset
                 cd->depth = cd->content_len;
             }
             /* Updating the depth as is relative to the offset */
-            cd->depth += cd->offset;
+            cd->depth += cd->offset;               /* 直接更新depth */
         }
     }
-    cd->flags |= DETECT_CONTENT_OFFSET;
+    cd->flags |= DETECT_CONTENT_OFFSET;            /* 设置标识 */
 
     ret = 0;
  end:

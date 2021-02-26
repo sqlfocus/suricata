@@ -95,12 +95,12 @@
  *                            in chunks.
  * \param inspection_mode Refers to the engine inspection mode we are currently
  *                        inspecting.  Can be payload, stream, one of the http
- *                        buffer inspection modes or dce inspection mode.
+ *                        buffer inspection modes or dce inspection mode. 如 DETECT_ENGINE_CONTENT_INSPECTION_MODE_STATE
  * \param flags           DETECT_CI_FLAG_*
  *
  *  \retval 0 no match
  *  \retval 1 match
- *//* 内容检测入口函数 */
+ *//* 内容检测入口*/
 int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx *det_ctx,
                                   const Signature *s, const SigMatchData *smd,
                                   Packet *p, Flow *f,
@@ -110,7 +110,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
 {
     SCEnter();
     KEYWORD_PROFILING_START;
-
+    /* 判断迭代栈深度, 防止过深 */
     det_ctx->inspection_recursion_counter++;
 
     if (det_ctx->inspection_recursion_counter == de_ctx->inspection_recursion_limit) {
@@ -119,7 +119,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         SCReturnInt(0);
     }
 
-    if (smd == NULL || buffer_len == 0) {
+    if (smd == NULL || buffer_len == 0) {      /* 简单条件检测, 匹配必须存在, 且必须存在待检测缓存 */
         KEYWORD_PROFILING_END(det_ctx, smd->type, 0);
         SCReturnInt(0);
     }
@@ -150,14 +150,14 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
         uint32_t prev_offset = 0; /**< used in recursive searching */
         uint32_t prev_buffer_offset = det_ctx->buffer_offset;
 
-        do {
+        do {/* 根据具体情形, 获取检测内容位置, offset/depth */
             if ((cd->flags & DETECT_CONTENT_DISTANCE) ||
-                (cd->flags & DETECT_CONTENT_WITHIN)) {
+                (cd->flags & DETECT_CONTENT_WITHIN)) {   /* 配置了within/distance相对位置关键字 */
                 SCLogDebug("det_ctx->buffer_offset %"PRIu32, det_ctx->buffer_offset);
 
                 offset = prev_buffer_offset;
                 depth = buffer_len;
-
+                                     /* 调整相对位置, distance */
                 int distance = cd->distance;
                 if (cd->flags & DETECT_CONTENT_DISTANCE) {
                     if (cd->flags & DETECT_CONTENT_DISTANCE_VAR) {
@@ -171,7 +171,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     SCLogDebug("cd->distance %"PRIi32", offset %"PRIu32", depth %"PRIu32,
                                distance, offset, depth);
                 }
-
+                                     /* 调整相对位置, within */
                 if (cd->flags & DETECT_CONTENT_WITHIN) {
                     if (cd->flags & DETECT_CONTENT_WITHIN_VAR) {
                         if ((int32_t)depth > (int32_t)(prev_buffer_offset + det_ctx->byte_values[cd->within] + distance)) {
@@ -220,7 +220,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                         SCLogDebug("setting offset %"PRIu32, offset);
                     }
                 }
-            } else { /* implied no relative matches */
+            } else { /* implied no relative matches */   /* 未配置相对位置关键字 */
                 /* set depth */
                 if (cd->flags & DETECT_CONTENT_DEPTH_VAR) {
                     depth = det_ctx->byte_values[cd->depth];
@@ -235,7 +235,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                         goto no_match;
                     } else if (depth >= (stream_start_offset + buffer_len)) {
                         ;
-                    } else {
+                    } else {         /* 配置了depth关键字, 则调整需要匹配的数据量 */
                         depth = depth - stream_start_offset;
                     }
                 }
@@ -275,7 +275,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     goto no_match;
                 }
             }
-
+                                     /* 计算待搜索缓存范围 */
             const uint8_t *sbuffer = buffer + offset;
             uint32_t sbuffer_len = depth - offset;
             uint32_t match_offset = 0;
@@ -289,7 +289,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
             } else if (cd->content_len > sbuffer_len) {
                 found = NULL;
             } else {
-                /* do the actual search */
+                                     /* 真实扫描, do the actual search */
                 found = SpmScan(cd->spm_ctx, det_ctx->spm_thread_ctx, sbuffer,
                         sbuffer_len);
             }
@@ -302,23 +302,23 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                 if ((cd->flags & (DETECT_CONTENT_DISTANCE|DETECT_CONTENT_WITHIN)) == 0) {
                     /* independent match from previous matches, so failure is fatal */
                     det_ctx->discontinue_matching = 1;
-                }
+                }                    /* 未搜索到, 且非相对搜索, 未匹配 */
 
                 goto no_match;
             } else if (found == NULL && (cd->flags & DETECT_CONTENT_NEGATED)) {
-                goto match;
+                goto match;          /* 未搜索到, 但取反操作, 匹配 */
             } else if (found != NULL && (cd->flags & DETECT_CONTENT_NEGATED)) {
                 SCLogDebug("content %"PRIu32" matched at offset %"PRIu32", but negated so no match", cd->id, match_offset);
                 /* don't bother carrying recursive matches now, for preceding
-                 * relative keywords */
+                 * relative keywords    搜索到, 但取反操作, 未匹配  */
                 if (DETECT_CONTENT_IS_SINGLE(cd))
                     det_ctx->discontinue_matching = 1;
                 goto no_match;
-            } else {
+            } else {                 /* 搜索到, 无取翻操作 */
                 match_offset = (uint32_t)((found - buffer) + cd->content_len);
                 SCLogDebug("content %"PRIu32" matched at offset %"PRIu32"", cd->id, match_offset);
-                det_ctx->buffer_offset = match_offset;
-
+                det_ctx->buffer_offset = match_offset;          /* 更新本次匹配的尾字节 */
+                                                                /* 缓存已经耗尽 */
                 if ((cd->flags & DETECT_CONTENT_ENDS_WITH) == 0 || match_offset == buffer_len) {
                     /* Match branch, add replace to the list if needed */
                     if (cd->flags & DETECT_CONTENT_REPLACE) {
@@ -332,7 +332,7 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     }
 
                     /* if this is the last match we're done */
-                    if (smd->is_last) {
+                    if (smd->is_last) {                         /* 已经是最后一个匹配, 搞定 */
                         goto match;
                     }
 
@@ -345,12 +345,12 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     int r = DetectEngineContentInspection(de_ctx, det_ctx, s, smd+1,
                             p, f, buffer, buffer_len, stream_start_offset, flags,
                             inspection_mode);
-                    if (r == 1) {
+                    if (r == 1) {                               /* 递归下一个匹配, 如果也匹配, 搞定 */
                         SCReturnInt(1);
                     }
                     SCLogDebug("no match for 'next sm'");
 
-                    if (det_ctx->discontinue_matching) {
+                    if (det_ctx->discontinue_matching) {        /* 下一个匹配失败, 且不继续, 则未匹配 */
                         SCLogDebug("'next sm' said to discontinue this right now");
                         goto no_match;
                     }
@@ -358,12 +358,12 @@ int DetectEngineContentInspection(DetectEngineCtx *de_ctx, DetectEngineThreadCtx
                     /* no match and no reason to look for another instance */
                     if ((cd->flags & DETECT_CONTENT_WITHIN_NEXT) == 0) {
                         SCLogDebug("'next sm' does not depend on me, so we can give up");
-                        det_ctx->discontinue_matching = 1;
+                        det_ctx->discontinue_matching = 1;      /* 后续匹配不依赖当前, 且后续匹配失败, 则未匹配 */
                         goto no_match;
                     }
 
                     SCLogDebug("'next sm' depends on me %p, lets see what we can do (flags %u)", cd, cd->flags);
-                }
+                }                                               /* 缓存未耗尽, 设定偏移, 继续下一个匹配 */
                 /* set the previous match offset to the start of this match + 1 */
                 prev_offset = (match_offset - (cd->content_len - 1));
                 SCLogDebug("trying to see if there is another match after prev_offset %"PRIu32, prev_offset);

@@ -1034,7 +1034,7 @@ void IPOnlyMatchPacket(ThreadVars *tv,
     uint32_t u;
     for (u = 0; u < src->size; u++) {
         SCLogDebug("And %"PRIu8" & %"PRIu8, src->array[u], dst->array[u]);
-        /* 记录到DetectEngineThreadCtx->io_ctx */
+        /* 记录到 DetectEngineThreadCtx->io_ctx */
         /* <TK!!!>此处记录的是源、目的IP同时匹配的规则 */
         io_tctx->sig_match_array[u] = dst->array[u] & src->array[u];
 

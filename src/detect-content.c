@@ -66,7 +66,7 @@ void DetectContentRegister (void)
     sigmatch_table[DETECT_CONTENT].RegisterTests = DetectContentRegisterTests;
 #endif
     sigmatch_table[DETECT_CONTENT].flags = (SIGMATCH_QUOTES_MANDATORY|SIGMATCH_HANDLE_NEGATION);
-}
+}                                            /* 允许前置"!" */
 
 /**
  *  \brief Parse a content string, ie "abc|DE|fgh"
@@ -78,7 +78,7 @@ void DetectContentRegister (void)
  *
  *  \retval -1 error
  *  \retval 0 ok
- */
+ *//* 去除 "|DE|" 等16进制转义 */
 int DetectContentDataParse(const char *keyword, const char *contentstr,
         uint8_t **pstr, uint16_t *plen)
 {
@@ -228,7 +228,7 @@ DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
     /* Prepare SPM search context. */
     cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 0,
                              spm_global_thread_ctx);
-    if (cd->spm_ctx == NULL) {  /* 初始化其单模引擎, SpmCtx */
+    if (cd->spm_ctx == NULL) {  /* 初始化其单模引擎, SpmCtx; 存储编译结果, 更新 spm_global_thread_ctx->ctx(临时结果的空间) */
         SCFree(content);
         SCFree(cd);
         return NULL;
@@ -334,12 +334,12 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
     DetectContentPrint(cd);
 
     if (DetectBufferGetActiveList(de_ctx, s) == -1)
-        goto error;        /* 存储前置另外的content(如果已经有) */
+        goto error;        /* 将"检测类型+转换"看作新类型 */
 
     int sm_list = s->init_data->list;
-    if (sm_list == DETECT_SM_LIST_NOTSET) {        /* 初始值, 未初始化, 此content存储在 DETECT_SM_LIST_PMATCH 链 */
+    if (sm_list == DETECT_SM_LIST_NOTSET) {        /* 无sticky buffer, 此content存储在 DETECT_SM_LIST_PMATCH 链 */
         sm_list = DETECT_SM_LIST_PMATCH;
-    } else if (sm_list > DETECT_SM_LIST_MAX &&     /* */
+    } else if (sm_list > DETECT_SM_LIST_MAX &&     /* 作用于sticky buffer, 检查转换兼容性 */
             0 == (cd->flags & DETECT_CONTENT_NEGATED)) {
         /* Check transform compatibility */
         const char *tstr;  /* 检测transform兼容性: 例如, 带有去除空格转换, 则不允许检测内容带有空格 */
@@ -352,12 +352,12 @@ int DetectContentSetup(DetectEngineCtx *de_ctx, Signature *s, const char *conten
         }
     }
 
-    sm = SigMatchAlloc();  /* 存储匹配, 类型 DETECT_CONTENT */
+    sm = SigMatchAlloc();                    /* 新建匹配, 类型 DETECT_CONTENT */
     if (sm == NULL)
         goto error;
     sm->ctx = (void *)cd;
     sm->type = DETECT_CONTENT;
-    SigMatchAppendSMToList(s, sm, sm_list);
+    SigMatchAppendSMToList(s, sm, sm_list);  /* 加入对应的检测类型链表 */
 
     return 0;
 
@@ -388,15 +388,15 @@ void DetectContentFree(DetectEngineCtx *de_ctx, void *ptr)
 /**
  *  \retval 1 valid
  *  \retval 0 invalid
- */
+ */ /* 检测dsize关键字 与 content关键字 之间是否存在长度冲突 */
 bool DetectContentPMATCHValidateCallback(const Signature *s)
 {
-    if (!(s->flags & SIG_FLAG_DSIZE)) {
+    if (!(s->flags & SIG_FLAG_DSIZE)) { /* 未设定dsize关键字 */
         return TRUE;
     }
 
     int max_right_edge_i = SigParseGetMaxDsize(s);
-    if (max_right_edge_i < 0) {
+    if (max_right_edge_i < 0) {         /* 获取dsize关键字指定的最大值 */
         return TRUE;
     }
 
@@ -405,7 +405,7 @@ bool DetectContentPMATCHValidateCallback(const Signature *s)
     const SigMatch *sm = s->init_data->smlists[DETECT_SM_LIST_PMATCH];
     for ( ; sm != NULL; sm = sm->next) {
         if (sm->type != DETECT_CONTENT)
-            continue;
+            continue;                   /* content关键字匹配范围不能超过dsize */
         const DetectContentData *cd = (const DetectContentData *)sm->ctx;
         uint32_t right_edge = cd->content_len + cd->offset;
         if (cd->content_len > max_right_edge) {

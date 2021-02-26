@@ -127,8 +127,8 @@ static int DetectAckSetup(DetectEngineCtx *de_ctx, Signature *s, const char *opt
     }
     sm->ctx = (SigMatchCtx*)data;
 
-    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH);
-    s->flags |= SIG_FLAG_REQUIRE_PACKET;
+    SigMatchAppendSMToList(s, sm, DETECT_SM_LIST_MATCH); /* 加入逐包匹配 */
+    s->flags |= SIG_FLAG_REQUIRE_PACKET;                 /* 匹配时, 依赖报文 */
 
     return 0;
 

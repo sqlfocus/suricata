@@ -58,13 +58,13 @@ void DetectUdphdrRegister(void)
 #endif
 
     g_udphdr_buffer_id = DetectBufferTypeRegister("udp.hdr");
-    BUG_ON(g_udphdr_buffer_id < 0);
+    BUG_ON(g_udphdr_buffer_id < 0);             /* 注册检测类型 */
 
-    DetectBufferTypeSupportsPacket("udp.hdr");
+    DetectBufferTypeSupportsPacket("udp.hdr");  /* 支持报文检测 */
 
     DetectPktMpmRegister("udp.hdr", 2, PrefilterGenericMpmPktRegister, GetData);
-
-    DetectPktInspectEngineRegister("udp.hdr", GetData,
+                                                       /* 支持多模式匹配(基于报文), 注册到多模式引擎 g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT]  */
+    DetectPktInspectEngineRegister("udp.hdr", GetData, /* 注册到报文检测引擎, g_pkt_inspect_engines */
             DetectEngineInspectPktBufferGeneric);
     return;
 }
@@ -84,10 +84,10 @@ static int DetectUdphdrSetup (DetectEngineCtx *de_ctx, Signature *s, const char 
     if (!(DetectProtoContainsProto(&s->proto, IPPROTO_UDP)))
         return -1;
 
-    s->flags |= SIG_FLAG_REQUIRE_PACKET;
+    s->flags |= SIG_FLAG_REQUIRE_PACKET;      /* 基于报文的检测 */
 
     if (DetectBufferSetActiveList(s, g_udphdr_buffer_id) < 0)
-        return -1;
+        return -1;                            /* 因为属于sticky buff, 因此激活等待后续修正操作(如to_md5) */
 
     return 0;
 }

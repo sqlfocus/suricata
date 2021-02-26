@@ -176,7 +176,7 @@ static void SetupDetectEngineConfig(DetectEngineCtx *de_ctx) {
 static int DetectFiledataSetup (DetectEngineCtx *de_ctx, Signature *s, const char *str)
 {
     SCEnter();
-
+    /* 文件内容关键字, 仅支持基于tcp的HTTP/SMTP/SMB/HTTP2协议 */
     if (!DetectProtoContainsProto(&s->proto, IPPROTO_TCP) ||
         (s->alproto != ALPROTO_UNKNOWN && s->alproto != ALPROTO_HTTP &&
         s->alproto != ALPROTO_SMTP && s->alproto != ALPROTO_SMB &&
@@ -184,24 +184,24 @@ static int DetectFiledataSetup (DetectEngineCtx *de_ctx, Signature *s, const cha
         SCLogError(SC_ERR_CONFLICTING_RULE_KEYWORDS, "rule contains conflicting keywords.");
         return -1;
     }
-
+    /* 不支持from client的http: 上传文件??? */
     if (s->alproto == ALPROTO_HTTP && (s->init_data->init_flags & SIG_FLAG_INIT_FLOW) &&
         (s->flags & SIG_FLAG_TOSERVER) && !(s->flags & SIG_FLAG_TOCLIENT)) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "Can't use file_data with "
                 "flow:to_server or flow:from_client with http.");
         return -1;
     }
-
+    /* 不支持from server的smtp */
     if (s->alproto == ALPROTO_SMTP && (s->init_data->init_flags & SIG_FLAG_INIT_FLOW) &&
         !(s->flags & SIG_FLAG_TOSERVER) && (s->flags & SIG_FLAG_TOCLIENT)) {
         SCLogError(SC_ERR_INVALID_SIGNATURE, "Can't use file_data with "
                 "flow:to_client or flow:from_server with smtp.");
         return -1;
     }
-
+    /* 设定sticky buffer */
     if (DetectBufferSetActiveList(s, DetectBufferTypeGetByName("file_data")) < 0)
         return -1;
-
+    /* 设定文件内容检测阈值/限制 */
     s->init_data->init_flags |= SIG_FLAG_INIT_FILEDATA;
     SetupDetectEngineConfig(de_ctx);
     return 0;

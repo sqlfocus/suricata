@@ -66,7 +66,7 @@ static int DetectEndsWithSetup (DetectEngineCtx *de_ctx, Signature *s, const cha
  */
 void DetectIsdataatRegister(void)
 {
-    sigmatch_table[DETECT_ISDATAAT].name = "isdataat";
+    sigmatch_table[DETECT_ISDATAAT].name = "isdataat";  /* 检测负载某处是否有数据 */
     sigmatch_table[DETECT_ISDATAAT].desc = "check if there is still data at a specific part of the payload";
     sigmatch_table[DETECT_ISDATAAT].url = "/rules/payload-keywords.html#isdataat";
     /* match is handled in DetectEngineContentInspection() */
@@ -79,7 +79,7 @@ void DetectIsdataatRegister(void)
     sigmatch_table[DETECT_ENDS_WITH].name = "endswith";
     sigmatch_table[DETECT_ENDS_WITH].desc = "make sure the previous content matches exactly at the end of the buffer";
     sigmatch_table[DETECT_ENDS_WITH].url = "/rules/payload-keywords.html#endswith";
-    sigmatch_table[DETECT_ENDS_WITH].Setup = DetectEndsWithSetup;
+    sigmatch_table[DETECT_ENDS_WITH].Setup = DetectEndsWithSetup;  /* 仅仅设定标识 */
     sigmatch_table[DETECT_ENDS_WITH].flags = SIGMATCH_NOOPT;
 
     DetectSetupParseRegexes(PARSE_REGEX, &parse_regex);
@@ -156,20 +156,20 @@ static DetectIsdataatData *DetectIsdataatParse (DetectEngineCtx *de_ctx, const c
             if (StringParseUint16(&idad->dataat, 10,
                                         strlen(args[0]), args[0]) < 0 ) {
                 SCLogError(SC_ERR_INVALID_VALUE, "isdataat out of range");
-                SCFree(idad);
+                SCFree(idad);          /* 偏移长度 */
                 idad = NULL;
                 goto error;
             }
         }
 
-        if (args[1] !=NULL) {
+        if (args[1] !=NULL) {          /* 相对于上一个匹配, "isdataat:6,relateive" */
             idad->flags |= ISDATAAT_RELATIVE;
 
             if(args[2] !=NULL)
                 idad->flags |= ISDATAAT_RAWBYTES;
         }
 
-        if (isdataatstr[0] == '!') {
+        if (isdataatstr[0] == '!') {   /* 前置"!", 表示否定验证 */
             idad->flags |= ISDATAAT_NEGATED;
         }
 
@@ -203,7 +203,7 @@ error:
  *
  * \retval 0 on Success
  * \retval -1 on Failure
- */
+ *//* 解析配置关键字“isdataat” */
 int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isdataatstr)
 {
     SigMatch *sm = NULL;
@@ -213,10 +213,10 @@ int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isda
     int ret = -1;
 
     idad = DetectIsdataatParse(de_ctx, isdataatstr, &offset);
-    if (idad == NULL)
+    if (idad == NULL)         /* 解析配置字符串: "isdataat:50, relative;" */
         return -1;
 
-    int sm_list;
+    int sm_list;              /* 查找修饰的匹配类型 */
     if (s->init_data->list != DETECT_SM_LIST_NOTSET) {
         if (DetectBufferGetActiveList(de_ctx, s) == -1)
             goto end;
@@ -225,13 +225,13 @@ int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isda
         if (idad->flags & ISDATAAT_RELATIVE) {
             prev_pm = DetectGetLastSMFromLists(s, DETECT_CONTENT, DETECT_PCRE, -1);
         }
-    } else if (idad->flags & ISDATAAT_RELATIVE) {
+    } else if (idad->flags & ISDATAAT_RELATIVE) {        /* relative: 相对于上一个匹配 */
         prev_pm = DetectGetLastSMFromLists(s,
             DETECT_CONTENT, DETECT_PCRE,
             DETECT_BYTETEST, DETECT_BYTEJUMP, DETECT_BYTE_EXTRACT,
             DETECT_ISDATAAT, DETECT_BYTEMATH, -1);
         if (prev_pm == NULL)
-            sm_list = DETECT_SM_LIST_PMATCH;
+            sm_list = DETECT_SM_LIST_PMATCH;  /* 默认 */
         else {
             sm_list = SigMatchListSMBelongsTo(s, prev_pm);
             if (sm_list < 0)
@@ -241,7 +241,7 @@ int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isda
         sm_list = DETECT_SM_LIST_PMATCH;
     }
 
-    if (offset != NULL) {
+    if (offset != NULL) {     /* 如果偏移值来自某变量, 先提取变量索引, 并设定标识 */
         DetectByteIndexType index;
         if (!DetectByteRetrieveSMVar(offset, s, &index)) {
             SCLogError(SC_ERR_INVALID_SIGNATURE, "Unknown byte_extract var "
@@ -255,19 +255,19 @@ int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isda
         offset = NULL;
     }
 
-    /* 'ends with' scenario */
+    /* 'ends with' scenario *//* endswith的等价写法: "isdataat:!1,relative;" */
     if (prev_pm != NULL && prev_pm->type == DETECT_CONTENT &&
         idad->dataat == 1 &&
         (idad->flags & (ISDATAAT_RELATIVE|ISDATAAT_NEGATED)) == (ISDATAAT_RELATIVE|ISDATAAT_NEGATED))
     {
         DetectIsdataatFree(de_ctx, idad);
         DetectContentData *cd = (DetectContentData *)prev_pm->ctx;
-        cd->flags |= DETECT_CONTENT_ENDS_WITH;
+        cd->flags |= DETECT_CONTENT_ENDS_WITH;  /* 设置等价标识 */
         ret = 0;
         goto end;
     }
 
-    sm = SigMatchAlloc();
+    sm = SigMatchAlloc();     /* 分配匹配结构, 并挂接到作用的匹配后 */
     if (sm == NULL)
         goto end;
     sm->type = DETECT_ISDATAAT;
@@ -279,8 +279,8 @@ int DetectIsdataatSetup (DetectEngineCtx *de_ctx, Signature *s, const char *isda
         goto end;
     }
 
-    if (prev_pm == NULL) {
-        ret = 0;
+    if (prev_pm == NULL) {    /* 如果设定了relative关键字, 则设定其前置的content特殊标识 */
+        ret = 0;              /* 此匹配的起始位置, 为前置匹配的匹配结果后 */
         goto end;
     }
 
@@ -329,7 +329,7 @@ static int DetectEndsWithSetup (DetectEngineCtx *de_ctx, Signature *s, const cha
     /* verify other conditions. */
     DetectContentData *cd = (DetectContentData *)pm->ctx;
 
-    cd->flags |= DETECT_CONTENT_ENDS_WITH;
+    cd->flags |= DETECT_CONTENT_ENDS_WITH;  /* 设置标识 */
 
     ret = 0;
  end:

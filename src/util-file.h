@@ -89,7 +89,7 @@ typedef struct File_ {
     uint64_t size;                  /* 文件数据量 */
     uint32_t inspect_window;
     uint32_t inspect_min_size;
-    uint64_t start;
+    uint64_t start;                 /* "Content-Range: bytes 0-2000/4932"解析结果 */
     uint64_t end;
 
     uint32_t *sid; /* signature id of a rule that triggered the filestore event */

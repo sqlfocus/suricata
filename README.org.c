@@ -144,6 +144,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
 配置文件目录: /path/to/suricata/etc/
 规则文件目录: /path/to/suricata/rules/
 日志输出控制: /path/to/suricata/threshold.config
+
                                                        
 --SuricataMain()
   --PostConfLoadedSetup()
@@ -158,6 +159,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
   --PostConfLoadedDetectSetup()
     --DetectEngineCtxInit()        初始化检测引擎, DetectEngineCtx
       --DetectEngineCtxLoadConf()                 加载配置文件, "detect:"配置
+      --DetectBufferTypeSetupDetectEngine()       记录已注册的检测类型、检测引擎等
       --SRepInit()                                加载IP信誉库
         --SRepLoadCatFile()
         --SRepLoadFile()
@@ -181,6 +183,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
                   --SigBuildAddressMatchArray()   规则源/目的IP列表变更为数组，以加速匹配
                   --DetectBufferRunSetupCallback()进一步构建检测类型环境, 如根据urilen设定限制内容检测长度/转换为小写
                     --DetectBufferType->SetupCallback()
+                  --SigValidate()                 合法性检测, 并调整标识
                   --SignatureSetType()
                   --IPOnlySigParseAddress()       构建IPonly加速查找数据结构
         1--SCSigRegisterSignatureOrderingFuncs()  注册规则优先级函数
@@ -188,10 +191,13 @@ SCLogConfig *sc_log_config         日志配置信息结构
         --SCThresholdConfInitContext()            解析threshold.config文件: 限制“嘈杂”规则的日志输出速率
         --SigGroupBuild()          调整规则列表为运行时刻需要的结构
           2--DetectSetFastPatternAndItsId()
+            --RetrieveFPForSig()   提取可作为fast pattern的匹配, 为后续prefilter构建提供基础
           --SigInitStandardMpmFactoryContexts()
           --SigAddressPrepareStage1()
             --SignatureCreateMask()               初始化规则标志位, 如 SIG_MASK_REQUIRE_PAYLOAD 等
             --RuleSetWhitelist()
+            --DetectBufferRunSetupCallback()
+              --DetectBufferType->SetupCallback()
             --DetectFlowbitsAnalyze()
           --SigAddressPrepareStage2()
             --RulesGroupByPorts()                 构建基于端口的规则组
@@ -199,7 +205,8 @@ SCLogConfig *sc_log_config         日志配置信息结构
             --IPOnlyPrepare()                     构建IPonly检测规则组
           --SigAddressPrepareStage3()
             --DetectEngineBuildDecoderEventSgh()  构建基于事件的规则组/SIG_FLAG_INIT_DEONLY
-          --SigAddressPrepareStage4()
+          2--SigAddressPrepareStage4()
+            --SigGroupHeadSetFilestoreCount()     获取规则组的标识, 以加速匹配
             --PrefilterSetupRuleGroup()           构建规则组的prefilter多模环境
               --PatternMatchPrepareGroup()
                 --MpmStorePrepareBuffer()
@@ -207,13 +214,17 @@ SCLogConfig *sc_log_config         日志配置信息结构
                     --PopulateMpmHelperAddPattern()
                     --mpm_table[].Prepare()
                 --PrepareAppMpms()
+                  --DetectBufferMpmRegistery->PrefilterRegisterWithListId()
+                  ==>PrefilterGenericMpmRegister()    加入SigGroupHead->init->tx_engines
                 --PreparePktMpms()
-              --sigmatch_table[].SetupPrefilter()
+                  --DetectBufferMpmRegistery->PrefilterRegisterWithListId()
+              --sigmatch_table[].SetupPrefilter()     构建配置prefilter关键字的prefilter检测引擎, 加入SigGroupHead->init->pkt_engines
             --SigGroupHeadBuildNonPrefilterArray()汇总规则组的非prefilter的规则
           2--DetectMpmPrepareBuiltinMpms()
           --DetectMpmPrepareAppMpms()             共享环境构建多模引擎
           --DetectMpmPreparePktMpms()
-          --SigMatchPrepare()                     初始化单规则的检测引擎
+          --SigMatchPrepare()                     初始化单规则的检测引擎 Signature->app_inspect/pkt_inspect
+            --DetectEngineAppInspectionEngine2Signature()
             --DetectEnginePktInspectionSetup()
               --DetectEngineInspectRulePayloadMatches()
               --DetectEngineInspectRulePacketMatches()
@@ -236,7 +247,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
       --DetectRun()
     --DetectNoFlow()            无流检测
       --DetectRun()
-        --DetectRunSetup()           构建检测环境, 检查是否有待检测重组原始数据
+        1--DetectRunSetup()           构建检测环境, 检查是否有待检测重组原始数据
           --StreamReassembleRawHasDataReady()
         --DetectRunInspectIPOnly()   IPonly规则引擎, DetectEngineIPOnlyCtx->tree_ipv4src
           --IPOnlyMatchPacket()
@@ -244,18 +255,18 @@ SCLogConfig *sc_log_config         日志配置信息结构
             --IP/端口匹配/
             --匹配 Signature->sm_arrays[DETECT_SM_LIST_MATCH]
             --匹配 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
-        --DetectRunGetRuleGroup()    获取基于端口的规则组
+        1--DetectRunGetRuleGroup()    获取基于端口的规则组
           --SigMatchSignaturesGetSgh()
         --DetectRunPrefilterPkt()    运行prefilters引擎
           --Prefilter()
             --匹配 SigGroupHead->pkt_engines
             --匹配 SigGroupHead->payload_engines
           --合并匹配结果 + 非prefilter规则, 作为后续逐条匹配的规则集
-        --DetectRulePacketRules()    prefilter结果规则, 运行逐报文规则
+        1--DetectRulePacketRules()    prefilter结果规则, 运行逐报文规则
           --DetectEnginePktInspectionRun()
             --匹配 Signature->pkt_engines
             --运行 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
-        --DetectRunTx()              上一步结果, 运行事务检测
+        --DetectRunTx()              上一步结果, 运行事务/应用检测
           --DetectRunPrefilterTx()
             --匹配 SigGroupHead->tx_engines
           --加入前置已匹配规则 DetectEngineThreadCtx->match_array[]
@@ -263,7 +274,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
           --DetectRunTxInspectRule()
             --匹配 Signature->app_inspect
           --匹配后 Signature->sm_arrays[DETECT_SM_LIST_POSTMATCH]
-        --DetectRunPostRules()       检测后处理, 匹配Threshold规则，去掉部分告警
+        1--DetectRunPostRules()       检测后处理, 匹配Threshold规则，去掉部分告警
           --PacketAlertFinalize()
             --PacketAlertHandle()
             --TagHandlePacket()
@@ -663,10 +674,18 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
   --HTPCallbackResponseHeaderData()       收到应答头
   --HTPCallbackResponseBodyData()
     --HtpResponseBodyHandle()
-      --HTPFileOpen()                     缓存文件
+      --HTPFileOpen()
+        --FileFlowToFlags()               根据流标识->file_flags更新缓存文件File->flags
   --HTPCallbackResponse()
 
 --FlowWorker()
+  --Detect()
+    --DetectFlow()
+      --DetectRun()
+        --DetectRunGetRuleGroup()
+          --DetectRunPostGetFirstRuleGroup()
+            --DetectPostInspectFileFlagsUpdate()
+              --FileUpdateFlowFileFlags() 更新流标识->file_flags
   --OutputLoggerLog()
     --RootLogger->LogFunc()
     -->OutputFiledataLog()

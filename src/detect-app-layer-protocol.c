@@ -250,7 +250,7 @@ static int PrefilterSetupAppProto(DetectEngineCtx *de_ctx, SigGroupHead *sgh)
 
 static bool PrefilterAppProtoIsPrefilterable(const Signature *s)
 {
-    if (s->flags & SIG_FLAG_PDONLY) {
+    if (s->flags & SIG_FLAG_PDONLY) { /* 针对 仅做协议识别的 规则 */
         SCLogDebug("prefilter on PD %u", s->id);
         return TRUE;
     }
@@ -275,7 +275,7 @@ void DetectAppLayerProtocolRegister(void)
     sigmatch_table[DETECT_AL_APP_LAYER_PROTOCOL].flags =
         (SIGMATCH_QUOTES_OPTIONAL|SIGMATCH_HANDLE_NEGATION);
 
-    sigmatch_table[DETECT_AL_APP_LAYER_PROTOCOL].SetupPrefilter =
+    sigmatch_table[DETECT_AL_APP_LAYER_PROTOCOL].SetupPrefilter =   /* prefilter过滤 */
         PrefilterSetupAppProto;
     sigmatch_table[DETECT_AL_APP_LAYER_PROTOCOL].SupportsPrefilter =
         PrefilterAppProtoIsPrefilterable;
