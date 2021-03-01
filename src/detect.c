@@ -1127,8 +1127,8 @@ static bool DetectRunTxInspectRule(ThreadVars *tv,
                 TRACE_SID_TXS(s->id, tx, "stream skipped, stored result %d used instead", match);
             } else {
                 KEYWORD_PROFILING_SET_LIST(det_ctx, engine->sm_list);
-                if (engine->Callback) {               /* 检测回调 */
-                    match = engine->Callback(tv, de_ctx, det_ctx,
+                if (engine->Callback) {               /* 检测回调;  http.uri ==> DetectEngineInspectBufferGeneric() */
+                    match = engine->Callback(tv, de_ctx, det_ctx,/* file_data ==> DetectEngineInspectFiledata() */
                             s, engine->smd, f, flow_flags, alstate, tx->tx_ptr, tx->tx_id);
                 } else {
                     BUG_ON(engine->v2.Callback == NULL);

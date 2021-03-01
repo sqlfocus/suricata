@@ -146,22 +146,22 @@ typedef enum HtpSwfCompressType_ {
 } HtpSwfCompressType;
 
 typedef struct HTPCfgDir_ {
-    uint32_t body_limit;            /* 报文体检测长度上限: 0无限制 */
-    uint32_t inspect_min_size;      /* 启动报文体检测的门限值: 大于此值启动检测 */
-    uint32_t inspect_window;        /* 报文检测宽度最小值??? */
-    StreamingBufferConfig sbcfg;    /* 缓存配置 */
+    uint32_t body_limit;            /* ???报文体检测长度上限: 0无限制 */
+    uint32_t inspect_min_size;      /* ???启动报文体检测的门限值: 大于此值启动检测 */
+    uint32_t inspect_window;        /* ???报文检测宽度最小值 */
+    StreamingBufferConfig sbcfg;    /* ???缓存配置 */
 } HTPCfgDir;         /* libhtp库方向性配置 */
 
 /** Need a linked list in order to keep track of these */
 typedef struct HTPCfgRec_ {
-    htp_cfg_t           *cfg;       /* libhtp库专有配置 */
+    htp_cfg_t           *cfg;       /* libhtp库专有配置, 如回调函数指针表/HTPCallbackRequestHeaderData() */
     struct HTPCfgRec_   *next;
 
     int                 uri_include_all; /**< use all info in uri (bool) */
 
     /** max size of the client body we inspect */
-    int                 randomize;
-    int                 randomize_range;
+    int                 randomize;  /* 用于随机->request/response.inspect_min_size/inspect_windown等 */
+    int                 randomize_range; /*   参考app-layer-htp.c:2436 */
     int                 http_body_inline;
 
     int                 swf_decompression_enabled;

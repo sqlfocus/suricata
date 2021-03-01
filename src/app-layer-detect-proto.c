@@ -72,15 +72,15 @@ typedef struct AppLayerProtoDetectProbingParserElement_ {
     uint32_t alproto_mask;    /* 应用协议索引的bit位, 如 1<<ALPROTO_HTTP */
     /* \todo check if we can reduce the bottom 2 vars to uint16_t */
     /* the min length of data that has to be supplied to invoke the parser */
-    uint32_t min_depth;
+    uint32_t min_depth;                  /* ALPROTO_TLS -> 0 */
     /* the max length of data after which this parser won't be invoked */
-    uint32_t max_depth;
+    uint32_t max_depth;                  /* ALPROTO_TLS -> 3 */
 
     /* the to_server probing parser function */
-    ProbingParserFPtr ProbingParserTs;
+    ProbingParserFPtr ProbingParserTs;   /* ALPROTO_TLS -> SSLProbingParser() */
 
     /* the to_client probing parser function */
-    ProbingParserFPtr ProbingParserTc;
+    ProbingParserFPtr ProbingParserTc;   /* */
 
     struct AppLayerProtoDetectProbingParserElement_ *next;
 } AppLayerProtoDetectProbingParserElement;
@@ -92,21 +92,21 @@ typedef struct AppLayerProtoDetectProbingParserPort_ {
     uint32_t alproto_mask;   /* 此端口已注册的应用协议位掩码 */
 
     /* the max depth for all the probing parsers registered for this port */
-    uint16_t dp_max_depth;   /* to server */
-    uint16_t sp_max_depth;   /* to client */
-
-    AppLayerProtoDetectProbingParserElement *dp;    /* 匹配规则列表; 特定端口的最后都 */
+    uint16_t dp_max_depth;   /* ->dp 最大匹配深度; to server */
+    uint16_t sp_max_depth;   /* ->sp 最大匹配深度; to client */
+    /* <TK!!!>每个端口只能对应某个协议, 不能对应多个 */
+    AppLayerProtoDetectProbingParserElement *dp;    /* 匹配应用协议列表; 特定端口的最后都 */
     AppLayerProtoDetectProbingParserElement *sp;    /* 会附加0端口(普世端口)规则列表 */
 
     struct AppLayerProtoDetectProbingParserPort_ *next; /* 以->port维护此链表 */
 } AppLayerProtoDetectProbingParserPort;/* 某个端口注册的应用检测列表, alpd_ctx->ctx_pp[]->port[] */
 
 typedef struct AppLayerProtoDetectProbingParser_ {
-    uint8_t ipproto;     /* IPPROTO_TCP */
+    uint8_t ipproto;                                /* IPPROTO_TCP */
     AppLayerProtoDetectProbingParserPort *port;     /* 端口号列表 */
 
     struct AppLayerProtoDetectProbingParser_ *next; /* 以->ipproto值维护此链表 */
-} AppLayerProtoDetectProbingParser;    /* 知名端口列表, alpd_ctx->ctx_pp[] */
+} AppLayerProtoDetectProbingParser;    /* 知名端口列表: 以传输层协议组织端口, alpd_ctx->ctx_pp[] */
 
 typedef struct AppLayerProtoDetectPMSignature_ {
     AppProto alproto;
@@ -114,22 +114,22 @@ typedef struct AppLayerProtoDetectPMSignature_ {
     SigIntId id;            /* sig id; 构建引擎后为 AppLayerProtoDetectPMCtx->map[] 数组索引 */
     /* \todo Change this into a non-pointer */
     DetectContentData *cd;  /* 单模式引擎环境 */
-    uint16_t pp_min_depth;
-    uint16_t pp_max_depth;
-    ProbingParserFPtr PPFunc;  /* */
+    uint16_t pp_min_depth;  /* ->cd对应的最小检测长度 */
+    uint16_t pp_max_depth;  /* ->cd对应的最大检测长度 */
+    ProbingParserFPtr PPFunc;  /* 基于port识别时, 用于进一步内容检测确认 */
     struct AppLayerProtoDetectPMSignature_ *next;
 } AppLayerProtoDetectPMSignature;      /* 某个应用识别规则/特征 */
 
 typedef struct AppLayerProtoDetectPMCtx_ {
-    uint16_t pp_max_len;    /* 包含模式的最大长度 */
-    uint16_t min_len;
+    uint16_t pp_max_len;    /* 检测深度的最大值 */
+    uint16_t min_len;       /*           最小值 */
     MpmCtx mpm_ctx;         /* 多模匹配环境 */
 
     /** Mapping between pattern id and signature.  As each signature has a
      *  unique pattern with a unique id, we can lookup the signature by
      *  the pattern id. */
-    AppLayerProtoDetectPMSignature **map;   /* 指针数组，存放->head链表对象地址 */
-    AppLayerProtoDetectPMSignature *head;   /* 单模式匹配链表, 初始化后为NULL */
+    AppLayerProtoDetectPMSignature **map;   /* 指针数组, 存放->head链表对象地址 */
+    AppLayerProtoDetectPMSignature *head;   /* 注册的匹配模式, 初始化后为NULL */
 
     /* \todo we don't need this except at setup time.  Get rid of it. */
     PatIntId max_pat_id;    /* ->head中不重复的模式数量(DetectContentData) */
@@ -143,22 +143,22 @@ typedef struct AppLayerProtoDetectCtxIpproto_ {
 
 /**
  * \brief The app layer protocol detection context.
- */
+ *//* 应用识别的数据结构 */
 typedef struct AppLayerProtoDetectCtx_ {
     /* Context per ip_proto.
      * \todo Modify ctx_ipp to hold for only tcp and udp. The rest can be
-     *       implemented if needed.  Waste of space otherwise. */ /* 传输层协议->流方向->L7识别规则表 */
-    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];    /* L7协议识别环境，多模环境上下文 */
-
+     *       implemented if needed.  Waste of space otherwise. */
+    AppLayerProtoDetectCtxIpproto ctx_ipp[FLOW_PROTO_DEFAULT];
+                                                 /* 基于规则匹配的多模环境: 传输层协议->流方向->L7识别规则表  */
     /* Global SPM thread context prototype. */
-    SpmGlobalThreadCtx *spm_global_thread_ctx;   /* 全局, 单模式匹配的上下文 */
+    SpmGlobalThreadCtx *spm_global_thread_ctx;   /* 基于规则匹配的单模环境; 多模初筛过后, 逐规则匹配 */
 
-    AppLayerProtoDetectProbingParser *ctx_pp;    /* 存储协议和端口号的对应关系列表，如ssl <--> 443 */
+    AppLayerProtoDetectProbingParser *ctx_pp;    /* ”协议<-->端口号"的对应关系列表，如ssl <--> 443 */
 
     /* Indicates the protocols that have registered themselves
      * for protocol detection.  This table is independent of the
      * ipproto. */
-    const char *alproto_names[ALPROTO_MAX];      /* 待检测的协议列表，如"http" */
+    const char *alproto_names[ALPROTO_MAX];      /* 待检测的协议名称，如"http" */
 } AppLayerProtoDetectCtx;
 
 /**
@@ -167,8 +167,8 @@ typedef struct AppLayerProtoDetectCtx_ {
 struct AppLayerProtoDetectThreadCtx_ {
     PrefilterRuleStore pmq;        /* 多模匹配后, 匹配到的规则列表; 后续遍历此列表进行单模匹配 */
     /* The value 2 is for direction(0 - toserver, 1 - toclient). */
-    MpmThreadCtx mpm_tctx[FLOW_PROTO_DEFAULT][2];
-    SpmThreadCtx *spm_thread_ctx;
+    MpmThreadCtx mpm_tctx[FLOW_PROTO_DEFAULT][2];  /* 多模引擎线程环境 */
+    SpmThreadCtx *spm_thread_ctx;                  /* 单模引擎线程环境 */
 };
 
 /* 应用层协议检测相关的环境，The global app layer proto detection context. */
@@ -289,8 +289,8 @@ static inline int PMGetProtoInspect(
      * contains only *unique* matches. */
     for (uint32_t cnt = 0; cnt < tctx->pmq.rule_id_array_cnt; cnt++) {
         const AppLayerProtoDetectPMSignature *s = pm_ctx->map[tctx->pmq.rule_id_array[cnt]];
-        while (s != NULL) {  /* 遍历已匹配的规则，继续单模匹配，得到应用协议 */
-            AppProto proto = AppLayerProtoDetectPMMatchSignature(s,
+        while (s != NULL) {  /* 遍历已匹配的规则，继续单模匹配，得到应用协议: 因为注册时, 有的pattern设定了offset和depth,  */
+            AppProto proto = AppLayerProtoDetectPMMatchSignature(s, /* 而多模匹配时, 忽略了这些细节 */
                     tctx, f, direction, buf, buflen, searchlen, rflow);
 
             /* store each unique proto once */
@@ -362,7 +362,7 @@ static AppProto AppLayerProtoDetectPMGetProto(
         SCReturnUInt((uint16_t)m);
 
     /* handle non-found in midstream case */
-    } else if (m <= 0) {              /* CASE: 正方向未匹配; 抽取反方向规则引擎, 继续匹配 */
+    } else if (m <= 0) {              /* CASE: 中间建流且正方向未匹配; 抽取反方向规则引擎, 继续匹配 */
         if (direction & STREAM_TOSERVER) {
             pm_ctx = &alpd_ctx.ctx_ipp[f->protomap].ctx_pm[1];
             mpm_tctx = &tctx->mpm_tctx[f->protomap][1];
@@ -582,7 +582,7 @@ again_midstream:
             SCLogDebug("toclient - No probing parser registered for source port %"PRIu16, sp);
         }
     }
-                                     /* 如果反方向已经识别, 提取对应的注册的端口规则链表 */
+                                     /* 如果其他方向已经识别, 提取对应的注册的端口规则链表 */
     if (dir == STREAM_TOSERVER && f->alproto_tc != ALPROTO_UNKNOWN) {
         pe0 = AppLayerProtoDetectGetProbingParser(alpd_ctx.ctx_pp, ipproto, f->alproto_tc);
     } else if (dir == STREAM_TOCLIENT && f->alproto_ts != ALPROTO_UNKNOWN) {
@@ -600,13 +600,13 @@ again_midstream:
     /* run the parser(s): always call with original direction */
     uint8_t rdir = 0;                  /* CASE: 基于端口识别; <TK!!!>注意优先级 */
     alproto = PPGetProto(pe0, f, idir, buf, buflen, alproto_masks, &rdir);
-    if (AppProtoIsValid(alproto))
+    if (AppProtoIsValid(alproto))      /* 先过已经识别的方向的链表 */
         goto end;
     alproto = PPGetProto(pe1, f, idir, buf, buflen, alproto_masks, &rdir);
-    if (AppProtoIsValid(alproto))
+    if (AppProtoIsValid(alproto))      /* 再过目的端口的链表 */
         goto end;
     alproto = PPGetProto(pe2, f, idir, buf, buflen, alproto_masks, &rdir);
-    if (AppProtoIsValid(alproto))
+    if (AppProtoIsValid(alproto))      /* 最后过源端口的链表 */
         goto end;
 
     /* get the mask we need for this direction */
@@ -1113,7 +1113,7 @@ static void AppLayerProtoDetectInsertNewProbingParser(AppLayerProtoDetectProbing
     }
     if (curr_pp == NULL) {
         AppLayerProtoDetectProbingParser *new_pp = AppLayerProtoDetectProbingParserAlloc();
-        new_pp->ipproto = ipproto;
+        new_pp->ipproto = ipproto; /* 注册特定协议, 挂接到链表尾端 */
         AppLayerProtoDetectProbingParserAppend(pp, new_pp);
         curr_pp = new_pp;
     }
@@ -1127,7 +1127,7 @@ static void AppLayerProtoDetectInsertNewProbingParser(AppLayerProtoDetectProbing
     }
     if (curr_port == NULL) {
         AppLayerProtoDetectProbingParserPort *new_port = AppLayerProtoDetectProbingParserPortAlloc();
-        new_port->port = port;     /* 注册特定端口 */
+        new_port->port = port;     /* 注册特定端口, 挂接到链表尾端 */
         AppLayerProtoDetectProbingParserPortAppend(&curr_pp->port, new_port);
         curr_port = new_port;
         if (direction & STREAM_TOSERVER) {
@@ -1155,7 +1155,7 @@ static void AppLayerProtoDetectInsertNewProbingParser(AppLayerProtoDetectProbing
                     curr_port->dp_max_depth < zero_pe->max_depth) {
                     curr_port->dp_max_depth = zero_pe->max_depth;
                 }
-
+                /* 将zero端口配置拷贝到当前端口列表; 并放置于最后 */
                 AppLayerProtoDetectProbingParserElement *dup_pe =
                     AppLayerProtoDetectProbingParserElementDuplicate(zero_pe);
                 AppLayerProtoDetectProbingParserElementAppend(&curr_port->dp, dup_pe);
@@ -1183,7 +1183,7 @@ static void AppLayerProtoDetectInsertNewProbingParser(AppLayerProtoDetectProbing
 
     /* insert the pe_pp */
     AppLayerProtoDetectProbingParserElement *curr_pe;
-    if (direction & STREAM_TOSERVER)       /* 选择插入端口列表 */
+    if (direction & STREAM_TOSERVER)       /* 根据方向, 选择插入端口列表 */
         curr_pe = curr_port->dp;
     else
         curr_pe = curr_port->sp;
@@ -1430,7 +1430,7 @@ static int AppLayerProtoDetectPMPrepareMpm(AppLayerProtoDetectPMCtx *ctx)
     MpmCtx *mpm_ctx = &ctx->mpm_ctx;
 
     if (mpm_table[mpm_ctx->mpm_type].Prepare(mpm_ctx) < 0)
-        goto error;    /* 构建多模匹配引擎, SCHSPreparePatterns() */
+        goto error;    /* 构建多模匹配引擎, MPM_HS -> SCHSPreparePatterns() */
 
     goto end;
  error:
@@ -1555,7 +1555,7 @@ AppProto AppLayerProtoDetectGetProto(AppLayerProtoDetectThreadCtx *tctx,
             // rerun probing parser for other direction if it is unknown
             uint8_t reverse_dir = (direction & STREAM_TOSERVER) ? STREAM_TOCLIENT : STREAM_TOSERVER;
             if (FLOW_IS_PP_DONE(f, reverse_dir)) {
-                AppProto rev_alproto =     /* 重置反方向端口识别, 重新识别 */
+                AppProto rev_alproto = 
                         (direction & STREAM_TOSERVER) ? f->alproto_tc : f->alproto_ts;
                 if (rev_alproto == ALPROTO_UNKNOWN) {
                     FLOW_RESET_PP_DONE(f, reverse_dir);
@@ -1586,7 +1586,7 @@ AppProto AppLayerProtoDetectGetProto(AppLayerProtoDetectThreadCtx *tctx,
     }
 
     /* Look if flow can be found in expectation list */
-    if (!FLOW_IS_PE_DONE(f, direction)) {  /* CASE3: 基于特殊设定的协议识别 */
+    if (!FLOW_IS_PE_DONE(f, direction)) {  /* CASE3: 基于特殊设定的协议识别, 如ftp的父子通道关联（父通道决定子通道应用协议为FTP） */
         alproto = AppLayerProtoDetectPEGetProto(f, ipproto, direction);
     }
 

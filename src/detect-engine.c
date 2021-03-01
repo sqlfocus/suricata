@@ -1458,9 +1458,9 @@ bool DetectEnginePktInspectionRun(ThreadVars *tv,
         DetectEngineThreadCtx *det_ctx, const Signature *s,
         Flow *f, Packet *p,
         uint8_t *alert_flags)
-{
-    SCEnter();
-    /* 报文引擎检测; tcp.hdr ==> DetectEngineInspectPktBufferGeneric() */
+{                 /* DETECT_SM_LIST_MATCH ==> DetectEngineInspectRulePacketMatches() */
+    SCEnter();    /* DETECT_SM_LIST_PMATCH ==> DetectEngineInspectRulePayloadMatches() */
+    /* 报文引擎检测; tcp.hdr/udp.hdr ==> DetectEngineInspectPktBufferGeneric() */
     for (DetectEnginePktInspectionEngine *e = s->pkt_inspect; e != NULL; e = e->next) {
         if (e->v1.Callback(det_ctx, e, s, p, alert_flags) == false) {
             SCLogDebug("sid %u: e %p Callback returned false", s->id, e);

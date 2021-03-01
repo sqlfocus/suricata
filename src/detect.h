@@ -1335,9 +1335,9 @@ typedef struct SigGroupHeadInitData_ {
     MpmCtx **app_mpms;   /* 存储->tx_engines对应的引擎上下文; 来自 DetectEngineCtx->app_mpms_list */
     MpmCtx **pkt_mpms;   /*                                   来自 DetectEngineCtx->pkt_mpms_list */
 
-    PrefilterEngineList *pkt_engines;     /* prefilter多模式引擎: "prefilter"关键字 */
+    PrefilterEngineList *pkt_engines;     /* prefilter多模式引擎: "prefilter"关键字 + 基于报文的动态注册类型 */
     PrefilterEngineList *payload_engines; /*                    : "fast_patten"关键字 */
-    PrefilterEngineList *tx_engines;      /* 动态监测类型对应的事务prefilter多模引擎 */
+    PrefilterEngineList *tx_engines;      /* 动态检测类型对应的事务prefilter多模引擎 */
 
     /* port ptr */
     struct DetectPort_ *port;

@@ -95,37 +95,37 @@ struct AppLayerParserThreadCtx_ {   /* 局部存储需求 */
 typedef struct AppLayerParserProtoCtx_
 {
     /* 0 - to_server, 1 - to_client. */
-    AppLayerParserFPtr Parser[2];          /* libhtp= HTPHandleRequestData()/HTPHandleResponseData() */
+    AppLayerParserFPtr Parser[2];  /* 解析入口; HTPHandleRequestData()/HTPHandleResponseData() */
     bool logger;
-    uint32_t logger_bits;   /* 参考 logger_bits[], registered loggers for this proto */
+    uint32_t logger_bits;          /* 参考 logger_bits[], registered loggers for this proto */
 
-    void *(*StateAlloc)(void *, AppProto); /* libhtp= HTPStateAlloc() */
+    void *(*StateAlloc)(void *, AppProto); /* 创建解析状态结构; HTPStateAlloc() */
     void (*StateFree)(void *);
     void (*StateTransactionFree)(void *, uint64_t);
     void *(*LocalStorageAlloc)(void);
     void (*LocalStorageFree)(void *);
 
-    void (*Truncate)(void *, uint8_t);
-    FileContainer *(*StateGetFiles)(void *, uint8_t);
-    AppLayerDecoderEvents *(*StateGetEvents)(void *);
+    void (*Truncate)(void *, uint8_t);     /* 截断已还原的文件; HTPStateTruncate() */
+    FileContainer *(*StateGetFiles)(void *, uint8_t); /* 获取传输的文件列表; HTPStateGetFiles() */
+    AppLayerDecoderEvents *(*StateGetEvents)(void *); /* 获取解析事件; HTPGetEvents() */
 
-    int (*StateGetProgress)(void *alstate, uint8_t direction);
-    uint64_t (*StateGetTxCnt)(void *alstate);
-    void *(*StateGetTx)(void *alstate, uint64_t tx_id);
+    int (*StateGetProgress)(void *alstate, uint8_t direction); /* 获取当前解析状态; HTPStateGetAlstateProgress() */
+    uint64_t (*StateGetTxCnt)(void *alstate);         /* 获取事务数; HTPStateGetTxCnt() */
+    void *(*StateGetTx)(void *alstate, uint64_t tx_id);/* 获取事务; HTPStateGetTx() */
     AppLayerGetTxIteratorFunc StateGetTxIterator;
-    int (*StateGetProgressCompletionStatus)(uint8_t direction);
-    int (*StateGetEventInfoById)(int event_id, const char **event_name,
+    int (*StateGetProgressCompletionStatus)(uint8_t direction); /* 获取结束状态; HTPStateGetAlstateProgressCompletionStatus() */
+    int (*StateGetEventInfoById)(int event_id, const char **event_name,  /* HTPStateGetEventInfoById() */
                                  AppLayerEventType *event_type);
-    int (*StateGetEventInfo)(const char *event_name,
+    int (*StateGetEventInfo)(const char *event_name,  /* 获取事件描述信息; HTPStateGetEventInfo() */
                              int *event_id, AppLayerEventType *event_type);
 
-    DetectEngineState *(*GetTxDetectState)(void *tx);
-    int (*SetTxDetectState)(void *tx, DetectEngineState *);
+    DetectEngineState *(*GetTxDetectState)(void *tx); /* 获取事务检测引擎状态; HTPGetTxDetectState() */
+    int (*SetTxDetectState)(void *tx, DetectEngineState *); /* HTPSetTxDetectState() */
 
-    AppLayerTxData *(*GetTxData)(void *tx);
+    AppLayerTxData *(*GetTxData)(void *tx);           /* HTPGetTxData() */
     bool (*ApplyTxConfig)(void *state, void *tx, int mode, AppLayerTxConfig);
 
-    void (*SetStreamDepthFlag)(void *tx, uint8_t flags);
+    void (*SetStreamDepthFlag)(void *tx, uint8_t flags);    /* 设置检测深度已到达标识; AppLayerHtpSetStreamDepthFlag() */
 
     /* each app-layer has its own value */
     uint32_t stream_depth;
@@ -133,10 +133,10 @@ typedef struct AppLayerParserProtoCtx_
     /* Indicates the direction the parser is ready to see the data
      * the first time for a flow.  Values accepted -
      * STREAM_TOSERVER, STREAM_TOCLIENT */
-    uint8_t first_data_dir;        /* 允许的首包方向 */
+    uint8_t first_data_dir;        /* 允许的首包方向, STREAM_TOSERVER|STREAM_TOCLIENT */
 
     /* Option flags such as supporting gaps or not. */
-    uint32_t option_flags;
+    uint32_t option_flags;         /* 选项, APP_LAYER_PARSER_OPT_ACCEPT_GAPS */
     /* coccinelle: AppLayerParserProtoCtx:option_flags:APP_LAYER_PARSER_OPT_ */
 
     uint32_t internal_flags;
@@ -149,7 +149,7 @@ typedef struct AppLayerParserProtoCtx_
 
 typedef struct AppLayerParserCtx_ {
     AppLayerParserProtoCtx ctxs[FLOW_PROTO_MAX][ALPROTO_MAX];
-} AppLayerParserCtx;    /* 协议解析所需信息 */
+} AppLayerParserCtx;    /* 应用协议解析注册的函数指针表 */
 
 struct AppLayerParserState_ {
     /* coccinelle: AppLayerParserState:flags:APP_LAYER_PARSER_ */

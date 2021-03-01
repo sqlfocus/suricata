@@ -209,7 +209,7 @@ DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
     int ret;
 
     ret = DetectContentDataParse("content", contentstr, &content, &len);
-    if (ret == -1) {            /* 解析传入字符串为uint8_t字节数组，去除转义等 */
+    if (ret == -1) {            /* 解析传入字符串为uint8_t字节数组，去除自定义转义(“|03|“)等 */
         return NULL;
     }
 
@@ -228,8 +228,8 @@ DetectContentData *DetectContentParse(SpmGlobalThreadCtx *spm_global_thread_ctx,
     /* Prepare SPM search context. */
     cd->spm_ctx = SpmInitCtx(cd->content, cd->content_len, 0,
                              spm_global_thread_ctx);
-    if (cd->spm_ctx == NULL) {  /* 初始化其单模引擎, SpmCtx; 存储编译结果, 更新 spm_global_thread_ctx->ctx(临时结果的空间) */
-        SCFree(content);
+    if (cd->spm_ctx == NULL) {  /* 初始化其单模引擎, SpmCtx; 存储编译结果 */
+        SCFree(content);        /* 更新 spm_global_thread_ctx->ctx(临时结果的空间) */
         SCFree(cd);
         return NULL;
     }

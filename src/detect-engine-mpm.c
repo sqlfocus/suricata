@@ -1612,9 +1612,9 @@ static void PrepareAppMpms(DetectEngineCtx *de_ctx, SigGroupHead *sh)
                 SCLogDebug("a %p a->name %s a->PrefilterRegisterWithListId %p "
                         "mpm_store->mpm_ctx %p", a, a->name,
                         a->PrefilterRegisterWithListId, mpm_store->mpm_ctx);
-
+                                         /* "file_data" ==> PrefilterMpmFiledataRegister() */
                 /* if we have just certain types of negated patterns,
-                 * mpm_ctx can be NULL *//* "http_uri" - PrefilterGenericMpmRegister() */
+                 * mpm_ctx can be NULL *//* "http_uri" ==> PrefilterGenericMpmRegister() */
                 if (a->PrefilterRegisterWithListId && mpm_store->mpm_ctx) {
                     BUG_ON(a->PrefilterRegisterWithListId(de_ctx,
                                 sh, mpm_store->mpm_ctx,
@@ -1646,7 +1646,7 @@ static void PreparePktMpms(DetectEngineCtx *de_ctx, SigGroupHead *sh)
                     a->PrefilterRegisterWithListId, mpm_store->mpm_ctx);
 
             /* if we have just certain types of negated patterns,
-             * mpm_ctx can be NULL */
+             * mpm_ctx can be NULL */ /* tcp.hdr ==> PrefilterGenericMpmPktRegister() */
             if (a->PrefilterRegisterWithListId && mpm_store->mpm_ctx) {
                 BUG_ON(a->PrefilterRegisterWithListId(de_ctx,
                             sh, mpm_store->mpm_ctx,

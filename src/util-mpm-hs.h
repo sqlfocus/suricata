@@ -42,7 +42,7 @@ typedef struct SCHSPattern_ {
 
     /* sid(s) for this pattern */
     uint32_t sids_size;
-    SigIntId *sids;             /* 对应的sid列表 */
+    SigIntId *sids;             /* 对应的sid列表, AppLayerProtoDetectPMSignature */
 
     /* only used at ctx init time, when this structure is part of a hash
      * table. */

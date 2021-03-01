@@ -52,7 +52,7 @@
 /**
  * \brief This is for the app layer in general and it contains per thread
  *        context relevant to both the alpd and alp.
- */
+ *//* 应用识别/解析的线程信息结构 */
 struct AppLayerThreadCtx_ {
     /* App layer protocol detection thread context, from AppLayerProtoDetectGetCtxThread(). */
     AppLayerProtoDetectThreadCtx *alpd_tctx;  /* 检测环境 */
@@ -336,8 +336,8 @@ static int TCPProtoDetect(ThreadVars *tv,
             IPPROTO_TCP, flags, &reverse_flow);
     PACKET_PROFILING_APP_PD_END(app_tctx);
     SCLogDebug("alproto %u rev %s", *alproto, reverse_flow ? "true" : "false");
-
-    if (*alproto != ALPROTO_UNKNOWN) {    /* CASE1: 本方向识别结果, 与反方向不同 */
+    /* 本方向成功识别 */
+    if (*alproto != ALPROTO_UNKNOWN) {    /* CASE1: 本方向与反方向识别结果不一致 */
         if (*alproto_otherdir != ALPROTO_UNKNOWN && *alproto_otherdir != *alproto) {
             AppLayerDecoderEventsSetEventRaw(&p->app_layer_events,
                     APPLAYER_MISMATCH_PROTOCOL_BOTH_DIRECTIONS);

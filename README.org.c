@@ -95,6 +95,7 @@ SCLogConfig *sc_log_config         日志配置信息结构
           --AppLayerProtoDetectPMRegisterPattern()  更新 alpd_ctx->ctx_ipp[].ctx_pm[].head
       --AppLayerParserRegisterParser()              报文解析操作, 更新 alp_ctx.ctxs[]
       --HTPConfigure()             注册libhtp回调; 分析http配置信息, 存储到 cfgtree/cfglist
+    --RegisterSSLParsers()
       --AppLayerProtoDetectPPParseConfPorts()
         --AppLayerProtoDetectPPRegister()           注册知名端口号(SSL为例), alpd_ctx->ctx_pp[]
   --AppLayerProtoDetectPrepareState()               

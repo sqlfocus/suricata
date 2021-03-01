@@ -86,8 +86,8 @@
 /** Fast lookup tree (radix) for the various HTP configurations */
 static SCRadixTree *cfgtree;    /* 以目的IP组织的libhtp的特定配置 */
 /** List of HTP configurations. */
-static HTPCfgRec cfglist;       /* libhtp库配置链表，首个为默认配置 */
-
+static HTPCfgRec cfglist;       /* libhtp库配置链表，其本身默认配置 */
+                                /* 其.next指向特殊IP配置 */
 /** Limit to the number of libhtp messages that can be handled */
 #define HTP_MAX_MESSAGES 512
 
@@ -272,7 +272,7 @@ static int HTPLookupPersonality(const char *str)
 
     IF_HTP_PERSONALITY_NUM(MINIMAL);
     IF_HTP_PERSONALITY_NUM(GENERIC);
-    IF_HTP_PERSONALITY_NUM(IDS);
+    IF_HTP_PERSONALITY_NUM(IDS);          // HTP_SERVER_IDS
     IF_HTP_PERSONALITY_NUM(IIS_4_0);
     IF_HTP_PERSONALITY_NUM(IIS_5_0);
     IF_HTP_PERSONALITY_NUM(IIS_5_1);
@@ -2501,7 +2501,7 @@ static void HTPConfigParseParameters(HTPCfgRec *cfg_prec, ConfNode *s,
     TAILQ_FOREACH(p, &s->head, next) {
 
         if (strcasecmp("address", p->name) == 0) {
-            ConfNode *pval;
+            ConfNode *pval;       /* 解析对应此特殊配制的地址 */
             /* Addresses */
             TAILQ_FOREACH(pval, &p->head, next) {
                 SCLogDebug("LIBHTP server %s: %s=%s", s->name, p->name,
@@ -3136,7 +3136,7 @@ void RegisterHTPParsers(void)
         AppLayerParserRegisterGetEventInfoById(IPPROTO_TCP, ALPROTO_HTTP, HTPStateGetEventInfoById);        /* 获取事件描述信息 */
 
         AppLayerParserRegisterTruncateFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPStateTruncate);           /* 设置文件标识, FILE_STATE_TRUNCATED */
-        AppLayerParserRegisterDetectStateFuncs(IPPROTO_TCP, ALPROTO_HTTP,                          /* 添加检测引擎状态 */
+        AppLayerParserRegisterDetectStateFuncs(IPPROTO_TCP, ALPROTO_HTTP,                          /* 添加/获取检测引擎状态 */
                                                HTPGetTxDetectState, HTPSetTxDetectState);
         AppLayerParserRegisterTxDataFunc(IPPROTO_TCP, ALPROTO_HTTP, HTPGetTxData);
 

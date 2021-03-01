@@ -140,13 +140,13 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         Packet *p, const uint8_t flags)
 {
     SCEnter();
-    /* 引擎：报文引擎, prefilter关键字 */
+    /* 引擎：基于报文的prefilter引擎 */
     if (sgh->pkt_engines) {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_PKT);
         /* run packet engines */
         PrefilterEngine *engine = sgh->pkt_engines;
-        do {
-            PREFILTER_PROFILING_START;   /* 最终引擎函数 */
+        do {                             /* tcp.hdr ==> PrefilterMpmPkt() */
+            PREFILTER_PROFILING_START;   /* ttl ==> PrefilterPacketTtlMatch() */
             engine->cb.Prefilter(det_ctx, p, engine->pectx);
             PREFILTER_PROFILING_END(det_ctx, engine->gid);
 
@@ -157,15 +157,15 @@ void Prefilter(DetectEngineThreadCtx *det_ctx, const SigGroupHead *sgh,
         PACKET_PROFILING_DETECT_END(p, PROF_DETECT_PF_PKT);
     }
 
-    /* 引擎：报文负载引擎, fast_pattern关键字; run payload inspecting engines */
+    /* 引擎：基于报文负载的prefilter引擎 */
     if (sgh->payload_engines &&
         (p->payload_len || (p->flags & PKT_DETECT_HAS_STREAMDATA)) &&
         !(p->flags & PKT_NOPAYLOAD_INSPECTION))
     {
         PACKET_PROFILING_DETECT_START(p, PROF_DETECT_PF_PAYLOAD);
         PrefilterEngine *engine = sgh->payload_engines;
-        while (1) {
-            PREFILTER_PROFILING_START;   /* 缓存原始数据, PrefilterPktStream() */
+        while (1) {                      /* DETECT_SM_LIST_PMATCH/"payload": PrefilterPktPayload() */
+            PREFILTER_PROFILING_START;   /* DETECT_SM_LIST_PMATCH/"stream": PrefilterPktStream() */
             engine->cb.Prefilter(det_ctx, p, engine->pectx);
             PREFILTER_PROFILING_END(det_ctx, engine->gid);
 
@@ -201,7 +201,7 @@ int PrefilterAppendEngine(DetectEngineCtx *de_ctx, SigGroupHead *sgh,
                                    /* DETECT_TTL -> PrefilterPacketTtlMatch() */
     e->Prefilter = PrefilterFunc;  /* DETECT_ACK -> PrefilterPacketAckMatch() */
     e->pectx = pectx;              /* DETECT_ACK -> PrefilterPacketHeaderCtx */
-    e->Free = FreeFunc;
+    e->Free = FreeFunc;            /* DETECT_TCPHDR -> PrefilterMpmPkt() */
 
     if (sgh->init->pkt_engines == NULL) {
         sgh->init->pkt_engines = e;
@@ -677,7 +677,7 @@ static void PrefilterMpmPktFree(void *ptr)
 {
     SCFree(ptr);
 }
-
+/* 注册”tcp.hdr“等的报文prefilter多模检测 */
 int PrefilterGenericMpmPktRegister(DetectEngineCtx *de_ctx,
         SigGroupHead *sgh, MpmCtx *mpm_ctx,
         const DetectBufferMpmRegistery *mpm_reg, int list_id)

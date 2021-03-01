@@ -95,8 +95,8 @@ typedef struct DetectContentData_ {
      * gap, but I think the first four members was used as a template for
      * casting.  \todo check this and fix it if possible */
     uint32_t flags;        /* DETECT_CONTENT_NOCASE */
-    PatIntId id;           /* 协议识别：pattern id, 在 AppLayerProtoDetectPMCtx->map[] 中的编号 */
-    uint16_t depth;        /* 内容检测：支持fast pattern的不重复的序号  */
+    PatIntId id;           /* pattern id, 不重复的序号 */
+    uint16_t depth;
     uint16_t offset;
     int32_t distance;      /* 匹配长度上限: depth/相对于0处; within/相对于上次匹配处 */
     int32_t within;        /* 匹配起始位置: offset/相对于0处; distance/相对于上次匹配 */
