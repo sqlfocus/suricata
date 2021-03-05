@@ -553,7 +553,7 @@ SCProfilingRegisterRuleCounter(SCProfileDetectCtx *ctx)
  * \param ticks Number of CPU ticks for this rule.
  * \param match Did the rule match?
  */
-void
+void/* 统计基于规则的匹配时长 */
 SCProfilingRuleUpdateCounter(DetectEngineThreadCtx *det_ctx, uint16_t id, uint64_t ticks, int match)
 {
     if (det_ctx != NULL && det_ctx->rule_perf_data != NULL && det_ctx->rule_perf_data_size > id) {

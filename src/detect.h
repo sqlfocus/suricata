@@ -938,7 +938,7 @@ typedef struct DetectEngineCtx_ {
     DetectBufferMpmRegistery *pkt_mpms_list;  /* 用于prefilter的多模式引擎 */
     uint32_t pkt_mpms_list_cnt;               /* = g_mpm_list[DETECT_BUFFER_MPM_TYPE_PKT] */
 
-    uint32_t prefilter_id;
+    uint32_t prefilter_id;               /* ->prefilter_hash_table数量 */
     HashListTable *prefilter_hash_table; /* PrefilterStore, prefilter多模引擎哈希表, 记录prefilter引擎的种类 */
 
     /** time of last ruleset reload */

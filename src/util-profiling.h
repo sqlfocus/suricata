@@ -38,7 +38,7 @@ extern thread_local int profiling_rules_entered;
 void SCProfilingPrintPacketProfile(Packet *);
 void SCProfilingAddPacket(Packet *);
 int SCProfileRuleStart(Packet *p);
-
+/* 规则匹配性能监控 */
 #define RULE_PROFILING_START(p) \
     uint64_t profile_rule_start_ = 0; \
     uint64_t profile_rule_end_ = 0; \
@@ -50,7 +50,7 @@ int SCProfileRuleStart(Packet *p);
         profiling_rules_entered++; \
         profile_rule_start_ = UtilCpuGetTicks(); \
     }
-
+/* 规则匹配性能监控结束 */
 #define RULE_PROFILING_END(ctx, r, m, p) \
     if (profiling_rules_enabled && ((p)->flags & PKT_PROFILE)) { \
         profile_rule_end_ = UtilCpuGetTicks(); \
@@ -61,7 +61,7 @@ int SCProfileRuleStart(Packet *p);
 
 extern int profiling_keyword_enabled;
 extern thread_local int profiling_keyword_entered;
-
+/* 以下为: 基于检测关键字的性能监控 */
 #define KEYWORD_PROFILING_SET_LIST(ctx, list) { \
     (ctx)->keyword_perf_list = (list); \
 }
@@ -88,7 +88,7 @@ extern thread_local int profiling_keyword_entered;
     }
 
 PktProfiling *SCProfilePacketStart(void);
-
+/* 以下为: 基于报文处理流程的各功能的性能监控统计 */
 #define PACKET_PROFILING_START(p)                                   \
     if (profiling_packets_enabled) {                                \
         (p)->profile = SCProfilePacketStart();                      \
@@ -146,7 +146,7 @@ PktProfiling *SCProfilePacketStart(void);
 #define PACKET_PROFILING_RESET_LOCKS
 #define PACKET_PROFILING_COPY_LOCKS(p, id)
 #endif
-
+/* 以下为: 某模块执行时间性能监控 */
 #define PACKET_PROFILING_TMM_START(p, id)                           \
     if (profiling_packets_enabled && (p)->profile != NULL) {        \
         if ((id) < TMM_SIZE) {                                      \
@@ -162,7 +162,7 @@ PktProfiling *SCProfilePacketStart(void);
             (p)->profile->tmm[(id)].ticks_end = UtilCpuGetTicks();  \
         }                                                           \
     }
-
+/* 以下为: 重要功能的性能监控数据 */
 #define FLOWWORKER_PROFILING_START(p, id)                           \
     if (profiling_packets_enabled && (p)->profile != NULL) {        \
         if ((id) < PROFILE_FLOWWORKER_SIZE) {                       \
@@ -182,7 +182,7 @@ PktProfiling *SCProfilePacketStart(void);
         SCFree((p)->profile);                                       \
         (p)->profile = NULL;                                        \
     }
-
+/* 以下为: 应用解析的的性能监控 */
 #define PACKET_PROFILING_APP_START(dp, id)                          \
     if (profiling_packets_enabled) {                                \
         (dp)->ticks_start = UtilCpuGetTicks();                      \
@@ -197,7 +197,7 @@ PktProfiling *SCProfilePacketStart(void);
             (dp)->ticks_spent = ((dp)->ticks_end - (dp)->ticks_start);  \
         }                                                           \
     }
-
+/* 以下为: 应用识别的性能监控 */
 #define PACKET_PROFILING_APP_PD_START(dp)                           \
     if (profiling_packets_enabled) {                                \
         (dp)->proto_detect_ticks_start = UtilCpuGetTicks();         \
@@ -230,7 +230,7 @@ PktProfiling *SCProfilePacketStart(void);
             (p)->profile->proto_detect += (dp)->proto_detect_ticks_spent;        \
         }                                                           \
     }
-
+/* 以下为: 规则检测流程的性能监控，如排序等 */
 #define PACKET_PROFILING_DETECT_START(p, id)                        \
     if (profiling_packets_enabled && (p)->profile != NULL) {        \
         if ((id) < PROF_DETECT_SIZE) {                              \
@@ -249,7 +249,7 @@ PktProfiling *SCProfilePacketStart(void);
             }                                                       \
         }                                                           \
     }
-
+/* 以下为: 日志输出的性能监控 */
 #define PACKET_PROFILING_LOGGER_START(p, id)                        \
     if (profiling_packets_enabled && (p)->profile != NULL) {        \
         if ((id) < LOGGER_SIZE) {                              \
@@ -268,7 +268,7 @@ PktProfiling *SCProfilePacketStart(void);
             }                                                       \
         }                                                           \
     }
-
+/* 以下为: 规则组的性能监控 */
 #define SGH_PROFILING_RECORD(det_ctx, sgh)                          \
     if (profiling_sghs_enabled) {                                   \
         SCProfilingSghUpdateCounter((det_ctx), (sgh));              \

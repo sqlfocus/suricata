@@ -715,3 +715,94 @@ suricata支持丰富的计数种类，包括协议类型计数、异常解析计
   --ParseCommandLine()          解析命令行
   --StartInternalRunMode()
     --RunUnittests()            运行单元测试
+
+
+* 动态存储
+有些规则如flow需要在过程中操控一些动态变量, 此变量一般存放在流表后, 其空间
+在初始化时预留 
+
+--PostConfLoadedSetup()
+  --StorageInit()               初始化 storage_map[][] 等
+  --EBPFRegisterExtension()
+  --LiveDevRegisterExtension()
+    --LiveDevStorageRegister()  "bypass_stats"
+      --StorageRegister(STORAGE_DEVICE, ...)
+  --RegisterFlowBypassInfo()
+  --MacSetRegisterFlowStorage()
+  --TagInitCtx()
+    --HostStorageRegister()     注册主机标, "tag"
+      --StorageRegister(STORAGE_HOST...)
+    --FlowStorageRegister()     注册流标, "tag"
+      --StorageRegister(STORAGE_FLOW,...)
+  --ThresholdInit()
+    --HostStorageRegister()     "threshold"
+    --IPPairStorageRegister()   "threshold"
+      --StorageRegister(STORAGE_IPPAIR,...)
+  --HostBitInitCtx()
+    --HostStorageRegister()     "bit"
+  --IPPairBitInitCtx()
+    --IPPairStorageRegister()   "bit"
+  --StorageFinalize()           根据注册结果构建 storage_map[][]
+  --。。。
+  --HostInitConfig()            分配内存时, 添加动态内存大小
+  --LiveDeviceFinalize()
+  --PreRunInit()
+    --FlowInitConfig()
+      --FlowSparePoolInit()
+        --FlowSparePoolUpdateBlock()
+          --FlowAlloc()
+            --FlowStorageSize()
+    --IPPairInitConfig()
+      --IPPairStorageSize()
+        --StorageGetSize()
+
+* 性能测试
+提供了性能测试, 以提供各个模块的运行占比, 为性能调优准别
+
+--PostConfLoadedSetup()
+  --PreRunInit()      解析配置文件
+    --SCProfilingRulesGlobalInit()       "profiling.rules"
+      --初始化 profiling_rules_enabled
+      --初始化 profiling_output_to_file
+    --SCProfilingKeywordsGlobalInit()    "profiling.keywords"/监控注册的关键字 DETECT_TBLSIZE
+      --初始化 profiling_keyword_enabled
+    --SCProfilingPrefilterGlobalInit()   "profiling.prefilter"
+      --初始化 profiling_prefilter_enabled
+    --SCProfilingSghsGlobalInit()        "profiling.rulegroups"
+      --初始化 profiling_sghs_enabled
+    --SCProfilingInit()                  "profiling"
+      --初始化 profiling_packets_enabled
+      --初始化 profiling_locks_enabled
+
+--PostConfLoadedDetectSetup()
+  --LoadSignatures()  加载规则
+    --SigLoadSignatures()
+      --SigGroupBuild()                 初始化计数环境 DetectEngineCtx->profile_xxx
+        --SigAddressPrepareStage4()
+          --SCProfilingSghInitCounters()
+        --SCProfilingKeywordInitCounters()
+        --SCProfilingPrefilterInitCounters()
+        --SCProfilingRuleInitCounters()
+
+--TmThreadsSlotPktAcqLoop()
+  --TmSlot->SlotThreadInit()
+    --FlowWorkerThreadInit()
+      --DetectEngineThreadCtxInit()     线程检测环境初始化 DetectEngineThreadCtx->xxx_perf_data
+        --ThreadCtxDoInit()
+          --SCProfilingRuleThreadSetup()
+          --SCProfilingKeywordThreadSetup()
+          --SCProfilingPrefilterThreadSetup()
+          --SCProfilingSghThreadSetup()
+                                               
+--PostRunDeinit()     程序退出时, 打印基于报文的统计结果
+  --SCProfilingDump()
+    --SCProfilingDumpPacketStats()
+
+--GlobalsDestroy()    程序退出时, 打印各定制模块的统计结果
+  --DetectEnginePruneFreeList()
+    --DetectEngineCtxFree()
+      --SCProfilingRuleDestroyCtx()
+        --SCProfilingRuleDump()
+      --SCProfilingKeywordDestroyCtx()
+      --SCProfilingSghDestroyCtx()
+      --SCProfilingPrefilterDestroyCtx()

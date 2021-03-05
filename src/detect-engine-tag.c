@@ -42,7 +42,7 @@
 #include "flow-util.h"
 #include "stream-tcp-private.h"
 
-SC_ATOMIC_DECLARE(unsigned int, num_tags);  /**< Atomic counter, to know if we
+SC_ATOMIC_DECLARE(unsigned int, num_tags);  /* 打标次数 *< Atomic counter, to know if we
                                                  have tagged hosts/sessions,
                                                  to avoid locking */
 static int host_tag_id = -1;                /**< Host storage id for tags */
@@ -51,7 +51,7 @@ static int flow_tag_id = -1;                /**< Flow storage id for tags */
 void TagInitCtx(void)
 {
     SC_ATOMIC_INIT(num_tags);
-       /* 主机打表 */
+       /* 主机打标 */
     host_tag_id = HostStorageRegister("tag", sizeof(void *), NULL, DetectTagDataListFree);
     if (host_tag_id == -1) {
         FatalError(SC_ERR_FATAL, "Can't initiate host storage for tag");

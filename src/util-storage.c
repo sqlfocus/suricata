@@ -43,8 +43,8 @@ typedef struct StorageList_ {
 } StorageList;
 
 static StorageList *storage_list = NULL;     /* 注册用的存储链表，初始化完毕后释放 */
-static int storage_max_id[STORAGE_MAX];      /* 同类型存储的索引, 0~N */
-static int storage_registraton_closed = 0;
+static int storage_max_id[STORAGE_MAX];      /* 同类型存储的累加计数, 0~N */
+static int storage_registraton_closed = 0;   /* 0/1 - 是否已经注册完毕 */
 static StorageMapping **storage_map = NULL;  /* 存储类型二级映射表， STORAGE_MAX -> storage_max_id[], 用于跟踪各类型内存分配 */
 
 static const char *StoragePrintType(StorageEnum type)
@@ -140,7 +140,7 @@ int StorageFinalize(void)
 {
     int count = 0;
     int i;
-
+    /* 后续不再允许注册 */
     storage_registraton_closed = 1;
 
     for (i = 0; i < STORAGE_MAX; i++) {
@@ -149,7 +149,7 @@ int StorageFinalize(void)
     }
     if (count == 0)
         return 0;
-
+    /* 分配二维数组, 以存储注册的存储类型 */
     storage_map = SCMalloc(sizeof(StorageMapping *) * STORAGE_MAX);
     if (unlikely(storage_map == NULL)) {
         return -1;

@@ -1128,7 +1128,7 @@ static void SCProfilingUpdatePacketLogRecords(Packet *p)
         }
     }
 }
-
+/* 将统计信息汇总到本线程数据结构 */
 void SCProfilingAddPacket(Packet *p)
 {
     if (p == NULL || p->profile == NULL ||
@@ -1239,7 +1239,7 @@ int SCProfileRuleStart(Packet *p)
 #else
     uint64_t sample = SC_ATOMIC_ADD(samples, 1);
     if (sample % rate == 0) {
-        p->flags |= PKT_PROFILE;
+        p->flags |= PKT_PROFILE;   /* 选中此包做性能监控 */
         return 1;
     }
 #endif

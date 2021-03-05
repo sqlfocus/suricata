@@ -608,7 +608,7 @@ typedef struct Packet_
     struct PktPool_ *pool;       /* 申请报文时的缓存池 */
 
 #ifdef PROFILING
-    PktProfiling *profile;
+    PktProfiling *profile;       /* 记录报文流程中的性能监控数据 */
 #endif
 #ifdef HAVE_NAPATECH
     NapatechPacketVars ntpv;
@@ -1123,7 +1123,7 @@ void DecodeUnregisterCounters(void);
 
 #define PKT_IS_FRAGMENT                 (1<<19)     /**< Packet is a fragment */
 #define PKT_IS_INVALID                  (1<<20)
-#define PKT_PROFILE                     (1<<21)
+#define PKT_PROFILE                     (1<<21)     /* 性能监控统计 */
 
 /** indication by decoder that it feels the packet should be handled by
  *  flow engine: Packet::flow_hash will be set */
